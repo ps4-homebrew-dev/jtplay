@@ -43,6 +43,10 @@ target_compile_options(jtplay PRIVATE -Wall -Werror)
 
 target_include_directories(jtplay PRIVATE ${QUICKJS_INCLUDE_DIR} src)
 
+if(ORBIS)
+  set(ORBIS_LIBRARIES SceIpmi SceAppContent)
+endif()
+
 target_link_libraries(jtplay PRIVATE
     SDL2::SDL2
     SDL2::SDL2main
@@ -54,6 +58,7 @@ target_link_libraries(jtplay PRIVATE
     PkgConfig::CURL
     Threads::Threads
     ${QUICKJS_LIBRARY}
+    ${ORBIS_LIBRARIES}
     m
 )
 

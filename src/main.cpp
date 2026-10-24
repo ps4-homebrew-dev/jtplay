@@ -13,9 +13,43 @@
 #define SCREEN_WIDTH  1920
 #define SCREEN_HEIGHT 1080
 
+
+typedef struct SceAppContentInitParam {
+  char reserved[32];
+} SceAppContentInitParam;
+
+typedef struct SceAppContentBootParam {
+  char     reserved1[4];
+  uint32_t attr;
+  char     reserved2[32];
+} SceAppContentBootParam;
+
+typedef struct SceAppContentMountPoint {
+  char data[16];
+} SceAppContentMountPoint;
+
+
+extern "C" {
+  int sceSystemServiceLoadExec(const char* path, char* const argv[]);
+  int sceAppContentInitialize(const SceAppContentInitParam *initParam,
+			      SceAppContentBootParam *bootParam);
+  int sceAppContentTemporaryDataMount2(uint32_t option, SceAppContentMountPoint *mountPoint);
+  int sceAppContentTemporaryDataUnmount(const SceAppContentMountPoint *mountPoint);
+  int sceSysmoduleLoadModule(uint64_t);
+}
+
 #if defined(__ORBIS__)
-// libSceSystemService; the SDK links it (SDL needs it) but has no header.
-extern "C" int sceSystemServiceLoadExec(const char* path, char* const argv[]);
+static SceAppContentMountPoint  g_tmpmnt = {0};
+
+__attribute__((constructor))
+static void OrbisInit(void) {
+  SceAppContentInitParam ip = {};
+  SceAppContentBootParam bp = {};
+
+  sceSysmoduleLoadModule(0x00b4);
+  sceAppContentInitialize(&ip, &bp);
+  sceAppContentTemporaryDataMount2(0, &g_tmpmnt);
+}
 #endif
 
 
@@ -41,17 +75,10 @@ static int Run(int argc, char* argv[]) {
   std::string fonts_dir;
 
 #if defined(__ORBIS__)
-  // A PS4 title is started without arguments, and relative paths mean
-  // nothing to it: its package is mounted read-only at /app0 (laid out as
-  // pkg/ in the build directory, see CMakeLists.txt), and /data is where it
-  // may write. Options given on the command line still win.
   options.assets_dir = "/app0/assets";
-  fonts_dir = "/app0/fonts";
   options.plugins_dir = "/app0/plugins";
-  ::mkdir("/data/jtplay", 0755); // the parent; artcache makes the leaf
-  options.cache_dir = "/data/jtplay/cache";
-  // HTTPS (plugins, remote artwork) trusts the CA bundle packaged with the
-  // title, unless one was named already.
+  options.cache_dir = "/temp0";
+  fonts_dir = "/app0/fonts";
   ::setenv("SSL_CERT_FILE", "/app0/ca-bundle.crt", 0);
 #endif
 
