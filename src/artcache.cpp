@@ -21,7 +21,7 @@ namespace {
 // Artwork is decoration; nothing here is worth a long stall on the worker
 // thread or a large allocation on a console with no swap.
 constexpr size_t kMaxImageBytes = 12u << 20;
-constexpr long kTimeoutMs = 15000;
+constexpr long kStallTimeoutMs = 15000; // no data for this long: give up
 
 // Files kept across runs. A few hundred covers is a couple of tens of MiB,
 // and the oldest ones are dropped on the next start.
@@ -213,7 +213,7 @@ std::string Fetch(const std::string& uri) {
 
   net::HttpClient::Request req;
   req.url = uri;
-  req.timeout_ms = kTimeoutMs;
+  req.stall_timeout_ms = kStallTimeoutMs;
   req.max_bytes = kMaxImageBytes;
 
   net::HttpClient::Response res;

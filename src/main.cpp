@@ -113,6 +113,7 @@ static int Run(int argc, char* argv[]) {
     fonts_dir = options.assets_dir + "/../fonts";
   if (options.plugins_dir.empty())
     options.plugins_dir = options.assets_dir + "/../plugins";
+  options.fonts_dir = fonts_dir;
 
   Rml::Context* ctx;
   std::string err;

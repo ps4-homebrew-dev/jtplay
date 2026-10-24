@@ -53,24 +53,16 @@ void App::StartDiscovery() {
     }
 
     Reply([this, sources = std::move(sources), errors]() mutable {
-      // Keep the cursor on the same source across a rescan.
-      const std::string selected = sel_source_ < (int)sources_.size()
-        ? sources_[sel_source_]->Name() : std::string();
-      sources_ = std::move(sources);
-      for (size_t i = 0; i < sources_.size(); i++) {
-        if (sources_[i]->Name() == selected) {
-          sel_source_ = (int)i;
-          break;
-        }
-      }
-      RebuildSourceRows();
+      discovered_ = std::move(sources);
+      registry_.Set(discovered_);
+      RebuildSources(); // keeps the cursor on the same source
 
       Rml::String status;
-      if (sources_.empty()) {
+      if (discovered_.empty()) {
         status = errors.empty() ? "No media sources found." : errors;
       } else {
-        status = std::to_string(sources_.size()) +
-          (sources_.size() == 1 ? " source found" : " sources found");
+        status = std::to_string(discovered_.size()) +
+          (discovered_.size() == 1 ? " source found" : " sources found");
         if (!errors.empty())
           status += "  ·  " + errors;
       }
@@ -266,6 +258,17 @@ void App::RebuildEntryRows() {
       row.name = e.name.empty() ? "(untitled)" : e.name;
       row.meta = EntryMeta(e);
       row.folder = e.IsFolder();
+      library::Ref ref;
+      if (Identify(e, ref)) {
+        row.favorite = library_.IsFavorite(ref.source_key, ref.entry.id);
+        library::Progress p;
+        if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
+          row.watched = p.watched;
+          if (!p.watched && p.position > 0 && p.duration > 0) // never "0%"
+            row.progress = std::to_string(
+              std::clamp((int)(p.position * 100 / p.duration), 2, 100)) + "%";
+        }
+      }
       entry_rows_.push_back(std::move(row));
     }
   }
@@ -306,6 +309,22 @@ void App::RebuildDetail() {
     add("Duration", e->duration > 0 ? FormatTime(e->duration * 1000000) : "");
     add("Size", FormatSize(e->size));
     add("Date", FormatDate(e->date, true));
+
+    library::Ref ref;
+    if (Identify(*e, ref)) {
+      library::Progress p;
+      if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
+        if (p.watched)
+          add("Status", "Watched");
+        else if (p.position > 0)
+          add("Status", "Resume at " + FormatTime(p.position * 1000000));
+      }
+      // Under Favorites / Continue watching, where it actually lives.
+      if (ref.source_key != (current_source_ ? current_source_->Key() : ""))
+        add("Source", ref.source_name.empty() ? "Not available" : ref.source_name);
+      Set("detail_favorite", bind_detail_favorite_,
+          library_.IsFavorite(ref.source_key, ref.entry.id));
+    }
   }
   bool same = props.size() == detail_props_.size();
   for (size_t i = 0; same && i < props.size(); i++)
@@ -498,6 +517,28 @@ void App::OpenMenu() {
 
   if (view_ == View::Browse) {
     Set("menu_title", bind_menu_title_, Rml::String("Options"));
+
+    // What can be done with the selected entry comes first, Kodi's
+    // context menu style; then the settings of the list.
+    if (const browse::Entry* e = SelectedEntry()) {
+      const browse::Entry entry = *e;
+      library::Ref ref;
+      if (Identify(entry, ref)) {
+        const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
+        menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
+          nullptr, [this, entry](int) { ToggleFavorite(entry); }});
+        if (entry.IsVideo() || entry.IsAudio()) {
+          library::Progress p;
+          const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
+          if (known && !p.watched && p.position > 0)
+            menu_items_.push_back({"Play from beginning", nullptr,
+              [this, entry](int) { Launch(entry, 0); }});
+          const bool watched = known && p.watched;
+          menu_items_.push_back({watched ? "Mark as unwatched" : "Mark as watched",
+            nullptr, [this, entry, watched](int) { SetWatched(entry, !watched); }});
+        }
+      }
+    }
     menu_items_.push_back({"Sort by",
       [this] { return std::string(SortModeName((int)sort_mode_)); },
       [this](int d) { CycleSortMode(d == 0 ? +1 : d); }});

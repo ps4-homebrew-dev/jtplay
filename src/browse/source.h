@@ -68,6 +68,11 @@ public:
   virtual const std::string& Detail() const = 0; // row subtitle (host, path)
   virtual const char* Icon() const = 0;          // emoji glyph for the row
 
+  // Identifies the source across rescans and restarts ("dlna:uuid:...",
+  // "fs:/mnt/usb0"), so favorites and resume points saved against it can
+  // find it again. Entry ids are only meaningful together with this.
+  virtual std::string Key() const { return Name(); }
+
   // Id of the root folder; passed back to Browse() to start.
   virtual std::string RootId() const = 0;
 

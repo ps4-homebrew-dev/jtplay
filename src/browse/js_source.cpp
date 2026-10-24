@@ -577,4 +577,9 @@ namespace browse {
     for (const std::string& path : scripts)
       out.push_back(std::make_unique<JsProvider>(path));
   }
+
+  std::string JsSource::Key() const {
+    return "js:" + plugin_->ProviderName() + "/" + name_;
+  }
+
 }

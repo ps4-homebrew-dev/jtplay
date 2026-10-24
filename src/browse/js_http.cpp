@@ -91,7 +91,7 @@ namespace browse {
 	double seconds = 0.0;
 	JS_ToFloat64(ctx, &seconds, timeout);
 	if (seconds > 0.0)
-	  req.timeout_ms = std::min((long)(seconds * 1000.0), kMaxTimeoutMs);
+	  req.stall_timeout_ms = std::min((long)(seconds * 1000.0), kMaxTimeoutMs);
       }
       JS_FreeValue(ctx, timeout);
 

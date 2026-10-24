@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <mutex>
 
@@ -16,6 +17,40 @@ namespace net {
       size_t limit = 0;
       bool overflow = false;
     };
+
+    // Stall detection: curl reports progress about once a second even when
+    // nothing moves, so the transfer is aborted once the byte counters
+    // have stood still for longer than the limit. Waiting for the server
+    // to start answering counts as a stall too, which is the point: a dead
+    // server and a dead link look the same from here.
+    struct Progress {
+      using Clock = std::chrono::steady_clock;
+      long stall_ms = 0;
+      curl_off_t last_bytes = -1;
+      Clock::time_point last_move = Clock::now();
+      bool stalled = false;
+    };
+
+    int OnProgress(void* userdata, curl_off_t dltotal, curl_off_t dlnow,
+		   curl_off_t ultotal, curl_off_t ulnow) {
+      (void)dltotal;
+      (void)ultotal;
+      Progress* p = static_cast<Progress*>(userdata);
+      const curl_off_t bytes = dlnow + ulnow;
+      const Progress::Clock::time_point now = Progress::Clock::now();
+      if (bytes != p->last_bytes) {
+	p->last_bytes = bytes;
+	p->last_move = now;
+	return 0;
+      }
+      const auto idle = std::chrono::duration_cast<std::chrono::milliseconds>(
+	now - p->last_move).count();
+      if (p->stall_ms > 0 && idle > p->stall_ms) {
+	p->stalled = true;
+	return 1; // aborts with CURLE_ABORTED_BY_CALLBACK
+      }
+      return 0;
+    }
 
     size_t WriteBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
       Sink* sink = static_cast<Sink*>(userdata);
@@ -85,6 +120,8 @@ namespace net {
 
     Sink sink;
     sink.limit = req.max_bytes;
+    Progress progress;
+    progress.stall_ms = req.stall_timeout_ms;
     char message[CURL_ERROR_SIZE] = {0};
 
     ::curl_easy_setopt(curl_, CURLOPT_URL, req.url.c_str());
@@ -98,8 +135,14 @@ namespace net {
     ::curl_easy_setopt(curl_, CURLOPT_FOLLOWLOCATION,
 		       req.follow_redirects ? 1L : 0L);
     ::curl_easy_setopt(curl_, CURLOPT_MAXREDIRS, 5L);
-    ::curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, req.timeout_ms);
-    ::curl_easy_setopt(curl_, CURLOPT_CONNECTTIMEOUT_MS, kConnectTimeoutMs);
+    ::curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, req.deadline_ms);
+    ::curl_easy_setopt(curl_, CURLOPT_CONNECTTIMEOUT_MS,
+		       std::min(kConnectTimeoutMs,
+				req.stall_timeout_ms > 0 ? req.stall_timeout_ms
+							 : kConnectTimeoutMs));
+    ::curl_easy_setopt(curl_, CURLOPT_XFERINFOFUNCTION, OnProgress);
+    ::curl_easy_setopt(curl_, CURLOPT_XFERINFODATA, &progress);
+    ::curl_easy_setopt(curl_, CURLOPT_NOPROGRESS, 0L);
     // The worker thread must not be hit by libcurl's signal-based timeouts.
     ::curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L);
 
@@ -154,6 +197,9 @@ namespace net {
       if (sink.overflow)
 	error = "http: response larger than " +
 	  std::to_string(req.max_bytes / (1024 * 1024)) + " MiB";
+      else if (progress.stalled)
+	error = "http: no data from the server for " +
+	  std::to_string(req.stall_timeout_ms / 1000) + " s";
       else
 	error = std::string("http: ") +
 	  (message[0] ? message : ::curl_easy_strerror(code));

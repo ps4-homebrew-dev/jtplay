@@ -74,7 +74,12 @@
 						     data-class-folder="e.folder">
 							<div class="eicon">{{e.icon}}</div>
 							<div class="etitle">{{e.name}}</div>
+							<span class="emark" data-if="e.favorite">⭐</span>
+							<span class="emark watched" data-if="e.watched">✔</span>
 							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
+							<div class="eprog" data-if="e.progress != '0%'">
+								<div class="eprog-bar" data-style-width="e.progress"/>
+							</div>
 						</div>
 						<div class="empty" data-if="entry_count == 0 && !busy">
 							This folder is empty.
@@ -91,7 +96,7 @@
 							<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
 							<div class="detail-glyph" data-if="detail_image == ''">{{detail_icon}}</div>
 						</div>
-						<div class="detail-title">{{detail_name}}</div>
+						<div class="detail-title"><span class="detail-fav" data-if="detail_favorite">⭐ </span>{{detail_name}}</div>
 						<div class="detail-props">
 							<div class="prop" data-for="p : detail_props">
 								<span class="prop-label">{{p.label}}</span>
@@ -124,14 +129,19 @@
 			<div class="np-title">{{watch_name}}</div>
 			<div class="np-meta" data-if="watch_description != ''">{{watch_description}}</div>
 			<div class="np-atrack" data-if="watch_atrack != ''">{{watch_atrack}}</div>
-			<div class="watch-progress" data-if="watch_seekable">
-				<div class="bar" data-style-width="watch_progress"/>
+			<div class="timeline">
+				<span class="tl-state" data-if="watch_paused">⏸</span>
+				<span class="tl-state" data-if="!watch_paused">▶</span>
+				<span class="tl-pos">{{watch_pos}}</span>
+				<div class="tl-track" data-if="watch_seekable">
+					<div class="tl-buffered" data-style-width="watch_buffered"/>
+					<div class="tl-played" data-style-width="watch_progress"/>
+				</div>
+				<span class="tl-live" data-if="!watch_seekable">LIVE</span>
+				<span class="tl-dur" data-if="watch_dur != ''">{{watch_dur}}</span>
 			</div>
-			<div class="np-timeline">
-				<span class="np-state" data-if="watch_paused">⏸</span>
-				<span class="np-state" data-if="!watch_paused">▶</span>
-				<span class="np-time">{{watch_time}}</span>
-				<span class="spacer"/>
+			<div class="np-sub">
+				<span data-if="watch_speed != ''" class="badge">{{watch_speed}}</span>
 				<span class="np-ends" data-if="watch_ends != ''">{{watch_ends}}</span>
 			</div>
 			<div class="np-next" data-if="watch_next != ''">
@@ -139,24 +149,36 @@
 			</div>
 		</div>
 
-		<!-- Video: auto-hiding transport bar over the frames. -->
+		<!-- Video: auto-hiding transport bar over the frames. The timeline
+		     spans the full width of the bar, Kodi style. -->
 		<div id="watch-bar" data-if="watching && !watch_audio && info_visible">
-			<div class="watch-glyph" data-if="watch_paused">⏸</div>
-			<div class="watch-glyph" data-if="!watch_paused">▶</div>
-			<img class="watch-thumb" data-if="watch_image != ''" data-attr-src="watch_image"/>
-			<div class="watch-main">
-				<div class="watch-name">{{watch_name}}</div>
-				<div class="watch-tracks">
-					<span class="watch-track" data-if="watch_vtrack != ''">Video  {{watch_vtrack}}</span>
-					<span class="watch-track" data-if="watch_atrack != ''">Audio  {{watch_atrack}}</span>
+			<div class="watch-row">
+				<img class="watch-thumb" data-if="watch_image != ''" data-attr-src="watch_image"/>
+				<div class="watch-main">
+					<div class="watch-name">{{watch_name}}</div>
+					<div class="watch-tracks">
+						<span class="watch-track" data-if="watch_vtrack != ''">Video  {{watch_vtrack}}</span>
+						<span class="watch-track" data-if="watch_atrack != ''">Audio  {{watch_atrack}}</span>
+					</div>
 				</div>
-				<div class="watch-progress" data-if="watch_seekable">
-					<div class="bar" data-style-width="watch_progress"/>
+				<div class="watch-side">
+					<div class="watch-clock">{{clock}}</div>
+					<div class="watch-ends">
+						<span data-if="watch_speed != ''" class="badge">{{watch_speed}}</span>
+						<span data-if="watch_ends != ''">{{watch_ends}}</span>
+					</div>
 				</div>
 			</div>
-			<div class="watch-side">
-				<div class="watch-time">{{watch_time}}</div>
-				<div class="watch-ends" data-if="watch_ends != ''">{{watch_ends}}</div>
+			<div class="timeline">
+				<span class="tl-state" data-if="watch_paused">⏸</span>
+				<span class="tl-state" data-if="!watch_paused">▶</span>
+				<span class="tl-pos">{{watch_pos}}</span>
+				<div class="tl-track" data-if="watch_seekable">
+					<div class="tl-buffered" data-style-width="watch_buffered"/>
+					<div class="tl-played" data-style-width="watch_progress"/>
+				</div>
+				<span class="tl-live" data-if="!watch_seekable">LIVE</span>
+				<span class="tl-dur" data-if="watch_dur != ''">{{watch_dur}}</span>
 			</div>
 		</div>
 
@@ -169,6 +191,15 @@
 		</div>
 
 		<div id="toast" data-if="toast != ''">{{toast}}</div>
+
+		<!-- Screensaver: dims everything after a while without input. -->
+		<div id="saver" data-if="saver">
+			<div class="saver-box" data-style-left="saver_x" data-style-top="saver_y">
+				<div class="saver-clock">{{clock}}</div>
+				<div class="saver-date">{{date}}</div>
+				<div class="saver-now" data-if="saver_now != ''">{{saver_now}}</div>
+			</div>
+		</div>
 
 	</body>
 </rml>

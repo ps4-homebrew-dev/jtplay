@@ -28,8 +28,35 @@ sessions.
 Moving past the last row of a list wraps around to the first, and the other
 way round.
 
-The options button opens a side menu with the sort settings, refresh, and
-going back to the source list.
+The options button opens a side menu: what can be done with the selected
+item (add to favorites, mark as watched, play from the beginning) followed by
+the sort settings, refresh, and going back to the source list.
+
+## Favorites and Continue watching
+
+Any folder or item, from any source, can be added to **Favorites**, which is
+always the first entry of the source list. A favorite folder is a shortcut:
+it browses (and plays) through the source it came from, so a DLNA folder
+works as long as that server is on the network.
+
+Videos (and audio longer than 20 minutes) remember where they were stopped.
+Playing one again offers to resume, unfinished items show a progress bar on
+their row and are collected under **Continue watching**, and anything played
+past 92% is marked watched with a tick. Moving to the next item in a folder
+resumes it without asking. All of this is stored in `library.xml` in the
+cache directory.
+
+## Playing
+
+The options button opens the playback menu: audio track, subtitles, video
+track, speed (0.5× to 2×), favorites, play next and stop. The info bar shows
+a full-width timeline with the buffered part of a network stream shaded
+ahead of the playhead, the time it will end (adjusted for the speed), and
+"LIVE" for streams that cannot seek. An item that fails to open while going
+through a folder is skipped.
+
+After three minutes without input (and no video running) the screen dims to
+a slowly drifting clock; the first key press only wakes it.
 
 ## JavaScript plugins
 
@@ -100,7 +127,7 @@ run on the browsing worker thread) and return the response directly:
 ```js
 const res = http.get("https://api.example.com/things", {
   headers: { Accept: "application/json" },
-  timeout: 20,        // seconds; default 15, capped at 60
+  timeout: 20,        // seconds without data; default 30, capped at 60
 });
 if (!res.ok) throw new Error("HTTP " + res.status);
 const things = JSON.parse(res.body);
@@ -117,7 +144,7 @@ can be turned off with `redirect: false`, and `binary: true` returns the body
 as an `ArrayBuffer` instead of a string (a string body is decoded as UTF-8).
 
 An HTTP error status is *not* an exception: check `res.ok`. Transport
-failures (DNS, TLS, timeout) throw an `Error`, so wrap calls in `try`/`catch`
+failures (DNS, TLS, a server that stops sending) throw an `Error`, so wrap calls in `try`/`catch`
 if a source should survive an unreachable server. Only `http` and `https`
 URLs are permitted, and a response over 8 MiB is refused. Time spent waiting
 on a request does not count towards the 10-second watchdog.
@@ -138,7 +165,7 @@ options button is the way into everything that is not on the d-pad.
 | d-pad left / right    | arrows          | page up / down                   | seek -10 / +10 s           |
 | cross (A)             | Return          | open / play                      | pause                      |
 | circle (B)            | Backspace       | back                             | stop                       |
-| options (start)       | F1              | options menu                     | info bar                   |
+| options (start)       | F1              | options menu                     | playback menu              |
 | square (X)            | Space           | next sort key (sources: rescan)  | next video track           |
 | triangle (Y)          | T               | reverse sort order               | next audio track           |
 | L1 / R1               | PageUp/PageDown | page up / down                   | previous / next item       |

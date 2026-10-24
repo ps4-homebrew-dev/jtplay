@@ -22,9 +22,11 @@ add_executable(jtplay
     src/main.cpp
     src/app.cpp
     src/app_browse.cpp
+    src/app_library.cpp
     src/app_watch.cpp
     src/artcache.cpp
     src/gamepad.cpp
+    src/library.cpp
     src/player.cpp
     src/browse/dlna_source.cpp
     src/browse/fs_source.cpp

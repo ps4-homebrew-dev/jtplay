@@ -1,7 +1,8 @@
 /*
  * Watch mode: hides the UI chrome so the video (drawn beneath the RmlUi
  * layer) shows through, and styles the auto-hiding transport bar over it.
- * Audio playback keeps a persistent now-playing card instead.
+ * Audio playback keeps a persistent now-playing card instead. Both share
+ * the timeline: state, elapsed, the bar, total.
  */
 
 /* Let the video drawn beneath the UI show through. */
@@ -14,28 +15,117 @@ body.watching #shell {
 }
 
 /* ------------------------------------------------------------------ */
+/* Timeline                                                           */
+/* ------------------------------------------------------------------ */
+
+.timeline {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+}
+
+.tl-state {
+	width: 44px;
+	font-size: 30px;
+	color: #4dd6b8;
+}
+
+.tl-pos,
+.tl-dur {
+	font-size: 26px;
+	color: #e8edf7;
+	white-space: nowrap;
+}
+
+.tl-pos {
+	min-width: 112px;
+}
+
+.tl-dur {
+	min-width: 112px;
+	text-align: right;
+	color: #aab6cc;
+}
+
+/* The bar: what is buffered ahead in a lighter shade under what has been
+ * played. Both children are positioned over the track, so the played part
+ * always draws on top. */
+.tl-track {
+	position: relative;
+	flex: 1;
+	height: 10px;
+	margin: 0px 24px;
+	border-radius: 5px;
+	background-color: #ffffff1f;
+}
+
+.tl-buffered,
+.tl-played {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	height: 10px;
+	border-radius: 5px;
+}
+
+.tl-buffered {
+	background-color: #ffffff33;
+}
+
+.tl-played {
+	background-color: #4dd6b8;
+}
+
+.tl-live {
+	flex: 1;
+	margin-left: 24px;
+	font-size: 20px;
+	font-weight: bold;
+	letter-spacing: 4px;
+	color: #ff6b6b;
+}
+
+.badge {
+	display: inline-block;
+	margin-right: 14px;
+	padding: 2px 10px;
+	font-size: 20px;
+	font-weight: bold;
+	color: #0d1322;
+	background-color: #4dd6b8;
+	border-radius: 6px;
+}
+
+/* ------------------------------------------------------------------ */
 /* Video transport bar                                                */
 /* ------------------------------------------------------------------ */
 
 #watch-bar {
 	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
+	left: 0px;
+	right: 0px;
+	bottom: 0px;
+	box-sizing: border-box;
 	display: flex;
-	flex-direction: row;
-	align-items: center;
-	padding: 36px 56px 44px 56px;
-	background-color: #0a0e18d8;
+	flex-direction: column;
+	padding: 36px 64px 44px 64px;
+	background-color: #0a0e18e0;
 	border-top: 2px #ffffff14;
 }
 
-/* Play/pause state, left of the title. */
-.watch-glyph {
-	width: 72px;
-	font-size: 48px;
-	text-align: center;
-	color: #4dd6b8;
+.watch-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-bottom: 26px;
+}
+
+.watch-thumb {
+	display: block;
+	width: 148px;
+	max-height: 84px;
+	border-radius: 10px;
 	margin-right: 28px;
 }
 
@@ -43,7 +133,7 @@ body.watching #shell {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
-	margin-right: 40px;
+	overflow: hidden;
 }
 
 .watch-name {
@@ -64,42 +154,30 @@ body.watching #shell {
 }
 
 .watch-track {
-	font-size: 26px;
+	font-size: 24px;
 	color: #8593ab;
 	margin-right: 32px;
 	white-space: nowrap;
-	overflow: hidden;
-}
-
-.watch-progress {
-	margin-top: 16px;
-	width: 100%;
-	max-width: 900px;
-	height: 8px;
-	border-radius: 4px;
-	background-color: #ffffff1a;
-}
-.watch-progress .bar {
-	height: 8px;
-	border-radius: 4px;
-	background-color: #4dd6b8;
 }
 
 .watch-side {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
+	margin-left: 40px;
 }
 
-.watch-time {
-	font-size: 30px;
+.watch-clock {
+	font-size: 40px;
+	font-weight: bold;
 	color: #e8edf7;
 }
 
 .watch-ends {
-	margin-top: 8px;
+	margin-top: 4px;
 	font-size: 22px;
 	color: #8593ab;
+	white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ */
@@ -114,7 +192,7 @@ body.watching #shell {
 	margin-left: -500px;
 	margin-top: -420px;
 	width: 1000px;
-	padding: 56px 72px;
+	padding: 56px 64px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -136,6 +214,15 @@ body.watching #shell {
 	margin-bottom: 36px;
 }
 
+/* Downloaded artwork replaces the note glyph. */
+#audio-card .np-art {
+	display: block;
+	width: 280px;
+	max-height: 280px;
+	border-radius: 20px;
+	margin-bottom: 36px;
+}
+
 #audio-card .np-title {
 	font-size: 42px;
 	font-weight: bold;
@@ -143,7 +230,7 @@ body.watching #shell {
 	text-align: center;
 	white-space: nowrap;
 	overflow: hidden;
-	max-width: 780px;
+	max-width: 860px;
 }
 
 #audio-card .np-meta {
@@ -160,39 +247,26 @@ body.watching #shell {
 	text-align: center;
 }
 
-#audio-card .watch-progress {
+#audio-card .timeline {
 	margin-top: 40px;
-	width: 100%;
-	max-width: none;
 }
 
-/* State glyph, elapsed / total ... ends at, under the progress bar. */
-#audio-card .np-timeline {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	width: 100%;
-	margin-top: 16px;
+#audio-card .tl-pos,
+#audio-card .tl-dur {
+	min-width: 80px;
+	font-size: 24px;
 }
 
-#audio-card .np-state {
-	margin-right: 14px;
-	font-size: 26px;
-	color: #4dd6b8;
-}
-
-#audio-card .np-time {
-	font-size: 26px;
-	color: #aab6cc;
-}
-
-#audio-card .np-ends {
+#audio-card .np-sub {
+	margin-top: 12px;
+	height: 30px;
 	font-size: 22px;
 	color: #8593ab;
+	text-align: center;
 }
 
 #audio-card .np-next {
-	margin-top: 32px;
+	margin-top: 26px;
 	padding-top: 22px;
 	width: 100%;
 	border-top: 1px #ffffff14;
@@ -209,24 +283,6 @@ body.watching #shell {
 	font-weight: bold;
 	letter-spacing: 3px;
 	color: #4dd6b8;
-}
-
-/* Downloaded artwork replaces the note glyph on the audio card... */
-#audio-card .np-art {
-	display: block;
-	width: 280px;
-	max-height: 280px;
-	border-radius: 20px;
-	margin-bottom: 36px;
-}
-
-/* ...and sits next to the state glyph on the video transport bar. */
-.watch-thumb {
-	display: block;
-	width: 148px;
-	max-height: 84px;
-	border-radius: 10px;
-	margin-right: 28px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -250,4 +306,41 @@ body.watching #shell {
 	margin-left: 10px;
 	font-size: 24px;
 	color: #e8edf7;
+}
+
+/* ------------------------------------------------------------------ */
+/* Screensaver                                                        */
+/* ------------------------------------------------------------------ */
+
+#saver {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	background-color: #000000f8;
+}
+
+.saver-box {
+	position: absolute;
+	width: 760px;
+}
+
+.saver-clock {
+	font-size: 150px;
+	font-weight: bold;
+	color: #5a6478;
+}
+
+.saver-date {
+	font-size: 34px;
+	color: #3c4454;
+}
+
+.saver-now {
+	margin-top: 28px;
+	font-size: 30px;
+	color: #3c4454;
+	white-space: nowrap;
+	overflow: hidden;
 }

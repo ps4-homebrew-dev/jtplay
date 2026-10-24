@@ -216,3 +216,44 @@
 	max-height: 230px;
 	overflow: hidden;
 }
+
+/* ------------------------------------------------------------------ */
+/* Library markers on rows                                            */
+/* ------------------------------------------------------------------ */
+
+.entry-row {
+	position: relative;
+}
+
+/* Favorite star / watched tick, between the title and the right column. */
+.emark {
+	margin-left: 14px;
+	font-size: 22px;
+	color: #e0b84d;
+}
+
+.emark.watched {
+	color: #4dd6b8;
+}
+
+/* How far an unfinished item got: a thin bar along the row's bottom edge,
+ * under the title, Kodi style. */
+.eprog {
+	position: absolute;
+	left: 94px;
+	right: 24px;
+	bottom: 8px;
+	height: 4px;
+	border-radius: 2px;
+	background-color: #ffffff1a;
+}
+
+.eprog-bar {
+	height: 4px;
+	border-radius: 2px;
+	background-color: #4dd6b8;
+}
+
+.detail-fav {
+	color: #e0b84d;
+}

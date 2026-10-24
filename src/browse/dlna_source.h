@@ -16,6 +16,9 @@ public:
   const std::string& Name() const override { return server_.friendly_name; }
   const std::string& Detail() const override { return detail_; }
   const char* Icon() const override { return "🖥"; }
+  std::string Key() const override {
+    return "dlna:" + (server_.udn.empty() ? server_.location : server_.udn);
+  }
 
   std::string RootId() const override { return "0"; } // ContentDirectory root
 

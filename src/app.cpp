@@ -42,7 +42,7 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
   // The player draws with the window's GL context, current here. Without it
   // the app still browses; playing says why it can't.
   std::string player_error;
-  if (!player_->Initialize(player_error))
+  if (!player_->Initialize(player_error, options.fonts_dir))
     Rml::Log::Message(Rml::Log::LT_WARNING, "No playback: %s", player_error.c_str());
 
   // Cache directory: artwork, plus the small settings file. If it can't be
@@ -62,6 +62,13 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
       cache_dir.c_str(), std::strerror(errno));
   settings_path_ = cache_dir + "/settings.ini";
   LoadSettings();
+  library_.Load(cache_dir + "/library.xml");
+  library_seen_ = library_.Generation();
+  favorites_source_ = std::make_shared<library::LibrarySource>(
+    library::LibrarySource::Kind::Favorites, library_, registry_);
+  continue_source_ = std::make_shared<library::LibrarySource>(
+    library::LibrarySource::Kind::ContinueWatching, library_, registry_);
+  RebuildSources();
 
   providers_.push_back(std::make_unique<browse::FsProvider>());
   providers_.push_back(std::make_unique<browse::DlnaProvider>(kDiscoveryWaitMs));
@@ -94,6 +101,10 @@ void App::Shutdown() {
   }
 
   artcache::Shutdown(); // after the worker is joined; it calls Fetch()
+
+  if (bind_watching_)
+    RecordProgress(true);
+  library_.Save();
 
   if (player_) {
     player_->Stop();
@@ -209,7 +220,10 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("icon", &EntryRow::icon);
     row.RegisterMember("name", &EntryRow::name);
     row.RegisterMember("meta", &EntryRow::meta);
+    row.RegisterMember("progress", &EntryRow::progress);
     row.RegisterMember("folder", &EntryRow::folder);
+    row.RegisterMember("favorite", &EntryRow::favorite);
+    row.RegisterMember("watched", &EntryRow::watched);
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
 
@@ -249,6 +263,12 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("detail_description", &bind_detail_description_);
   ctor.Bind("detail_props", &detail_props_);
   ctor.Bind("detail_image", &bind_detail_image_);
+  ctor.Bind("detail_favorite", &bind_detail_favorite_);
+
+  ctor.Bind("saver", &bind_saver_);
+  ctor.Bind("saver_x", &bind_saver_x_);
+  ctor.Bind("saver_y", &bind_saver_y_);
+  ctor.Bind("saver_now", &bind_saver_now_);
 
   ctor.Bind("menu_open", &bind_menu_open_);
   ctor.Bind("menu_title", &bind_menu_title_);
@@ -262,7 +282,10 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_seekable", &bind_watch_seekable_);
   ctor.Bind("watch_name", &bind_watch_name_);
   ctor.Bind("watch_description", &bind_watch_description_);
-  ctor.Bind("watch_time", &bind_watch_time_);
+  ctor.Bind("watch_pos", &bind_watch_pos_);
+  ctor.Bind("watch_dur", &bind_watch_dur_);
+  ctor.Bind("watch_buffered", &bind_watch_buffered_);
+  ctor.Bind("watch_speed", &bind_watch_speed_);
   ctor.Bind("watch_ends", &bind_watch_ends_);
   ctor.Bind("watch_next", &bind_watch_next_);
   ctor.Bind("watch_progress", &bind_watch_progress_);
@@ -310,6 +333,20 @@ void App::Update() {
   }
 
   RunReplies();
+
+  // Favorites or progress changed (here or in a worker reply): bring the
+  // views that show them up to date, and save now and then.
+  if (library_.Generation() != library_seen_) {
+    library_seen_ = library_.Generation();
+    OnLibraryChanged();
+  }
+  if (bind_watching_ && player_->IsPlaying() && now - progress_saved_at_ > 15.0) {
+    progress_saved_at_ = now;
+    RecordProgress(false);
+  }
+
+  UpdateScreensaver(now);
+
   if (image_refresh_pending_) {
     image_refresh_pending_ = false;
     RefreshImageBindings();
@@ -319,7 +356,8 @@ void App::Update() {
     UpdateWatchOverlay();
     if (player_->IsPlaying() && player_->AtEnd())
       HandlePlaybackEnd();
-    if (bind_info_visible_ && !bind_watch_audio_ && now > info_deadline_)
+    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
+        now > info_deadline_)
       Set("info_visible", bind_info_visible_, false);
   }
 
@@ -380,6 +418,14 @@ void App::ProcessEvent(Rml::Event& event) {
     return;
 
   const int key = event.GetParameter<int>("key_identifier", 0);
+
+  // The first key after the screensaver came up only wakes the screen.
+  last_input_ = Now();
+  if (bind_saver_) {
+    Set("saver", bind_saver_, false);
+    event.StopPropagation();
+    return;
+  }
 
   // Global quit (keyboard only; controllers use the system's own menu).
   if (key == Rml::Input::KI_Q &&

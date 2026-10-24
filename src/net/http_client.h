@@ -33,7 +33,13 @@ public:
     std::string body;
     bool has_body = false;
     bool follow_redirects = true;
-    long timeout_ms = 15000;
+
+    // Gives up when no data has moved for this long. This is not a cap on
+    // the whole transfer: a large listing or image on a slow link may take
+    // as long as it needs, as long as bytes keep arriving.
+    long stall_timeout_ms = 30000;
+    // Optional hard limit on the whole request, 0 = none.
+    long deadline_ms = 0;
 
     // The body is held outside any managed heap, so every caller states how
     // much it is willing to hold. Exceeding it aborts the transfer.
@@ -53,7 +59,7 @@ public:
   HttpClient(const HttpClient&) = delete;
   HttpClient& operator=(const HttpClient&) = delete;
 
-  // Returns false only on transport errors (DNS, TLS, timeout, ...);
+  // Returns false only on transport errors (DNS, TLS, stall, ...);
   // HTTP error statuses are a successful request with res.status set.
   bool Perform(const Request& req, Response& res, std::string& error);
 

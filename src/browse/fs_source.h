@@ -16,6 +16,7 @@ public:
   const std::string& Name() const override { return name_; }
   const std::string& Detail() const override { return root_; }
   const char* Icon() const override { return "💾"; }
+  std::string Key() const override { return "fs:" + root_; }
   std::string RootId() const override { return root_; }
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
 

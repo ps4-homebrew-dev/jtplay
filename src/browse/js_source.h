@@ -75,6 +75,7 @@ namespace browse {
     const std::string& Detail() const override { return detail_; }
     const char* Icon() const override { return icon_.c_str(); }
     std::string RootId() const override { return root_; }
+    std::string Key() const override;
 
     bool Browse(const std::string& id, Listing& out,
 		std::string& error) override;

@@ -7,7 +7,10 @@ namespace upnp {
 
 namespace {
 
-constexpr long kTimeoutMs = 8000;
+// Seconds without a byte before a request is given up. Generous, because
+// some servers (Plex, Jellyfin on a NAS) think for a long time before the
+// first byte of a big folder; the transfer itself may take any length.
+constexpr long kStallTimeoutMs = 30000;
 // Device descriptions and DIDL listings are small; anything this large is a
 // server misbehaving, not something worth holding in memory.
 constexpr size_t kMaxBytes = 4u << 20;
@@ -105,7 +108,7 @@ bool HttpRequest(const char* method, const std::string& url,
 	req.headers.emplace_back("User-Agent", "Linux/1.0 UPnP/1.0 jtplay/1.0");
 	req.body = body;
 	req.has_body = !body.empty();
-	req.timeout_ms = kTimeoutMs;
+	req.stall_timeout_ms = kStallTimeoutMs;
 	req.max_bytes = kMaxBytes;
 
 	net::HttpClient::Response res;

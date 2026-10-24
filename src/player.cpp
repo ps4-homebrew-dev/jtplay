@@ -16,10 +16,10 @@
 
 namespace {
 
-// How long Open() waits for mpv to open a file. mpv gives up on a silent
-// server by itself (network-timeout); this only bounds a server that keeps
-// trickling.
-constexpr auto kOpenTimeout = std::chrono::seconds(60);
+// A stalled server is mpv's to notice (network-timeout: no data for that
+// long); a slow but live one may take as long as it takes, and the user can
+// back out with AbortOpen(). This only bounds an mpv that never answers.
+constexpr auto kOpenTimeout = std::chrono::minutes(5);
 
 // The spectrum shown for audio-only files, fed from track 'aid'. It is a
 // lavfi graph: the audio goes to the output untouched ([ao]), a copy is
@@ -44,6 +44,9 @@ enum : uint64_t {
   kPropVid,
   kPropAid,
   kPropTrackList,
+  kPropSid,
+  kPropCacheTime,
+  kPropSpeed,
 };
 
 const mpv_node* MapGet(const mpv_node* map, const char* key) {
@@ -105,7 +108,7 @@ Player::~Player() {
   Shutdown();
 }
 
-bool Player::Initialize(std::string& error) {
+bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
   if (mpv_)
     return true;
 
@@ -147,7 +150,7 @@ bool Player::Initialize(std::string& error) {
     {"hwdec", "no", false},
     // Cover art is shown by the UI, from the server's metadata.
     {"audio-display", "no", false},
-    {"network-timeout", "15", false},
+    {"network-timeout", "30", false},
     // DLNA servers recycle sockets aggressively.
     {"stream-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5", false},
 #if defined(__ORBIS__)
@@ -164,6 +167,15 @@ bool Player::Initialize(std::string& error) {
   }
   if (const char* ca = std::getenv("SSL_CERT_FILE"))
     mpv_set_option_string(mpv_, "tls-ca-file", ca);
+
+  // Subtitles in the UI's typeface, from the app's own font directory, so
+  // text subtitles render the same with and without a system font setup.
+  if (!fonts_dir.empty()) {
+    mpv_set_option_string(mpv_, "sub-fonts-dir", fonts_dir.c_str());
+    mpv_set_option_string(mpv_, "osd-fonts-dir", fonts_dir.c_str());
+    mpv_set_option_string(mpv_, "sub-font", "LatoLatin");
+    mpv_set_option_string(mpv_, "sub-bold", "yes");
+  }
 
   // Extra mpv options for testing and tuning, as "name=value" words:
   //   JTPLAY_MPV="hwdec=auto-safe ao=pulse" ./jtplay
@@ -218,6 +230,9 @@ bool Player::Initialize(std::string& error) {
   mpv_observe_property(mpv_, kPropVid, "vid", MPV_FORMAT_INT64);
   mpv_observe_property(mpv_, kPropAid, "aid", MPV_FORMAT_INT64);
   mpv_observe_property(mpv_, kPropTrackList, "track-list", MPV_FORMAT_NODE);
+  mpv_observe_property(mpv_, kPropSid, "sid", MPV_FORMAT_INT64);
+  mpv_observe_property(mpv_, kPropCacheTime, "demuxer-cache-time", MPV_FORMAT_DOUBLE);
+  mpv_observe_property(mpv_, kPropSpeed, "speed", MPV_FORMAT_DOUBLE);
 
   quitting_ = false;
   event_thread_ = std::thread(&Player::EventThread, this);
@@ -254,10 +269,13 @@ void Player::ResetFileState() {
   duration_us_ = -1;
   video_id_ = -1;
   audio_id_ = -1;
+  sub_id_ = -1;
+  buffered_us_ = -1;
   {
     std::lock_guard<std::mutex> lock(tracks_mutex_);
     video_tracks_.clear();
     audio_tracks_.clear();
+    sub_tracks_.clear();
     track_status_.clear();
   }
   vtrack_count_ = 0;
@@ -268,22 +286,30 @@ void Player::ResetFileState() {
 // Opening and stopping (app worker thread)
 // ---------------------------------------------------------------------------
 
-bool Player::Open(const std::string& url, std::string& error) {
+bool Player::Open(const std::string& url, std::string& error, int64_t start_seconds) {
   if (!mpv_) {
     error = "the player is not available";
     return false;
   }
 
   Stop();
-  opening_ = true;
 
   // Whatever the last file left set is undone before the next one starts.
   mpv_set_property_string(mpv_, "pause", "no");
+  mpv_set_property_string(mpv_, "speed", "1");
+  speed_ = 1.0;
+  // "start" applies to every file loaded after it is set, so it is set
+  // (or reset) for each one.
+  const std::string start = start_seconds > 0 ? std::to_string(start_seconds) : "none";
+  mpv_set_property_string(mpv_, "start", start.c_str());
 
   int64_t starts_before;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     starts_before = started_count_;
+    // Together, so an AbortOpen() sees either no open or this one.
+    opening_ = true;
+    abort_open_ = false;
     end_error_.clear();
     last_log_error_.clear();
   }
@@ -304,7 +330,7 @@ bool Player::Open(const std::string& url, std::string& error) {
   std::unique_lock<std::mutex> lock(mutex_);
   const auto deadline = std::chrono::steady_clock::now() + kOpenTimeout;
   const bool settled = cv_.wait_until(lock, deadline, [&] {
-    if (quitting_)
+    if (quitting_ || abort_open_)
       return true;
     // An mpv too old to name the entry: the first file started after the
     // command is the one.
@@ -315,10 +341,12 @@ bool Player::Open(const std::string& url, std::string& error) {
 
   // A file that loaded and is over already (a very short clip) counts as
   // opened; AtEnd() then moves on.
-  if (!settled || quitting_ || loaded_id_ != id) {
+  if (!settled || quitting_ || abort_open_ || loaded_id_ != id) {
     std::string why = !settled ? "timed out" : end_error_;
     if (!last_log_error_.empty())
       why = last_log_error_;
+    if (abort_open_)
+      why = "cancelled";
     lock.unlock();
     opening_ = false;
     const char* stop[] = {"stop", nullptr};
@@ -348,6 +376,14 @@ bool Player::Open(const std::string& url, std::string& error) {
   active_ = true;
   opening_ = false;
   return true;
+}
+
+void Player::AbortOpen() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!opening_)
+    return;
+  abort_open_ = true;
+  cv_.notify_all();
 }
 
 void Player::Stop() {
@@ -458,6 +494,16 @@ void Player::EventThread() {
       case kPropAid:
         audio_id_ = (int)PropertyInt(prop, -1);
         break;
+      case kPropSid:
+        sub_id_ = (int)PropertyInt(prop, -1); // "no" arrives as no int
+        break;
+      case kPropCacheTime:
+        buffered_us_ = PropertyUs(prop);
+        break;
+      case kPropSpeed:
+        if (prop->format == MPV_FORMAT_DOUBLE && prop->data)
+          speed_ = *static_cast<const double*>(prop->data);
+        break;
       case kPropTrackList:
         if (prop->format == MPV_FORMAT_NODE && prop->data)
           UpdateTracks(static_cast<const mpv_node*>(prop->data));
@@ -485,6 +531,7 @@ void Player::EventThread() {
 void Player::UpdateTracks(const mpv_node* list) {
   std::vector<VideoTrackInfo> video;
   std::vector<AudioTrackInfo> audio;
+  std::vector<SubtitleTrackInfo> subs;
   std::string video_desc, audio_desc;
 
   if (list && list->format == MPV_FORMAT_NODE_ARRAY && list->u.list) {
@@ -492,7 +539,8 @@ void Player::UpdateTracks(const mpv_node* list) {
       const mpv_node* track = &list->u.list->values[i];
       const std::string type = NodeString(MapGet(track, "type"));
       const bool is_video = type == "video";
-      if (!is_video && type != "audio")
+      const bool is_sub = type == "sub";
+      if (!is_video && !is_sub && type != "audio")
         continue;
       // Cover art is a video track in name only; not selectable.
       if (is_video && NodeFlag(MapGet(track, "albumart")))
@@ -509,7 +557,12 @@ void Player::UpdateTracks(const mpv_node* list) {
       append(NodeString(MapGet(track, "title")));
 
       std::string codec = NodeString(MapGet(track, "codec"));
-      if (is_video) {
+      if (is_sub) {
+        if (NodeFlag(MapGet(track, "forced")))
+          append("Forced");
+        if (NodeFlag(MapGet(track, "external")))
+          append("External");
+      } else if (is_video) {
         const int64_t w = NodeInt(MapGet(track, "demux-w"), 0);
         const int64_t h = NodeInt(MapGet(track, "demux-h"), 0);
         if (w > 0 && h > 0)
@@ -526,13 +579,13 @@ void Player::UpdateTracks(const mpv_node* list) {
       }
       append(codec);
 
-      std::vector<TrackInfo>& into = is_video ? video : audio;
+      std::vector<TrackInfo>& into = is_sub ? subs : is_video ? video : audio;
       TrackInfo t;
       t.stream_index = (int)NodeInt(MapGet(track, "id"), -1);
       t.label = label.empty() ? "Track " + std::to_string(into.size() + 1) : label;
       into.push_back(std::move(t));
 
-      if (NodeFlag(MapGet(track, "selected")))
+      if (!is_sub && NodeFlag(MapGet(track, "selected")))
         (is_video ? video_desc : audio_desc) = codec;
     }
   }
@@ -544,6 +597,7 @@ void Player::UpdateTracks(const mpv_node* list) {
   std::lock_guard<std::mutex> lock(tracks_mutex_);
   video_tracks_ = std::move(video);
   audio_tracks_ = std::move(audio);
+  sub_tracks_ = std::move(subs);
   track_status_ = status;
   vtrack_count_ = (int)video_tracks_.size();
   atrack_count_ = (int)audio_tracks_.size();
@@ -687,5 +741,33 @@ bool Player::SelectAudioTrack(int stream_index) {
   int64_t id = stream_index;
   mpv_set_property_async(mpv_, 0, "aid", MPV_FORMAT_INT64, &id);
   audio_id_ = stream_index;
+  return true;
+}
+
+void Player::SetSpeed(double speed) {
+  if (!mpv_ || !active_)
+    return;
+  speed_ = speed; // at once, for the UI; the property event confirms it
+  mpv_set_property_async(mpv_, 0, "speed", MPV_FORMAT_DOUBLE, &speed);
+}
+
+std::vector<SubtitleTrackInfo> Player::SubtitleTracks() const {
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  return sub_tracks_;
+}
+
+bool Player::SelectSubtitleTrack(int stream_index) {
+  if (!active_ || stream_index == CurrentSubtitleStream())
+    return false;
+  if (stream_index >= 0) {
+    bool known = false;
+    for (const TrackInfo& t : SubtitleTracks())
+      known |= t.stream_index == stream_index;
+    if (!known)
+      return false;
+  }
+  const std::string value = stream_index >= 0 ? std::to_string(stream_index) : "no";
+  mpv_set_property_string(mpv_, "sid", value.c_str());
+  sub_id_ = stream_index;
   return true;
 }

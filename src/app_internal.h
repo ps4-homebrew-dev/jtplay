@@ -34,6 +34,8 @@ inline constexpr double kToastSec = 3.0;
 // appears once the open has taken at least this long.
 inline constexpr double kLaunchFeedbackSec = 0.3;
 inline constexpr double kWatchInfoSec = 5.0;      // watch info bar auto-hide
+inline constexpr double kScreensaverSec = 180.0;  // idle time before dimming
+inline constexpr double kScreensaverMoveSec = 20.0;
 inline constexpr int kDiscoveryWaitMs = 2500;
 
 inline constexpr int64_t kSeekSmallUs = 10 * 1000000LL;

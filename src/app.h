@@ -26,6 +26,7 @@
 #include <RmlUi/Core.h>
 
 #include "browse/source.h"
+#include "library.h"
 #include "player.h"
 
 class App : public Rml::EventListener {
@@ -37,6 +38,7 @@ public:
     std::string assets_dir = "assets";   // directory containing main.rml
     std::string cache_dir;             // artwork cache; "" = XDG default
     std::string plugins_dir;           // JS plugin scripts; "" = none
+    std::string fonts_dir;             // also used for subtitles
   };
 
   // Creates the data model and loads <assets_dir>/main.rml. Must be called
@@ -82,7 +84,12 @@ private:
     Rml::String icon;   // glyph for the type of entry
     Rml::String name;
     Rml::String meta;   // right-hand column: follows the sort key
+    // Resume bar width ("37%"); "0%" = none. Never empty: a data-style
+    // binding is evaluated even on a row its data-if hides.
+    Rml::String progress = "0%";
     bool folder = false;
+    bool favorite = false;
+    bool watched = false;
   };
   struct PropRow {      // one "label: value" line in the info panel
     Rml::String label;
@@ -128,6 +135,20 @@ private:
   void LoadSettings();
   void SaveSettings() const;
 
+  // --- Library (favorites, resume points) ----------------------------------
+  // The source and source-native id 'entry' belongs to, also for entries
+  // listed under Favorites / Continue watching. False when unknown.
+  bool Identify(const browse::Entry& entry, library::Ref& out) const;
+  void ToggleFavorite(const browse::Entry& entry);
+  void SetWatched(const browse::Entry& entry, bool watched);
+  // Saves the playing item's position as a resume point, or marks it
+  // watched once it is (nearly) over. 'final': playback is ending;
+  // 'ended': it played to the end.
+  void RecordProgress(bool final, bool ended = false);
+  // Library changed: refresh what shows it (rows, counts, library views).
+  void OnLibraryChanged();
+  void RebuildSources();   // library sources + discovered ones
+
   // --- Sources view ------------------------------------------------------
   void StartDiscovery();
   void RebuildSourceRows();
@@ -166,7 +187,11 @@ private:
   void HandleKeyMenu(Rml::Event& event, int key);
 
   // --- Playback ----------------------------------------------------------
+  // Plays 'entry', first offering to resume where it was left off.
   void PlayEntry(const browse::Entry& entry);
+  void Launch(const browse::Entry& entry, int64_t start_seconds);
+  void OpenWatchMenu();
+  void CycleSubtitleTrack(int direction);
   // Abandons an in-flight PlayEntry: the result that eventually arrives is
   // discarded (and the stream torn down again if it did open).
   void CancelLaunch();
@@ -181,9 +206,14 @@ private:
   // playing (or being launched), or -1.
   int NeighborIndex(int direction) const;
   bool PlayNeighbor(int direction);      // next/previous playable item
-  void CycleAudioTrack();
-  void CycleVideoTrack();
+  void CycleAudioTrack(int direction = +1);
+  void CycleVideoTrack(int direction = +1);
   void HandleKeyWatch(Rml::Event& event, int key);
+
+  // --- Screensaver -------------------------------------------------------
+  // Dims the screen with a drifting clock after a while without input,
+  // unless a video is playing.
+  void UpdateScreensaver(double now);
 
   void EnsureRowVisible(const char* list_id, int index, float row_pitch);
   void ShowToast(const std::string& text);
@@ -224,8 +254,11 @@ private:
   bool bind_watch_seekable_ = false;
   Rml::String bind_watch_name_;
   Rml::String bind_watch_description_;
-  Rml::String bind_watch_time_;
+  Rml::String bind_watch_pos_;     // "12:34"
+  Rml::String bind_watch_dur_;     // "45:00", "" for live streams
   Rml::String bind_watch_ends_;    // "Ends at 21:45"
+  Rml::String bind_watch_buffered_ = "0%"; // buffered-ahead bar width
+  Rml::String bind_watch_speed_;   // "1.5×", "" at normal speed
   Rml::String bind_watch_next_;    // name of the item that plays next
   Rml::String bind_watch_progress_ = "0%"; // data-style-width; never empty
   // Codec lines shown in the watch bar: the label of the video and audio
@@ -234,6 +267,14 @@ private:
   Rml::String bind_watch_vtrack_;
   Rml::String bind_watch_atrack_;
   Rml::String bind_detail_image_;  // local image path, "" = none
+  bool bind_detail_favorite_ = false;
+
+  bool bind_saver_ = false;        // screensaver up
+  Rml::String bind_saver_x_ = "0px";
+  Rml::String bind_saver_y_ = "0px";
+  Rml::String bind_saver_now_;     // what is playing, under the clock
+  double last_input_ = 0.0;
+  double saver_moved_at_ = 0.0;
   Rml::String bind_watch_image_;   // now-playing artwork path, "" = none
 
   bool bind_menu_open_ = false;
@@ -255,6 +296,25 @@ private:
   browse::SourcePtr current_source_;   // source being browsed, or null
   std::vector<BrowseLevel> path_;      // root first
   browse::Entry playing_;              // item in the player right now
+
+  library::Library library_;
+  library::SourceRegistry registry_;
+  std::shared_ptr<library::LibrarySource> favorites_source_;
+  std::shared_ptr<library::LibrarySource> continue_source_;
+  std::vector<browse::SourcePtr> discovered_;   // from the providers
+  uint64_t library_seen_ = 0;          // generation the UI reflects
+
+  // The item playing, as the library knows it; 'resumable' says whether
+  // its progress is worth remembering (seekable, long enough).
+  library::Ref playing_ref_;
+  bool playing_identified_ = false;
+  double progress_saved_at_ = 0.0;  // last RecordProgress() while playing
+  double library_saved_at_ = 0.0;   // last write of the library file
+  // The last position/duration the player reported for the item playing:
+  // once a file has ended, mpv reports neither.
+  int64_t watch_last_pos_us_ = -1;
+  int64_t watch_last_dur_us_ = -1;
+  bool watch_last_seekable_ = false;
 
   SortMode sort_mode_ = SortMode::Default;
   bool sort_desc_ = false;
@@ -289,6 +349,9 @@ private:
   uint32_t launch_seq_ = 0;         // ever-increasing ticket source
   uint32_t launch_request_ = 0;     // ticket we are waiting for; 0 = idle
   browse::Entry launch_entry_;      // item being opened
+  // Direction of a next/previous (or auto-advance) launch, so an item that
+  // fails to open is skipped the same way; 0 for an explicit choice.
+  int launch_direction_ = 0;
   double launch_visible_at_ = 0.0;  // suppress the phase line before this
 
   double toast_deadline_ = 0.0;
