@@ -64,13 +64,13 @@ All of this is stored in `library.xml` in the cache directory.
 
 ## Playing
 
-The bar along the bottom shows title, tracks, time and when it will end;
-its top edge is the timeline, with the played part in the accent colour,
+The bar along the bottom shows title, tracks, elapsed and total time; its
+top edge is the timeline, with the played part in the accent colour,
 what a network stream has buffered ahead in a lighter shade, and a knob at
 the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a
 paused video shows a large pause badge, and streams that cannot seek are
-marked LIVE. Audio keeps the bar up, with large cover art and what plays
-next, over the spectrum.
+marked LIVE and have no timeline. Audio keeps the bar up, with large cover
+art and what plays next, over the spectrum.
 
 The options button opens the playback menu: audio track, subtitles, video
 track, speed (0.5× to 2×), favorites, play next and stop. An item that

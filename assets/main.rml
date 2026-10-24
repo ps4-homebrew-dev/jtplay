@@ -170,9 +170,8 @@
 				<div class="osd-buffered" data-style-width="watch_buffered"/>
 				<div class="osd-played" data-style-width="watch_progress"/>
 				<div class="osd-knob" data-style-left="watch_progress"/>
-				<div class="osd-seek" data-if="watch_seek != ''" data-style-left="watch_progress">{{watch_seek}}</div>
+				<div class="osd-seek" data-if="watch_seek != ''" data-style-left="watch_seek_at">{{watch_seek}}</div>
 			</div>
-			<div class="osd-edge live" data-if="!watch_seekable"/>
 			<div class="osd-row">
 				<img class="osd-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
 				<div class="osd-art osd-glyph" data-if="watch_image == '' && watch_audio">🎵</div>
@@ -194,12 +193,11 @@
 				<div class="osd-side">
 					<div class="osd-time">
 						<span class="osd-pos">{{watch_pos}}</span>
-						<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
+						<span class="osd-dur" data-if="watch_dur != ''">/  {{watch_dur}}</span>
 						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 					</div>
-					<div class="osd-ends">
-						<span data-if="watch_speed != ''" class="badge">{{watch_speed}}</span>
-						<span data-if="watch_ends != ''">{{watch_ends}}</span>
+					<div class="osd-speed" data-if="watch_speed != ''">
+						<span class="badge">{{watch_speed}}</span>
 					</div>
 				</div>
 			</div>

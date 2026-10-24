@@ -311,13 +311,15 @@ private:
   Rml::String bind_watch_description_;
   Rml::String bind_watch_pos_;     // "12:34"
   Rml::String bind_watch_dur_;     // "45:00", "" for live streams
-  Rml::String bind_watch_ends_;    // "Ends at 21:45"
   Rml::String bind_watch_buffered_ = "0%"; // buffered-ahead bar width
   Rml::String bind_watch_speed_;   // "1.5×", "" at normal speed
   Rml::String bind_watch_next_;    // name of the item that plays next
   Rml::String bind_watch_seek_;    // seek bubble over the knob, "" = none
   double seek_bubble_until_ = 0.0;
   int64_t seek_accum_us_ = 0;      // jump of the current run of presses
+  // Where the seek bubble sits: the knob, kept far enough from the screen
+  // edges that the whole bubble shows.
+  Rml::String bind_watch_seek_at_ = "50%";
   Rml::String bind_watch_progress_ = "0%"; // data-style-width; never empty
   // Codec lines shown in the watch bar: the label of the video and audio
   // track being decoded ("h264 1920x1080", "eng · ac3 5.1(side)"), or ""

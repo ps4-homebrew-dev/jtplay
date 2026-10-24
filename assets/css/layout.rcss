@@ -216,7 +216,7 @@
 
 /* The box art goes in: the image cover-fitted, or the type's glyph on a
  * tint of its own, so a wall of local files without art still reads at a
- * glance (folders amber, video teal, audio violet, images blue). */
+ * glance (folders slate, video teal, audio violet, images blue). */
 .art-tile {
 	position: relative;
 	display: flex;
@@ -228,7 +228,7 @@
 	border-radius: 10px;
 }
 
-.art-tile.k-folder { background-color: #3a2f1a; }
+.art-tile.k-folder { background-color: #252e40; }
 .art-tile.k-video  { background-color: #163633; }
 .art-tile.k-audio  { background-color: #2d2147; }
 .art-tile.k-image  { background-color: #1a2c47; }
@@ -245,7 +245,7 @@
 	color: #ffffff;
 	opacity: 0.55;
 }
-.k-folder .art-glyph { color: #e0b84d; opacity: 0.9; }
+.k-folder .art-glyph { color: #9fb0cc; opacity: 0.9; }
 .k-video .art-glyph  { color: #4dd6b8; opacity: 0.9; }
 .k-audio .art-glyph  { color: #a68bf0; opacity: 0.9; }
 .k-image .art-glyph  { color: #6fa8ff; opacity: 0.9; }

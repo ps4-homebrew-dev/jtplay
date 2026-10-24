@@ -181,7 +181,6 @@ void App::EnterWatch(const browse::Entry& entry) {
   Set("watch_progress", bind_watch_progress_, Rml::String("0%"));
   Set("watch_buffered", bind_watch_buffered_, Rml::String("0%"));
   Set("watch_speed", bind_watch_speed_, Rml::String());
-  Set("watch_ends", bind_watch_ends_, Rml::String());
   Set("watch_vtrack", bind_watch_vtrack_, Rml::String());
   Set("watch_atrack", bind_watch_atrack_, Rml::String());
   RefreshImageBindings();
@@ -221,11 +220,6 @@ void App::UpdateWatchOverlay() {
     watch_last_seekable_ = player_->CanSeek();
   }
 
-  Rml::String ends;
-  if (pos >= 0 && dur > pos) {
-    const double left = (double)(dur - pos) / 1e6 / (speed > 0 ? speed : 1.0);
-    ends = "Ends at " + ClockIn((int64_t)left);
-  }
   // Only worth drawing while it runs ahead of the position, i.e. for a
   // network stream that is still filling its cache.
   int64_t buffered = player_->BufferedUs();
@@ -234,8 +228,16 @@ void App::UpdateWatchOverlay() {
 
   Set("watch_pos", bind_watch_pos_, pos >= 0 ? FormatTime(pos) : Rml::String());
   Set("watch_dur", bind_watch_dur_, dur > 0 ? FormatTime(dur) : Rml::String());
-  Set("watch_ends", bind_watch_ends_, ends);
   Set("watch_progress", bind_watch_progress_, Percent(pos, dur));
+  if (!bind_watch_seek_.empty() && dur > 0) {
+    // Half the bubble's width (100px) as a share of the 1920px bar.
+    const double half = 100.0 * 100.0 / 1920.0;
+    const double at = std::clamp((double)std::max<int64_t>(pos, 0) * 100.0 / (double)dur,
+                                 half, 100.0 - half);
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%.2f%%", at);
+    Set("watch_seek_at", bind_watch_seek_at_, Rml::String(buf));
+  }
   Set("watch_buffered", bind_watch_buffered_, Percent(buffered, dur));
   Set("watch_speed", bind_watch_speed_,
       std::fabs(speed - 1.0) < 0.01 ? Rml::String() : SpeedLabel(speed));

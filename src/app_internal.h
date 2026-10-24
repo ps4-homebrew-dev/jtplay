@@ -101,16 +101,6 @@ inline std::string FormatDate(int64_t epoch, bool with_time) {
   return buf;
 }
 
-// Wall-clock time 'seconds' from now as "21:45".
-inline std::string ClockIn(int64_t seconds) {
-  const std::time_t t = std::time(nullptr) + (std::time_t)seconds;
-  std::tm tm = {};
-  localtime_r(&t, &tm);
-  char buf[16];
-  std::strftime(buf, sizeof(buf), "%H:%M", &tm);
-  return buf;
-}
-
 // A short glyph for an entry; the emoji font is loaded as a fallback face,
 // so these render everywhere.
 inline const char* IconFor(const browse::Entry& e) {

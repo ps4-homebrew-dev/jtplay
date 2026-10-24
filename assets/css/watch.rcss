@@ -47,10 +47,6 @@ body.watching #shell {
 	background-color: #ffffff2e;
 }
 
-.osd-edge.live {
-	background-color: #ff6b6b;
-}
-
 .osd-buffered,
 .osd-played {
 	position: absolute;
@@ -183,15 +179,19 @@ body.watching #shell {
 	white-space: nowrap;
 }
 
-.osd-pos {
-	font-size: 46px;
+/* Elapsed and total in one size; only the colour tells them apart. */
+.osd-pos,
+.osd-dur {
+	font-size: 30px;
 	font-weight: bold;
+}
+
+.osd-pos {
 	color: #ffffff;
 }
 
 .osd-dur {
-	margin-left: 10px;
-	font-size: 30px;
+	margin-left: 8px;
 	color: #8593ab;
 }
 
@@ -206,16 +206,12 @@ body.watching #shell {
 	border-radius: 6px;
 }
 
-.osd-ends {
-	margin-top: 6px;
-	font-size: 22px;
-	color: #8593ab;
-	white-space: nowrap;
+.osd-speed {
+	margin-top: 8px;
 }
 
 .badge {
 	display: inline-block;
-	margin-right: 14px;
 	padding: 2px 10px;
 	font-size: 20px;
 	font-weight: bold;
