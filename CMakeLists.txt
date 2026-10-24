@@ -29,6 +29,7 @@ add_executable(jtplay
     src/gamepad.cpp
     src/library.cpp
     src/player.cpp
+    src/visualizer.cpp
     src/browse/dlna_source.cpp
     src/browse/fs_source.cpp
     src/browse/js_http.cpp

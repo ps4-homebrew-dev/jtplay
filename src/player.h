@@ -6,8 +6,9 @@
 // mpv opens plays, which covers everything a DLNA server serves and every
 // plugin's stream (http, https, HLS, ...).
 //
-// Audio-only files get a spectrum drawn by an ffmpeg filter in place of the
-// picture ("lavfi-complex"); the now-playing card is shown over it.
+// Audio-only files get a spectrum from an ffmpeg filter in place of the
+// picture ("lavfi-complex"); the visualizer turns it into the background
+// the now-playing card is shown over.
 #ifndef PLAYER_H
 #define PLAYER_H
 
@@ -72,8 +73,17 @@ public:
 
   // Main thread. Draws the current video frame into framebuffer 0 at
   // width x height; called after the backbuffer has been cleared and
-  // before the UI is rendered over it.
+  // before the UI is rendered over it. Draws nothing for audio-only files.
   void RenderVideo(int width, int height);
+
+  // Audio-only files: the current spectrum frame, kSpectrumWidth x
+  // kSpectrumHeight white bars on black (low frequencies left, log scaled
+  // both ways: bar height spans -120..0 dB), rendered into framebuffer
+  // 'fbo'. False when there is none.
+  static constexpr int kSpectrumWidth = 128;
+  static constexpr int kSpectrumHeight = 96;
+  bool HasSpectrum() const { return vis_aid_ >= 0 && (active_ || opening_); }
+  bool RenderSpectrum(unsigned fbo);
 
   // Short human-readable status ("h264 1920x1080 + aac", "Opening...", ...)
   // for display in the UI. Empty = nothing.
@@ -134,6 +144,7 @@ private:
   // Feeds audio track 'aid' to the spectrum filter, or (-1) turns it off.
   void SetVisualizer(int aid);
   void Command(const char* const* args);
+  bool RenderTo(unsigned fbo, int width, int height);
   void ResetFileState();
 
   mpv_handle* mpv_ = nullptr;

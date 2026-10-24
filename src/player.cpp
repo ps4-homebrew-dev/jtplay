@@ -23,15 +23,21 @@ constexpr auto kOpenTimeout = std::chrono::minutes(5);
 
 // The spectrum shown for audio-only files, fed from track 'aid'. It is a
 // lavfi graph: the audio goes to the output untouched ([ao]), a copy is
-// drawn as constant-Q bars (left channel orange, right blue, both white),
-// dimmed so the now-playing card stays readable over it ([vo]).
+// drawn as a tiny white-on-black bar spectrum ([vo]). That picture is not
+// for looking at: the visualizer has mpv render it into an offscreen
+// framebuffer, reads the bar heights back and draws its own scene from
+// them. mpv presents the frames against its audio clock, so the data
+// arrives in step with what is audible, with no PCM tap needed.
+// No alpha channel: mpv would draw its transparency checkerboard behind
+// the bars, and every column would read as full.
 std::string VisualizerGraph(int aid) {
   char graph[512];
   std::snprintf(graph, sizeof(graph),
                 "[aid%d] asplit [ao] [viz];"
-                "[viz] showcqt=s=1280x720:fps=30:sono_h=0:axis=0:bar_g=2,"
-                "colorchannelmixer=rr=0.6:gg=0.6:bb=0.6,format=yuv420p [vo]",
-                aid);
+                "[viz] showfreqs=s=%dx%d:mode=bar:ascale=log:fscale=log:"
+                "win_size=2048:overlap=0.5:averaging=1:cmode=combined:"
+                "colors=white,format=rgb24 [vo]",
+                aid, Player::kSpectrumWidth, Player::kSpectrumHeight);
   return graph;
 }
 
@@ -608,16 +614,30 @@ void Player::UpdateTracks(const mpv_node* list) {
 // ---------------------------------------------------------------------------
 
 void Player::RenderVideo(int width, int height) {
+  // Audio-only: the "video" is spectrum data for the visualizer, which
+  // fetches it itself (RenderSpectrum) and draws the screen.
+  if (HasSpectrum())
+    return;
+  RenderTo(0, width, height);
+}
+
+bool Player::RenderSpectrum(unsigned fbo) {
+  if (!HasSpectrum())
+    return false;
+  return RenderTo(fbo, kSpectrumWidth, kSpectrumHeight);
+}
+
+bool Player::RenderTo(unsigned target, int width, int height) {
   // Rendering starts with the open, not after it: mpv hands the first frame
   // over before Open() returns, and gives up on a renderer that doesn't
   // take it within 200 ms.
   if (!render_ || !(active_ || opening_))
-    return;
+    return false;
 
   mpv_render_context_update(render_);
 
   mpv_opengl_fbo fbo = {};
-  fbo.fbo = 0;
+  fbo.fbo = (int)target;
   fbo.w = width;
   fbo.h = height;
   int flip_y = 1;
@@ -630,7 +650,7 @@ void Player::RenderVideo(int width, int height) {
     {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &block},
     {MPV_RENDER_PARAM_INVALID, nullptr},
   };
-  mpv_render_context_render(render_, params);
+  return mpv_render_context_render(render_, params) >= 0;
 }
 
 std::string Player::StatusText() const {

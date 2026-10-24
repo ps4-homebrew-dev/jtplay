@@ -28,6 +28,7 @@
 #include "browse/source.h"
 #include "library.h"
 #include "player.h"
+#include "visualizer.h"
 
 class App : public Rml::EventListener {
 public:
@@ -395,6 +396,7 @@ private:
   std::string cache_dir_;              // snapshots of where videos stopped
 
   std::unique_ptr<Player> player_;
+  Visualizer visualizer_;          // background for audio-only playback
   Rml::Context* context_ = nullptr;
   Rml::ElementDocument* document_ = nullptr;
   View view_ = View::Home;

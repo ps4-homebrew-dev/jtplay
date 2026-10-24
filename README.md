@@ -69,8 +69,16 @@ top edge is the timeline, with the played part in the accent colour,
 what a network stream has buffered ahead in a lighter shade, and a knob at
 the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a
 paused video shows a large pause badge, and streams that cannot seek are
-marked LIVE and have no timeline. Audio keeps the bar up, with large cover
-art and what plays next, over the spectrum.
+marked LIVE and have no timeline.
+
+Audio-only playback shows a now-playing card (cover art, title, track,
+progress, what plays next) in frosted glass over a visualizer drawn with
+OpenGL: an aurora night sky, the spectrum as a mirrored mountain range on
+the horizon (bass at the edges, treble in the middle) with its reflection,
+and a perspective grid floor that rolls faster with louder music and
+flashes on beats. mpv has no PCM tap, so the player has it render a small
+`showfreqs` spectrum into an offscreen framebuffer and reads the bars back;
+mpv keeps those frames in step with what is audible.
 
 The options button opens the playback menu: audio track, subtitles, video
 track, speed (0.5× to 2×), favorites, play next and stop. An item that
@@ -199,7 +207,7 @@ Held directions repeat. Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
 
 Playback is libmpv's: mpv opens the URL, decodes and plays the audio, and
 draws the video with its OpenGL renderer under the UI. Audio-only items get
-a spectrum (an ffmpeg `showcqt` graph) behind the now-playing card. Extra mpv
+the visualizer (`src/visualizer.cpp`) behind the now-playing card. Extra mpv
 options can be given for testing or tuning, and mpv's log made more verbose:
 
     JTPLAY_MPV="hwdec=auto-safe profile=high-quality" JTPLAY_MPV_LOG=v ./jtplay

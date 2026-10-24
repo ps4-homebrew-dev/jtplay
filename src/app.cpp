@@ -122,6 +122,7 @@ void App::Shutdown() {
     RecordProgress(true);
   library_.Save();
 
+  visualizer_.Shutdown(); // GL context still current
   if (player_) {
     player_->Stop();
     player_->Shutdown();
@@ -463,6 +464,12 @@ void App::Update() {
 }
 
 void App::RenderVideo(int width, int height) {
+  // Audio-only: the visualizer is the picture. It also covers the moment
+  // before the player is up, so the screen never flashes black.
+  if (bind_watching_ && bind_watch_audio_) {
+    visualizer_.Render(*player_, width, height, player_->IsPaused());
+    return;
+  }
   player_->RenderVideo(width, height);
 }
 

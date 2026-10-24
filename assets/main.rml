@@ -164,8 +164,7 @@
 		<!-- The bar along the bottom. Its top edge is the timeline: played,
 		     buffered ahead, and a knob at the playhead. Video: auto-hides.
 		     Audio: stays, with large cover art, over the spectrum. -->
-		<div id="osd" data-if="watching && (watch_audio || info_visible)"
-		     data-class-audio="watch_audio">
+		<div id="osd" data-if="watching && !watch_audio && info_visible">
 			<div class="osd-edge" data-if="watch_seekable">
 				<div class="osd-buffered" data-style-width="watch_buffered"/>
 				<div class="osd-played" data-style-width="watch_progress"/>
@@ -174,7 +173,6 @@
 			</div>
 			<div class="osd-row">
 				<img class="osd-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
-				<div class="osd-art osd-glyph" data-if="watch_image == '' && watch_audio">🎵</div>
 				<div class="osd-main">
 					<div class="osd-title">
 						<span class="osd-state" data-if="watch_paused">⏸</span>
@@ -192,14 +190,43 @@
 				</div>
 				<div class="osd-side">
 					<div class="osd-time">
-						<span class="osd-pos">{{watch_pos}}</span>
-						<span class="osd-dur" data-if="watch_dur != ''">/  {{watch_dur}}</span>
+						<span>{{watch_pos}}</span>
+						<span data-if="watch_dur != ''"> / {{watch_dur}}</span>
 						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 					</div>
 					<div class="osd-speed" data-if="watch_speed != ''">
 						<span class="badge">{{watch_speed}}</span>
 					</div>
 				</div>
+			</div>
+		</div>
+
+		<!-- Audio: the now-playing card, over the visualizer the player draws
+		     underneath (src/visualizer.cpp). Always up. -->
+		<div id="np-card" data-if="watching && watch_audio">
+			<div class="np-artbox">
+				<img class="np-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
+				<div class="np-glyph" data-if="watch_image == ''">🎵</div>
+			</div>
+			<div class="np-title">{{watch_name}}</div>
+			<div class="np-meta" data-if="watch_description != ''">{{watch_description}}</div>
+			<div class="np-track" data-if="watch_atrack != ''">{{watch_atrack}}</div>
+			<div class="np-progress" data-if="watch_seekable">
+				<div class="np-buffered" data-style-width="watch_buffered"/>
+				<div class="np-played" data-style-width="watch_progress"/>
+				<div class="np-knob" data-style-left="watch_progress"/>
+			</div>
+			<div class="np-status">
+				<span class="np-state" data-if="watch_paused">⏸</span>
+				<span class="np-state" data-if="!watch_paused">▶</span>
+				<span>{{watch_pos}}</span>
+				<span data-if="watch_dur != ''"> / {{watch_dur}}</span>
+				<span class="np-live" data-if="!watch_seekable">LIVE</span>
+				<span class="badge" data-if="watch_speed != ''">{{watch_speed}}</span>
+			</div>
+			<div class="np-seek" data-if="watch_seek != ''">{{watch_seek}}</div>
+			<div class="np-next" data-if="watch_next != ''">
+				<span class="np-next-label">UP NEXT</span>{{watch_next}}
 			</div>
 		</div>
 

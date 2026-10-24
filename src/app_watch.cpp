@@ -170,6 +170,7 @@ void App::CancelLaunch() {
 }
 
 void App::EnterWatch(const browse::Entry& entry) {
+  visualizer_.Reset();
   Set("watching", bind_watching_, true);
   Set("watch_audio", bind_watch_audio_, entry.IsAudio());
   Set("watch_name", bind_watch_name_,
