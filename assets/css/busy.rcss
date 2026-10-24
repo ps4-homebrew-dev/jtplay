@@ -1,0 +1,28 @@
+.busy-dot {
+	width: 16dp;
+	height: 16dp;
+	background-color: #4dd6b8;
+	font-size: 20px;
+}
+
+.busy-dot0 { background-color: transparent; }
+.busy-dot1 { animation: busy-dot1 0.9s infinite; }
+.busy-dot2 { animation: busy-dot2 0.9s infinite; }
+.busy-dot3 { animation: busy-dot3 0.9s infinite; }
+
+@keyframes busy-dot1 {
+	0%, 20%  { opacity:  1; }
+	33%,100% { opacity: .3; }
+}
+
+@keyframes busy-dot2 {
+	0%, 20%  { opacity: .3; }
+	33%, 53% { opacity:  1; }
+	66%,100% { opacity: .3; }
+}
+
+@keyframes busy-dot3 {
+	0%, 53%  { opacity: .3; }
+	66%, 86% { opacity:  1; }
+	100%     { opacity: .3; }
+}

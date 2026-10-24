@@ -1,0 +1,691 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// See player.h.
+#include "player.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
+#include <SDL.h>
+#include <mpv/client.h>
+#include <mpv/render_gl.h>
+
+namespace {
+
+// How long Open() waits for mpv to open a file. mpv gives up on a silent
+// server by itself (network-timeout); this only bounds a server that keeps
+// trickling.
+constexpr auto kOpenTimeout = std::chrono::seconds(60);
+
+// The spectrum shown for audio-only files, fed from track 'aid'. It is a
+// lavfi graph: the audio goes to the output untouched ([ao]), a copy is
+// drawn as constant-Q bars (left channel orange, right blue, both white),
+// dimmed so the now-playing card stays readable over it ([vo]).
+std::string VisualizerGraph(int aid) {
+  char graph[512];
+  std::snprintf(graph, sizeof(graph),
+                "[aid%d] asplit [ao] [viz];"
+                "[viz] showcqt=s=1280x720:fps=30:sono_h=0:axis=0:bar_g=2,"
+                "colorchannelmixer=rr=0.6:gg=0.6:bb=0.6,format=yuv420p [vo]",
+                aid);
+  return graph;
+}
+
+// Property ids for mpv_observe_property's reply_userdata.
+enum : uint64_t {
+  kPropTimePos = 1,
+  kPropDuration,
+  kPropPause,
+  kPropSeekable,
+  kPropVid,
+  kPropAid,
+  kPropTrackList,
+};
+
+const mpv_node* MapGet(const mpv_node* map, const char* key) {
+  if (!map || map->format != MPV_FORMAT_NODE_MAP || !map->u.list)
+    return nullptr;
+  for (int i = 0; i < map->u.list->num; i++)
+    if (!std::strcmp(map->u.list->keys[i], key))
+      return &map->u.list->values[i];
+  return nullptr;
+}
+
+std::string NodeString(const mpv_node* node) {
+  return (node && node->format == MPV_FORMAT_STRING && node->u.string)
+           ? std::string(node->u.string) : std::string();
+}
+
+int64_t NodeInt(const mpv_node* node, int64_t fallback) {
+  if (!node)
+    return fallback;
+  if (node->format == MPV_FORMAT_INT64)
+    return node->u.int64;
+  if (node->format == MPV_FORMAT_DOUBLE)
+    return (int64_t)node->u.double_;
+  return fallback;
+}
+
+bool NodeFlag(const mpv_node* node) {
+  return node && node->format == MPV_FORMAT_FLAG && node->u.flag;
+}
+
+// Seconds (an mpv double property) to microseconds, -1 if unknown.
+int64_t PropertyUs(const mpv_event_property* prop) {
+  if (prop->format != MPV_FORMAT_DOUBLE || !prop->data)
+    return -1;
+  const double s = *static_cast<const double*>(prop->data);
+  return std::isfinite(s) && s >= 0 ? (int64_t)(s * 1e6) : -1;
+}
+
+int64_t PropertyInt(const mpv_event_property* prop, int64_t fallback) {
+  if (prop->format != MPV_FORMAT_INT64 || !prop->data)
+    return fallback;
+  return *static_cast<const int64_t*>(prop->data);
+}
+
+bool PropertyFlag(const mpv_event_property* prop) {
+  return prop->format == MPV_FORMAT_FLAG && prop->data &&
+         *static_cast<const int*>(prop->data);
+}
+
+void* GetProcAddress(void*, const char* name) {
+  return SDL_GL_GetProcAddress(name);
+}
+
+} // namespace
+
+Player::Player() = default;
+
+Player::~Player() {
+  Shutdown();
+}
+
+bool Player::Initialize(std::string& error) {
+  if (mpv_)
+    return true;
+
+  mpv_ = mpv_create();
+  if (!mpv_) {
+    error = "mpv_create failed";
+    return false;
+  }
+
+  // The window is the app's; mpv draws through the render API and takes no
+  // input. Everything else is tuned for playing from a network server.
+  // 'quiet' options are left out silently by an mpv that doesn't know them
+  // (the built-in Lua scripts differ between versions; none is wanted).
+  struct Option { const char* name; const char* value; bool quiet; };
+  static const Option options[] = {
+    // Bilinear scaling, no dithering, no LUT-based scalers: what the PS4's
+    // GPU affords at 1080p next to the UI. (The LUT scalers also came up
+    // black on the first file with some drivers.)
+    {"profile", "fast", false},
+    {"vo", "libmpv", false},
+    {"idle", "yes", false},
+    {"keep-open", "no", false},
+    {"terminal", "no", false},
+    {"config", "no", false},
+    {"load-scripts", "no", false},
+    {"osc", "no", true},
+    {"load-stats-overlay", "no", true},
+    {"load-console", "no", true},
+    {"load-osd-console", "no", true},
+    {"load-auto-profiles", "no", true},
+    {"load-select", "no", true},
+    {"load-commands", "no", true},
+    {"load-context-menu", "no", true},
+    {"load-positioning", "no", true},
+    {"ytdl", "no", true},
+    {"input-default-bindings", "no", false},
+    {"input-vo-keyboard", "no", false},
+    {"osd-level", "0", false},
+    {"hwdec", "no", false},
+    // Cover art is shown by the UI, from the server's metadata.
+    {"audio-display", "no", false},
+    {"network-timeout", "15", false},
+    // DLNA servers recycle sockets aggressively.
+    {"stream-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5", false},
+#if defined(__ORBIS__)
+    // The demuxer cache comes out of the same pool as the GPU's memory.
+    {"demuxer-max-bytes", "64MiB", false},
+    {"demuxer-max-back-bytes", "16MiB", false},
+#endif
+  };
+  for (const Option& o : options) {
+    const int rc = mpv_set_option_string(mpv_, o.name, o.value);
+    if (rc < 0 && !o.quiet)
+      std::fprintf(stderr, "mpv: option %s=%s: %s\n", o.name, o.value,
+                   mpv_error_string(rc));
+  }
+  if (const char* ca = std::getenv("SSL_CERT_FILE"))
+    mpv_set_option_string(mpv_, "tls-ca-file", ca);
+
+  // Extra mpv options for testing and tuning, as "name=value" words:
+  //   JTPLAY_MPV="hwdec=auto-safe ao=pulse" ./jtplay
+  if (const char* extra = std::getenv("JTPLAY_MPV")) {
+    std::string words = extra;
+    size_t at = 0;
+    while (at < words.size()) {
+      const size_t end = std::min(words.find(' ', at), words.size());
+      const std::string word = words.substr(at, end - at);
+      const size_t eq = word.find('=');
+      if (eq != std::string::npos) {
+        const int rc = mpv_set_option_string(mpv_, word.substr(0, eq).c_str(),
+                                             word.substr(eq + 1).c_str());
+        if (rc < 0)
+          std::fprintf(stderr, "mpv: option %s: %s\n", word.c_str(), mpv_error_string(rc));
+      }
+      at = end + 1;
+    }
+  }
+
+  int rc = mpv_initialize(mpv_);
+  if (rc < 0) {
+    error = std::string("mpv_initialize: ") + mpv_error_string(rc);
+    mpv_terminate_destroy(mpv_);
+    mpv_ = nullptr;
+    return false;
+  }
+
+  mpv_opengl_init_params gl_init = {};
+  gl_init.get_proc_address = GetProcAddress;
+  mpv_render_param params[] = {
+    {MPV_RENDER_PARAM_API_TYPE, const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},
+    {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl_init},
+    {MPV_RENDER_PARAM_INVALID, nullptr},
+  };
+  rc = mpv_render_context_create(&render_, mpv_, params);
+  if (rc < 0) {
+    error = std::string("mpv's OpenGL renderer: ") + mpv_error_string(rc);
+    mpv_terminate_destroy(mpv_);
+    mpv_ = nullptr;
+    render_ = nullptr;
+    return false;
+  }
+
+  // mpv's messages go to stderr; JTPLAY_MPV_LOG=v (or debug) says more.
+  const char* log_level = std::getenv("JTPLAY_MPV_LOG");
+  mpv_request_log_messages(mpv_, log_level && *log_level ? log_level : "warn");
+  mpv_observe_property(mpv_, kPropTimePos, "time-pos", MPV_FORMAT_DOUBLE);
+  mpv_observe_property(mpv_, kPropDuration, "duration", MPV_FORMAT_DOUBLE);
+  mpv_observe_property(mpv_, kPropPause, "pause", MPV_FORMAT_FLAG);
+  mpv_observe_property(mpv_, kPropSeekable, "seekable", MPV_FORMAT_FLAG);
+  mpv_observe_property(mpv_, kPropVid, "vid", MPV_FORMAT_INT64);
+  mpv_observe_property(mpv_, kPropAid, "aid", MPV_FORMAT_INT64);
+  mpv_observe_property(mpv_, kPropTrackList, "track-list", MPV_FORMAT_NODE);
+
+  quitting_ = false;
+  event_thread_ = std::thread(&Player::EventThread, this);
+  return true;
+}
+
+void Player::Shutdown() {
+  if (!mpv_)
+    return;
+  active_ = false;
+  quitting_ = true;
+  mpv_wakeup(mpv_);
+  if (event_thread_.joinable())
+    event_thread_.join();
+  // The renderer goes first, while the GL context is still current.
+  if (render_)
+    mpv_render_context_free(render_);
+  render_ = nullptr;
+  mpv_terminate_destroy(mpv_);
+  mpv_ = nullptr;
+}
+
+void Player::Command(const char* const* args) {
+  if (mpv_)
+    mpv_command_async(mpv_, 0, const_cast<const char**>(args));
+}
+
+void Player::ResetFileState() {
+  active_ = false;
+  playing_id_ = -1;
+  seekable_ = false;
+  paused_ = false;
+  position_us_ = -1;
+  duration_us_ = -1;
+  video_id_ = -1;
+  audio_id_ = -1;
+  {
+    std::lock_guard<std::mutex> lock(tracks_mutex_);
+    video_tracks_.clear();
+    audio_tracks_.clear();
+    track_status_.clear();
+  }
+  vtrack_count_ = 0;
+  atrack_count_ = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Opening and stopping (app worker thread)
+// ---------------------------------------------------------------------------
+
+bool Player::Open(const std::string& url, std::string& error) {
+  if (!mpv_) {
+    error = "the player is not available";
+    return false;
+  }
+
+  Stop();
+  opening_ = true;
+
+  // Whatever the last file left set is undone before the next one starts.
+  mpv_set_property_string(mpv_, "pause", "no");
+
+  int64_t starts_before;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    starts_before = started_count_;
+    end_error_.clear();
+    last_log_error_.clear();
+  }
+
+  // loadfile answers with the playlist entry it made, whose start, load and
+  // end the event thread then reports.
+  const char* cmd[] = {"loadfile", url.c_str(), "replace", nullptr};
+  mpv_node result = {};
+  int rc = mpv_command_ret(mpv_, cmd, &result);
+  if (rc < 0) {
+    opening_ = false;
+    error = std::string("unable to open the stream: ") + mpv_error_string(rc);
+    return false;
+  }
+  int64_t id = NodeInt(MapGet(&result, "playlist_entry_id"), -1);
+  mpv_free_node_contents(&result);
+
+  std::unique_lock<std::mutex> lock(mutex_);
+  const auto deadline = std::chrono::steady_clock::now() + kOpenTimeout;
+  const bool settled = cv_.wait_until(lock, deadline, [&] {
+    if (quitting_)
+      return true;
+    // An mpv too old to name the entry: the first file started after the
+    // command is the one.
+    if (id < 0 && started_count_ > starts_before)
+      id = started_id_;
+    return id >= 0 && (loaded_id_ == id || ended_id_ == id);
+  });
+
+  // A file that loaded and is over already (a very short clip) counts as
+  // opened; AtEnd() then moves on.
+  if (!settled || quitting_ || loaded_id_ != id) {
+    std::string why = !settled ? "timed out" : end_error_;
+    if (!last_log_error_.empty())
+      why = last_log_error_;
+    lock.unlock();
+    opening_ = false;
+    const char* stop[] = {"stop", nullptr};
+    mpv_command(mpv_, stop);
+    error = "unable to open the stream" + (why.empty() ? "" : ": " + why);
+    return false;
+  }
+  lock.unlock();
+
+  playing_id_ = id;
+
+  // The tracks are known once the file is loaded; ask for them now rather
+  // than wait for the property event, so the UI has them from the start.
+  mpv_node tracks = {};
+  if (mpv_get_property(mpv_, "track-list", MPV_FORMAT_NODE, &tracks) >= 0) {
+    UpdateTracks(&tracks);
+    mpv_free_node_contents(&tracks);
+  }
+  int seekable = 0;
+  if (mpv_get_property(mpv_, "seekable", MPV_FORMAT_FLAG, &seekable) >= 0)
+    seekable_ = seekable != 0;
+
+  // Nothing to look at: draw the sound instead.
+  if (vtrack_count_ == 0 && atrack_count_ > 0)
+    SetVisualizer(audio_id_ >= 0 ? audio_id_.load() : AudioTracks().front().stream_index);
+
+  active_ = true;
+  opening_ = false;
+  return true;
+}
+
+void Player::Stop() {
+  if (!mpv_)
+    return;
+  active_ = false;
+  // Synchronous, so a stop the app asks for is done when this returns.
+  const char* stop[] = {"stop", nullptr};
+  mpv_command(mpv_, stop);
+  if (vis_aid_ >= 0)
+    SetVisualizer(-1);
+  ResetFileState();
+}
+
+bool Player::AtEnd() const {
+  if (!active_)
+    return false;
+  std::lock_guard<std::mutex> lock(mutex_);
+  return ended_id_ >= 0 && ended_id_ == playing_id_;
+}
+
+void Player::SetVisualizer(int aid) {
+  const std::string graph = aid >= 0 ? VisualizerGraph(aid) : std::string();
+  const int rc = mpv_set_property_string(mpv_, "lavfi-complex", graph.c_str());
+  if (rc < 0) {
+    std::fprintf(stderr, "mpv: no spectrum: %s\n", mpv_error_string(rc));
+    vis_aid_ = -1;
+    return;
+  }
+  vis_aid_ = aid;
+}
+
+// ---------------------------------------------------------------------------
+// Events (event thread)
+// ---------------------------------------------------------------------------
+
+void Player::EventThread() {
+  while (!quitting_) {
+    mpv_event* event = mpv_wait_event(mpv_, -1);
+    switch (event->event_id) {
+    case MPV_EVENT_SHUTDOWN:
+      quitting_ = true;
+      cv_.notify_all();
+      return;
+
+    case MPV_EVENT_LOG_MESSAGE: {
+      const auto* msg = static_cast<const mpv_event_log_message*>(event->data);
+      std::fprintf(stderr, "mpv[%s] %s: %s", msg->prefix, msg->level, msg->text);
+      if (msg->log_level <= MPV_LOG_LEVEL_ERROR) {
+        std::string text = msg->text;
+        while (!text.empty() && (text.back() == '\n' || text.back() == '.'))
+          text.pop_back();
+        std::lock_guard<std::mutex> lock(mutex_);
+        last_log_error_ = text;
+      }
+      break;
+    }
+
+    case MPV_EVENT_START_FILE: {
+      const auto* start = static_cast<const mpv_event_start_file*>(event->data);
+      std::lock_guard<std::mutex> lock(mutex_);
+      started_count_++;
+      started_id_ = start ? start->playlist_entry_id : -1;
+      cv_.notify_all();
+      break;
+    }
+
+    case MPV_EVENT_FILE_LOADED: {
+      std::lock_guard<std::mutex> lock(mutex_);
+      loaded_id_ = started_id_;
+      cv_.notify_all();
+      break;
+    }
+
+    case MPV_EVENT_END_FILE: {
+      const auto* end = static_cast<const mpv_event_end_file*>(event->data);
+      std::lock_guard<std::mutex> lock(mutex_);
+      ended_id_ = end->playlist_entry_id;
+      if (end->reason != MPV_END_FILE_REASON_STOP && end->reason != MPV_END_FILE_REASON_REDIRECT)
+        std::fprintf(stderr, "mpv: entry %lld ended (%s)\n", (long long)end->playlist_entry_id,
+                     end->reason == MPV_END_FILE_REASON_EOF ? "eof"
+                     : end->reason == MPV_END_FILE_REASON_ERROR ? mpv_error_string(end->error)
+                     : "quit");
+      if (end->reason == MPV_END_FILE_REASON_ERROR)
+        end_error_ = mpv_error_string(end->error);
+      cv_.notify_all();
+      break;
+    }
+
+    case MPV_EVENT_PROPERTY_CHANGE: {
+      const auto* prop = static_cast<const mpv_event_property*>(event->data);
+      switch (event->reply_userdata) {
+      case kPropTimePos:
+        position_us_ = PropertyUs(prop);
+        break;
+      case kPropDuration:
+        duration_us_ = PropertyUs(prop);
+        break;
+      case kPropPause:
+        paused_ = PropertyFlag(prop);
+        break;
+      case kPropSeekable:
+        seekable_ = PropertyFlag(prop);
+        break;
+      case kPropVid:
+        video_id_ = (int)PropertyInt(prop, -1);
+        break;
+      case kPropAid:
+        audio_id_ = (int)PropertyInt(prop, -1);
+        break;
+      case kPropTrackList:
+        if (prop->format == MPV_FORMAT_NODE && prop->data)
+          UpdateTracks(static_cast<const mpv_node*>(prop->data));
+        break;
+      }
+      break;
+    }
+
+    case MPV_EVENT_COMMAND_REPLY:
+    case MPV_EVENT_SET_PROPERTY_REPLY:
+      if (event->error < 0)
+        std::fprintf(stderr, "mpv: %s\n", mpv_error_string(event->error));
+      break;
+
+    default:
+      break;
+    }
+  }
+}
+
+// The video and audio tracks from mpv's track-list. The label is built
+// from the metadata (language, title) plus the codec and, depending on the
+// kind, the channel layout or the frame size: "eng · ac3 5.1(side)",
+// "Commentary · aac stereo", "h264 1920x1080".
+void Player::UpdateTracks(const mpv_node* list) {
+  std::vector<VideoTrackInfo> video;
+  std::vector<AudioTrackInfo> audio;
+  std::string video_desc, audio_desc;
+
+  if (list && list->format == MPV_FORMAT_NODE_ARRAY && list->u.list) {
+    for (int i = 0; i < list->u.list->num; i++) {
+      const mpv_node* track = &list->u.list->values[i];
+      const std::string type = NodeString(MapGet(track, "type"));
+      const bool is_video = type == "video";
+      if (!is_video && type != "audio")
+        continue;
+      // Cover art is a video track in name only; not selectable.
+      if (is_video && NodeFlag(MapGet(track, "albumart")))
+        continue;
+
+      std::string label;
+      auto append = [&label](const std::string& part) {
+        if (!part.empty())
+          label += (label.empty() ? "" : " · ") + part;
+      };
+      const std::string lang = NodeString(MapGet(track, "lang"));
+      if (lang != "und")
+        append(lang);
+      append(NodeString(MapGet(track, "title")));
+
+      std::string codec = NodeString(MapGet(track, "codec"));
+      if (is_video) {
+        const int64_t w = NodeInt(MapGet(track, "demux-w"), 0);
+        const int64_t h = NodeInt(MapGet(track, "demux-h"), 0);
+        if (w > 0 && h > 0)
+          codec += " " + std::to_string(w) + "x" + std::to_string(h);
+      } else {
+        // A layout the container doesn't name comes out as "unknownN".
+        std::string channels = NodeString(MapGet(track, "demux-channels"));
+        if (channels.empty() || channels.compare(0, 7, "unknown") == 0) {
+          const int64_t n = NodeInt(MapGet(track, "demux-channel-count"), 0);
+          channels = n == 1 ? "mono" : n == 2 ? "stereo" : n > 0 ? std::to_string(n) + "ch" : "";
+        }
+        if (!channels.empty())
+          codec += " " + channels;
+      }
+      append(codec);
+
+      std::vector<TrackInfo>& into = is_video ? video : audio;
+      TrackInfo t;
+      t.stream_index = (int)NodeInt(MapGet(track, "id"), -1);
+      t.label = label.empty() ? "Track " + std::to_string(into.size() + 1) : label;
+      into.push_back(std::move(t));
+
+      if (NodeFlag(MapGet(track, "selected")))
+        (is_video ? video_desc : audio_desc) = codec;
+    }
+  }
+
+  std::string status = video_desc;
+  if (!audio_desc.empty())
+    status += (status.empty() ? "" : " + ") + audio_desc;
+
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  video_tracks_ = std::move(video);
+  audio_tracks_ = std::move(audio);
+  track_status_ = status;
+  vtrack_count_ = (int)video_tracks_.size();
+  atrack_count_ = (int)audio_tracks_.size();
+}
+
+// ---------------------------------------------------------------------------
+// Main thread
+// ---------------------------------------------------------------------------
+
+void Player::RenderVideo(int width, int height) {
+  // Rendering starts with the open, not after it: mpv hands the first frame
+  // over before Open() returns, and gives up on a renderer that doesn't
+  // take it within 200 ms.
+  if (!render_ || !(active_ || opening_))
+    return;
+
+  mpv_render_context_update(render_);
+
+  mpv_opengl_fbo fbo = {};
+  fbo.fbo = 0;
+  fbo.w = width;
+  fbo.h = height;
+  int flip_y = 1;
+  // The UI renders every frame anyway; mpv is not to hold it up waiting
+  // for the next video frame's time.
+  int block = 0;
+  mpv_render_param params[] = {
+    {MPV_RENDER_PARAM_OPENGL_FBO, &fbo},
+    {MPV_RENDER_PARAM_FLIP_Y, &flip_y},
+    {MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &block},
+    {MPV_RENDER_PARAM_INVALID, nullptr},
+  };
+  mpv_render_context_render(render_, params);
+}
+
+std::string Player::StatusText() const {
+  if (opening_)
+    return "Opening...";
+  if (!active_)
+    return {};
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  return track_status_;
+}
+
+void Player::SeekRelative(int64_t delta_us) {
+  if (!active_ || !CanSeek())
+    return;
+
+  // Seeking past the end would end the file, and with it go on to the
+  // next item; stop a second short instead.
+  const int64_t pos = PositionUs();
+  const int64_t dur = DurationUs();
+  char amount[32];
+  if (delta_us > 0 && pos >= 0 && dur > 0 && pos + delta_us > dur - 1000000) {
+    std::snprintf(amount, sizeof(amount), "%.3f",
+                  std::max<int64_t>(0, dur - 1000000) / 1e6);
+    const char* cmd[] = {"seek", amount, "absolute", nullptr};
+    Command(cmd);
+    return;
+  }
+  std::snprintf(amount, sizeof(amount), "%.3f", delta_us / 1e6);
+  const char* cmd[] = {"seek", amount, "relative", nullptr};
+  Command(cmd);
+}
+
+void Player::SetPaused(bool paused) {
+  if (!mpv_)
+    return;
+  paused_ = paused; // at once, for the UI; the property event confirms it
+  int flag = paused ? 1 : 0;
+  mpv_set_property_async(mpv_, 0, "pause", MPV_FORMAT_FLAG, &flag);
+}
+
+bool Player::TogglePause() {
+  const bool paused = !paused_;
+  SetPaused(paused);
+  return paused;
+}
+
+std::vector<VideoTrackInfo> Player::VideoTracks() const {
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  return video_tracks_;
+}
+
+std::vector<AudioTrackInfo> Player::AudioTracks() const {
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  return audio_tracks_;
+}
+
+int Player::CurrentAudioStream() const {
+  // The spectrum's track is the filter's, not mpv's "aid".
+  const int vis = vis_aid_;
+  return vis >= 0 ? vis : audio_id_.load();
+}
+
+std::string Player::CurrentVideoLabel() const {
+  const int id = video_id_;
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  for (const TrackInfo& t : video_tracks_)
+    if (t.stream_index == id)
+      return t.label;
+  return {};
+}
+
+std::string Player::CurrentAudioLabel() const {
+  const int id = CurrentAudioStream();
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  for (const TrackInfo& t : audio_tracks_)
+    if (t.stream_index == id)
+      return t.label;
+  return {};
+}
+
+bool Player::SelectVideoTrack(int stream_index) {
+  if (!active_ || stream_index == CurrentVideoStream())
+    return false;
+  bool known = false;
+  for (const TrackInfo& t : VideoTracks())
+    known |= t.stream_index == stream_index;
+  if (!known)
+    return false;
+  int64_t id = stream_index;
+  mpv_set_property_async(mpv_, 0, "vid", MPV_FORMAT_INT64, &id);
+  video_id_ = stream_index;
+  return true;
+}
+
+bool Player::SelectAudioTrack(int stream_index) {
+  if (!active_ || stream_index == CurrentAudioStream())
+    return false;
+  bool known = false;
+  for (const TrackInfo& t : AudioTracks())
+    known |= t.stream_index == stream_index;
+  if (!known)
+    return false;
+  if (vis_aid_ >= 0) {
+    // The spectrum's graph names its track; build it again for this one.
+    SetVisualizer(stream_index);
+    return vis_aid_ == stream_index;
+  }
+  int64_t id = stream_index;
+  mpv_set_property_async(mpv_, 0, "aid", MPV_FORMAT_INT64, &id);
+  audio_id_ = stream_index;
+  return true;
+}

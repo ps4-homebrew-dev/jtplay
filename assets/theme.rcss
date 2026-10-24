@@ -1,0 +1,24 @@
+/*
+ * Designed for a 1920x1080 context viewed from the couch: large type, high
+ * contrast, generous spacing, and an unmissable focus treatment. Palette is
+ * a deep blue-slate night background with a sea-glass teal accent used
+ * exclusively for focus/selection.
+ *
+ *   background   #0a0e18 / #101827
+ *   panel        #ffffff07 .. #ffffff14
+ *   text         #e8edf7    muted #8593ab    faint #5a6478
+ *   accent       #4dd6b8 (focus / selection only)
+ *
+ * The per-view rules live in assets/css/; this file holds the palette note
+ * and the global body scaffold that all of them build on.
+ */
+
+body {
+	width: 100%;
+	height: 100%;
+	font-size: 26px;
+	color: #e8edf7;
+	/* Flat color: gradient decorators need shader support, which the SDL
+	   software renderer does not provide. */
+	background-color: #0d1322;
+}

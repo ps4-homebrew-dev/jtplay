@@ -1,0 +1,162 @@
+/*
+ * The sources view and the content browser. Row heights must stay in sync
+ * with kSourceRowPitch / kEntryRowPitch in app_internal.h.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Sources                                                            */
+/* ------------------------------------------------------------------ */
+
+#sources {
+	width: 1100px;
+	margin-left: 346px; /* centered inside the 1792px content strip */
+}
+
+.source-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 96px;
+	margin-bottom: 12px;
+	padding: 0px 28px;
+	background-color: #ffffff07;
+	border: 2px transparent;
+	border-radius: 14px;
+}
+
+.source-row.selected {
+	background-color: #4dd6b81a;
+	border: 2px #4dd6b8;
+}
+
+.srcicon {
+	width: 72px;
+	font-size: 44px;
+	text-align: center;
+	margin-right: 20px;
+}
+
+.srcinfo {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+}
+
+.srcname {
+	font-size: 32px;
+	font-weight: bold;
+	color: #e8edf7;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.srcdetail {
+	margin-top: 4px;
+	font-size: 22px;
+	color: #8593ab;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Entries                                                            */
+/* ------------------------------------------------------------------ */
+
+#entries {
+	flex: 3;
+	margin-right: 32px;
+}
+
+#details {
+	flex: 2;
+}
+
+.entry-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 76px;
+	margin-bottom: 10px;
+	padding: 0px 24px;
+	background-color: #ffffff07;
+	border: 2px transparent;
+	border-radius: 12px;
+}
+
+.entry-row.selected {
+	background-color: #4dd6b81a;
+	border: 2px #4dd6b8;
+}
+
+.eicon {
+	width: 56px;
+	font-size: 34px;
+	text-align: center;
+	margin-right: 18px;
+}
+
+.einfo {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	flex: 1;
+	overflow: hidden;
+}
+
+.etitle {
+	flex: 1;
+	font-size: 28px;
+	color: #e8edf7;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.entry-row.folder .etitle {
+	font-weight: bold;
+}
+
+.emeta {
+	margin-left: 24px;
+	font-size: 21px;
+	color: #8593ab;
+	white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Details                                                            */
+/* ------------------------------------------------------------------ */
+
+.detail-body {
+	box-sizing: border-box;
+	padding: 28px 32px;
+	background-color: #ffffff07;
+	border-radius: 14px;
+}
+
+.detail-title {
+	font-size: 34px;
+	font-weight: bold;
+	color: #e8edf7;
+}
+
+.detail-desc {
+	margin-top: 14px;
+	font-size: 24px;
+	line-height: 1.55em;
+	color: #aab6cc;
+	white-space: pre-line;
+}
+
+/* Cover art / thumbnail of the selected entry. Width is fixed by the pane;
+ * height comes from the image's aspect ratio, so covers are square-ish and
+ * video thumbs are wide. */
+.detail-art {
+	display: block;
+	max-height: 600px;
+	max-width: 600px;
+	margin-bottom: 24px;
+	border-radius: 12px;
+}

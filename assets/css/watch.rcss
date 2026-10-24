@@ -1,0 +1,231 @@
+/*
+ * Watch mode: hides the UI chrome so the video (drawn beneath the RmlUi
+ * layer) shows through, and styles the auto-hiding transport bar over it.
+ * Audio playback keeps a persistent now-playing card instead.
+ */
+
+/* Let the video drawn beneath the UI show through. */
+body.watching {
+	background-color: transparent;
+	decorator: none;
+}
+body.watching #shell {
+	display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Video transport bar                                                */
+/* ------------------------------------------------------------------ */
+
+#watch-bar {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 36px 56px 44px 56px;
+	background-color: #0a0e18d8;
+	border-top: 2px #ffffff14;
+}
+
+.watch-glyph {
+	width: 96px;
+	font-size: 56px;
+	text-align: center;
+	color: #4dd6b8;
+	margin-right: 40px;
+}
+
+.watch-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	margin-right: 40px;
+}
+
+.watch-name {
+	font-size: 40px;
+	font-weight: bold;
+	color: #e8edf7;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.watch-now {
+	margin-top: 6px;
+	font-size: 28px;
+	color: #8593ab;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+/* Codec line: the video and audio streams being decoded, side by side. */
+.watch-tracks {
+	display: flex;
+	flex-direction: row;
+	margin-top: 6px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.watch-track {
+	font-size: 26px;
+	color: #8593ab;
+	margin-right: 32px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.watch-progress {
+	margin-top: 16px;
+	width: 100%;
+	max-width: 900px;
+	height: 8px;
+	border-radius: 4px;
+	background-color: #ffffff1a;
+}
+.watch-progress .bar {
+	height: 8px;
+	border-radius: 4px;
+	background-color: #4dd6b8;
+}
+
+.watch-side {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+}
+
+.watch-time {
+	font-size: 30px;
+	color: #e8edf7;
+}
+
+.watch-hints {
+	margin-top: 18px;
+}
+.watch-hints .chip {
+	margin-right: 0px;
+	margin-left: 14px;
+	font-size: 19px;
+	color: #aab6cc;
+}
+
+/* ------------------------------------------------------------------ */
+/* Audio now-playing card                                             */
+/* ------------------------------------------------------------------ */
+
+#audio-card {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	margin-left: -506px;
+	margin-top: -400px;
+	width: 900px;
+	padding: 56px 64px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	background-color: #101827f2;
+	border: 2px #ffffff14;
+	border-radius: 22px;
+	opacity: 0.7;
+}
+
+#audio-card .art {
+	width: 200px;
+	height: 200px;
+	font-size: 110px;
+	text-align: center;
+	line-height: 200px;
+	background-color: #4dd6b81a;
+	border-radius: 20px;
+	color: #4dd6b8;
+	margin-bottom: 36px;
+}
+
+#audio-card .np-title {
+	font-size: 42px;
+	font-weight: bold;
+	color: #e8edf7;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	max-width: 780px;
+}
+
+#audio-card .np-meta {
+	margin-top: 10px;
+	font-size: 27px;
+	color: #8593ab;
+	text-align: center;
+}
+
+#audio-card .np-atrack {
+	margin-top: 16px;
+	font-size: 23px;
+	color: #aab6cc;
+	text-align: center;
+}
+
+#audio-card .watch-progress {
+	margin-top: 40px;
+	width: 700px;
+}
+
+#audio-card .np-time {
+	margin-top: 14px;
+	font-size: 26px;
+	color: #aab6cc;
+}
+
+#audio-card .np-state {
+	margin-top: 20px;
+	font-size: 22px;
+	font-weight: bold;
+	letter-spacing: 4px;
+	color: #4dd6b8;
+}
+
+/* Downloaded artwork replaces the note glyph on the audio card... */
+#audio-card .np-art {
+	display: block;
+	width: 280px;
+	max-height: 280px;
+	border-radius: 20px;
+	margin-bottom: 36px;
+}
+
+/* ...and accompanies the state glyph on the video transport bar. */
+.watch-thumb {
+	display: block;
+	width: 148px;
+	max-height: 84px;
+	border-radius: 10px;
+	margin-right: 28px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Loading the next track from inside watch mode                      */
+/* ------------------------------------------------------------------ */
+
+#launch-overlay {
+	position: absolute;
+	top: 48px;
+	right: 56px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 8dp;
+	padding: 14px 26px;
+	background-color: #0a0e18cc;
+	border-radius: 10px;
+}
+
+#launch-overlay .launch-label {
+	margin-left: 10px;
+	font-size: 24px;
+	color: #e8edf7;
+}
