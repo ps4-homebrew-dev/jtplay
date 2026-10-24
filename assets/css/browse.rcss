@@ -1,72 +1,9 @@
 /*
- * The sources view and the content browser. Row heights must stay in sync
- * with kSourceRowPitch / kEntryRowPitch in src/app_internal.h.
+ * The content browser: a list with an info panel, or (#browse.grid) a
+ * wall of artwork tiles with the focused item's facts along the bottom.
+ * Row and tile sizes must stay in sync with kEntryRowPitch, kGridColumns
+ * and kGridRowPitch in src/app_internal.h.
  */
-
-/* ------------------------------------------------------------------ */
-/* Sources                                                            */
-/* ------------------------------------------------------------------ */
-
-#sources {
-	width: 1100px;
-	margin-left: 338px; /* centered inside the 1776px content strip */
-}
-
-.source-row {
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	height: 96px;
-	margin-bottom: 12px;
-	padding: 0px 28px;
-	background-color: #ffffff07;
-	border: 2px transparent;
-	border-radius: 14px;
-}
-
-.source-row.selected {
-	background-color: #4dd6b82a;
-	border: 2px #4dd6b8;
-}
-
-.srcicon {
-	width: 72px;
-	font-size: 44px;
-	text-align: center;
-	margin-right: 20px;
-}
-
-.srcinfo {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	overflow: hidden;
-}
-
-.srcname {
-	font-size: 32px;
-	font-weight: bold;
-	color: #c5cee0;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-.source-row.selected .srcname {
-	color: #ffffff;
-}
-
-.srcdetail {
-	margin-top: 4px;
-	font-size: 22px;
-	color: #8593ab;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-/* ------------------------------------------------------------------ */
-/* Entries                                                            */
-/* ------------------------------------------------------------------ */
 
 #entries {
 	flex: 3;
@@ -75,36 +12,46 @@
 
 #details {
 	flex: 2;
-	padding-top: 56px; /* aligns with the first row, under the pane head */
+	padding-top: 52px; /* aligns with the first row, under the pane head */
 }
 
+/* ------------------------------------------------------------------ */
+/* List                                                               */
+/* ------------------------------------------------------------------ */
+
 .entry-row {
+	position: relative;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
 	height: 72px;
 	margin-bottom: 6px;
-	padding: 0px 24px;
-	border: 2px transparent;
+	padding: 0px 20px 0px 10px;
 	border-radius: 10px;
 }
 
-.entry-row.selected {
-	background-color: #4dd6b82a;
-	border: 2px #4dd6b8;
+/* Thumbnail (or type glyph) at the start of the row. */
+.entry-row .art-tile {
+	width: 88px;
+	height: 56px;
+	margin-right: 20px;
+	border-radius: 7px;
 }
 
-.eicon {
-	width: 52px;
-	font-size: 30px;
-	text-align: center;
-	margin-right: 18px;
-	opacity: 0.8;
+.entry-row .art-glyph {
+	font-size: 28px;
 }
 
-.entry-row.selected .eicon {
-	opacity: 1;
+/* The corner badges belong to tiles; a row says the same in line. */
+.entry-row .art-check,
+.entry-row .art-fav {
+	display: none;
+}
+
+.entry-row .art-prog,
+.entry-row .art-prog-bar {
+	height: 4px;
 }
 
 .etitle {
@@ -115,12 +62,19 @@
 	overflow: hidden;
 }
 
-.entry-row.selected .etitle {
-	color: #ffffff;
+.etitle.folder {
+	font-weight: bold;
 }
 
-.entry-row.folder .etitle {
-	font-weight: bold;
+/* Favorite star / watched tick, between the title and the right column. */
+.emark {
+	margin-left: 14px;
+	font-size: 22px;
+	color: #e0b84d;
+}
+
+.emark.watched {
+	color: #4dd6b8;
 }
 
 /* Kodi's "label2": the value the list is sorted by. */
@@ -131,7 +85,125 @@
 	white-space: nowrap;
 }
 
-.entry-row.selected .emeta {
+/* Focused row: the solid accent bar, dark text. */
+.entry-row.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.entry-row.selected .etitle { color: #06231d; }
+.entry-row.selected .emeta { color: #0d3d33; }
+.entry-row.selected .emark { color: #06231d; }
+
+/* ------------------------------------------------------------------ */
+/* Grid                                                               */
+/* ------------------------------------------------------------------ */
+
+#browse.grid #details {
+	display: none;
+}
+
+#browse.grid #entries {
+	margin-right: 0px;
+}
+
+#browse.grid #entry-list {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-content: flex-start;
+	gap: 24px 24px;
+	padding: 10px 6px 0px 6px;
+}
+
+/* A tile: art on top, title under it. 252px tall plus the 24px gap. */
+#browse.grid .entry-row {
+	flex-direction: column;
+	align-items: stretch;
+	width: 272px;
+	height: 252px;
+	margin: 0px;
+	padding: 0px;
+	border-radius: 0px;
+	decorator: none;
+	transform: scale(1);
+	transition: transform 0.15s cubic-out;
+}
+
+#browse.grid .entry-row .art-tile {
+	width: 272px;
+	height: 176px;
+	margin: 0px;
+	border: 3px transparent;
+	border-radius: 10px;
+}
+
+#browse.grid .entry-row .art-glyph {
+	font-size: 64px;
+}
+
+#browse.grid .entry-row .art-check,
+#browse.grid .entry-row .art-fav {
+	display: block;
+}
+
+#browse.grid .entry-row .art-prog,
+#browse.grid .entry-row .art-prog-bar {
+	height: 6px;
+}
+
+#browse.grid .etitle {
+	flex: 0;
+	margin-top: 12px;
+	font-size: 22px;
+	text-align: center;
+}
+
+#browse.grid .emark,
+#browse.grid .emeta {
+	display: none;
+}
+
+#browse.grid .entry-row.selected {
+	decorator: none;
+	transform: scale(1.06);
+}
+#browse.grid .entry-row.selected .art-tile {
+	border: 3px #4dd6b8;
+	box-shadow: #4dd6b855 0px 0px 24px 0px;
+}
+#browse.grid .entry-row.selected .etitle {
+	color: #ffffff;
+	font-weight: bold;
+}
+
+/* The focused tile's facts, along the bottom of the wall. */
+#grid-info {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 72px;
+	margin-top: 12px;
+	padding: 0px 24px;
+	background-color: #ffffff0a;
+	border-radius: 12px;
+}
+
+.gi-title {
+	flex: 1;
+	font-size: 28px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.gi-props {
+	white-space: nowrap;
+}
+
+.gi-prop {
+	margin-left: 28px;
+	font-size: 22px;
 	color: #aab6cc;
 }
 
@@ -141,8 +213,8 @@
 
 .detail-body {
 	box-sizing: border-box;
-	padding: 32px 36px;
-	background-color: #ffffff07;
+	padding: 28px 32px;
+	background-color: #0b1020b3;
 	border-radius: 16px;
 }
 
@@ -153,9 +225,9 @@
 	flex-direction: row;
 	justify-content: center;
 	align-items: center;
-	height: 420px;
-	margin-bottom: 28px;
-	background-color: #00000033;
+	height: 400px;
+	margin-bottom: 26px;
+	background-color: #00000040;
 	border-radius: 12px;
 	overflow: hidden;
 }
@@ -165,7 +237,7 @@
 .detail-art {
 	display: block;
 	max-width: 100%;
-	max-height: 420px;
+	max-height: 400px;
 }
 
 .detail-glyph {
@@ -177,13 +249,17 @@
 .detail-title {
 	font-size: 34px;
 	font-weight: bold;
-	color: #e8edf7;
+	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
 }
 
+.detail-fav {
+	color: #e0b84d;
+}
+
 .detail-props {
-	margin-top: 18px;
+	margin-top: 16px;
 }
 
 .prop {
@@ -208,52 +284,11 @@
 }
 
 .detail-desc {
-	margin-top: 20px;
+	margin-top: 18px;
 	font-size: 23px;
 	line-height: 1.5em;
 	color: #aab6cc;
 	white-space: pre-line;
 	max-height: 230px;
 	overflow: hidden;
-}
-
-/* ------------------------------------------------------------------ */
-/* Library markers on rows                                            */
-/* ------------------------------------------------------------------ */
-
-.entry-row {
-	position: relative;
-}
-
-/* Favorite star / watched tick, between the title and the right column. */
-.emark {
-	margin-left: 14px;
-	font-size: 22px;
-	color: #e0b84d;
-}
-
-.emark.watched {
-	color: #4dd6b8;
-}
-
-/* How far an unfinished item got: a thin bar along the row's bottom edge,
- * under the title, Kodi style. */
-.eprog {
-	position: absolute;
-	left: 94px;
-	right: 24px;
-	bottom: 8px;
-	height: 4px;
-	border-radius: 2px;
-	background-color: #ffffff1a;
-}
-
-.eprog-bar {
-	height: 4px;
-	border-radius: 2px;
-	background-color: #4dd6b8;
-}
-
-.detail-fav {
-	color: #e0b84d;
 }

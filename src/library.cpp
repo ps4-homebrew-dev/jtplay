@@ -241,6 +241,12 @@ void Library::SetWatched(const Ref& ref, bool watched) {
   Changed();
 }
 
+std::string Library::ImageFor(const std::string& key, const std::string& id) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = progress_.find(Id(key, id));
+  return it == progress_.end() ? std::string() : it->second.ref.entry.image;
+}
+
 std::vector<std::pair<Ref, Progress>> Library::InProgress() const {
   std::vector<std::pair<Ref, Progress>> out;
   {

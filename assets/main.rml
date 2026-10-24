@@ -4,6 +4,7 @@
 		<link type="text/rcss" href="rml.rcss"/>
 		<link type="text/rcss" href="theme.rcss"/>
 		<link type="text/rcss" href="css/layout.rcss"/>
+		<link type="text/rcss" href="css/home.rcss"/>
 		<link type="text/rcss" href="css/browse.rcss"/>
 		<link type="text/rcss" href="css/menu.rcss"/>
 		<link type="text/rcss" href="css/watch.rcss"/>
@@ -11,12 +12,16 @@
 	</head>
 	<body data-model="jtplay" data-class-watching="watching">
 
+		<!-- Fanart: the focused item's artwork, large and dim, behind it all. -->
+		<div id="backdrop" data-if="backdrop != 'none' && !watching" data-style-decorator="backdrop"/>
+		<div id="backdrop-shade" data-if="!watching"/>
+
 		<div id="shell">
 			<div id="topbar">
 				<img class="brand-logo" src="icons/logo.png"/>
 				<div class="location">
+					<span class="wordmark" data-if="view == 'home'">jtplay</span>
 					<span class="location-source" data-if="view == 'browse'">{{source_name}}</span>
-					<span class="location-source" data-if="view == 'sources'">Media sources</span>
 					<span class="location-path" data-if="view == 'browse' && crumb != ''">›  {{crumb}}</span>
 				</div>
 				<span class="busy">
@@ -31,36 +36,63 @@
 				</div>
 			</div>
 
-			<!-- ========================== Sources ========================== -->
-			<div id="content-sources" class="content" data-if="view == 'sources'">
-				<div id="sources" class="pane">
-					<div class="pane-head">
-						<span class="eyebrow">Sources</span>
-						<span class="spacer"/>
-						<span class="position" data-if="source_count > 0">{{sel_source + 1}} / {{source_count}}</span>
+			<!-- ============================ Home =========================== -->
+			<div id="home" class="content" data-if="view == 'home'">
+				<div id="rail" data-class-away="home_shelves">
+					<div class="rail-row" data-for="r, ri : rail"
+					     data-class-selected="ri == sel_rail">
+						<span class="rail-icon">{{r.icon}}</span>
+						<div class="rail-text">
+							<div class="rail-label">{{r.label}}</div>
+							<div class="rail-detail" data-if="r.detail != ''">{{r.detail}}</div>
+						</div>
 					</div>
-					<div id="source-list" class="list">
-						<div class="source-row" data-for="src : sources"
-						     data-class-selected="it_index == sel_source">
-							<div class="srcicon">{{src.icon}}</div>
-							<div class="srcinfo">
-								<div class="srcname">{{src.name}}</div>
-								<div class="srcdetail">{{src.detail}}</div>
+				</div>
+
+				<div id="home-main">
+					<div id="hero" data-if="hero_title != ''">
+						<div class="hero-icon">{{hero_icon}}</div>
+						<div class="hero-text">
+							<div class="hero-title">{{hero_title}}</div>
+							<div class="hero-detail" data-if="hero_detail != ''">{{hero_detail}}</div>
+							<div class="hero-note" data-if="hero_note != ''">{{hero_note}}</div>
+						</div>
+					</div>
+
+					<div id="shelves" data-class-active="home_shelves">
+						<div class="shelf" data-for="sh, si : shelves"
+						     data-class-current="si == sel_shelf">
+							<div class="shelf-head">
+								<span class="shelf-title">{{sh.title}}</span>
+								<span class="shelf-count">{{sh.cards.size}}</span>
+							</div>
+							<div class="cards" data-attr-id="'cards-' + si">
+								<div class="card" data-for="c, ci : sh.cards"
+								     data-class-selected="home_shelves && si == sel_shelf && ci == sel_card">
+									<div class="art-tile"
+									     data-class-k-folder="c.kind == 'folder'"
+									     data-class-k-audio="c.kind == 'audio'"
+									     data-class-k-video="c.kind == 'video'"
+									     data-class-k-image="c.kind == 'image'">
+										<div class="art-img" data-if="c.art != 'none'" data-style-decorator="c.art"/>
+										<div class="art-glyph" data-if="c.art == 'none'">{{c.glyph}}</div>
+										<span class="art-check" data-if="c.watched">✔</span>
+										<div class="art-prog" data-if="c.progress != '0%'">
+											<div class="art-prog-bar" data-style-width="c.progress"/>
+										</div>
+									</div>
+									<div class="card-title">{{c.title}}</div>
+									<div class="card-sub">{{c.subtitle}}</div>
+								</div>
 							</div>
 						</div>
-						<div class="empty" data-if="source_count == 0 && !busy">
-							No media sources found.
-						</div>
-						<div class="empty" data-if="source_count == 0 && busy">
-							Searching for media sources...
-						</div>
 					</div>
-					<div class="status" data-if="status != ''">{{status}}</div>
 				</div>
 			</div>
 
 			<!-- =========================== Browse ========================== -->
-			<div id="content-browse" class="content" data-if="view == 'browse'">
+			<div id="browse" class="content" data-if="view == 'browse'"
+			     data-class-grid="view_mode == 'grid'">
 				<div id="entries" class="pane">
 					<div class="pane-head">
 						<span class="eyebrow">{{entry_count}} items</span>
@@ -70,22 +102,37 @@
 					</div>
 					<div id="entry-list" class="list">
 						<div class="entry-row" data-for="e : entries"
-						     data-class-selected="it_index == sel_entry"
-						     data-class-folder="e.folder">
-							<div class="eicon">{{e.icon}}</div>
-							<div class="etitle">{{e.name}}</div>
+						     data-class-selected="it_index == sel_entry">
+							<div class="art-tile"
+							     data-class-k-folder="e.kind == 'folder'"
+							     data-class-k-audio="e.kind == 'audio'"
+							     data-class-k-video="e.kind == 'video'"
+							     data-class-k-image="e.kind == 'image'">
+								<div class="art-img" data-if="e.art != 'none'" data-style-decorator="e.art"/>
+								<div class="art-glyph" data-if="e.art == 'none'">{{e.icon}}</div>
+								<span class="art-check" data-if="e.watched">✔</span>
+								<span class="art-fav" data-if="e.favorite">⭐</span>
+								<div class="art-prog" data-if="e.progress != '0%'">
+									<div class="art-prog-bar" data-style-width="e.progress"/>
+								</div>
+							</div>
+							<div class="etitle" data-class-folder="e.folder">{{e.name}}</div>
 							<span class="emark" data-if="e.favorite">⭐</span>
 							<span class="emark watched" data-if="e.watched">✔</span>
 							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
-							<div class="eprog" data-if="e.progress != '0%'">
-								<div class="eprog-bar" data-style-width="e.progress"/>
-							</div>
 						</div>
 						<div class="empty" data-if="entry_count == 0 && !busy">
 							This folder is empty.
 						</div>
 						<div class="empty" data-if="entry_count == 0 && busy">
 							Loading...
+						</div>
+					</div>
+					<!-- Grid: what the focused tile is, along the bottom. -->
+					<div id="grid-info" data-if="view_mode == 'grid' && detail_name != ''">
+						<div class="gi-title"><span class="detail-fav" data-if="detail_favorite">⭐ </span>{{detail_name}}</div>
+						<div class="gi-props">
+							<span class="gi-prop" data-for="p : detail_props">{{p.value}}</span>
 						</div>
 					</div>
 				</div>
@@ -109,78 +156,57 @@
 			</div>
 		</div>
 
-		<!-- ========================= Options menu ======================== -->
-		<div id="menu-scrim" data-if="menu_open"/>
-		<div id="menu" data-if="menu_open">
-			<div class="menu-title">{{menu_title}}</div>
-			<div class="menu-row" data-for="m : menu"
-			     data-class-selected="it_index == sel_menu">
-				<span class="menu-label">{{m.label}}</span>
-				<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
-			</div>
-		</div>
+		<!-- ======================== Playback OSD ========================= -->
 
-		<!-- =========================== Watching ========================== -->
+		<!-- Paused video: a large badge in the middle, Kodi style. -->
+		<div id="pause-badge" data-if="watching && watch_paused && !watch_audio && !menu_open">⏸</div>
 
-		<!-- Audio: persistent now-playing card in the middle of the screen. -->
-		<div id="audio-card" data-if="watching && watch_audio">
-			<img class="np-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
-			<div class="art" data-if="watch_image == ''">🎵</div>
-			<div class="np-title">{{watch_name}}</div>
-			<div class="np-meta" data-if="watch_description != ''">{{watch_description}}</div>
-			<div class="np-atrack" data-if="watch_atrack != ''">{{watch_atrack}}</div>
-			<div class="timeline">
-				<span class="tl-state" data-if="watch_paused">⏸</span>
-				<span class="tl-state" data-if="!watch_paused">▶</span>
-				<span class="tl-pos">{{watch_pos}}</span>
-				<div class="tl-track" data-if="watch_seekable">
-					<div class="tl-buffered" data-style-width="watch_buffered"/>
-					<div class="tl-played" data-style-width="watch_progress"/>
-				</div>
-				<span class="tl-live" data-if="!watch_seekable">LIVE</span>
-				<span class="tl-dur" data-if="watch_dur != ''">{{watch_dur}}</span>
+		<!-- The bar along the bottom. Its top edge is the timeline: played,
+		     buffered ahead, and a knob at the playhead. Video: auto-hides.
+		     Audio: stays, with large cover art, over the spectrum. -->
+		<div id="osd" data-if="watching && (watch_audio || info_visible)"
+		     data-class-audio="watch_audio">
+			<div class="osd-edge" data-if="watch_seekable">
+				<div class="osd-buffered" data-style-width="watch_buffered"/>
+				<div class="osd-played" data-style-width="watch_progress"/>
+				<div class="osd-knob" data-style-left="watch_progress"/>
+				<div class="osd-seek" data-if="watch_seek != ''" data-style-left="watch_progress">{{watch_seek}}</div>
 			</div>
-			<div class="np-sub">
-				<span data-if="watch_speed != ''" class="badge">{{watch_speed}}</span>
-				<span class="np-ends" data-if="watch_ends != ''">{{watch_ends}}</span>
-			</div>
-			<div class="np-next" data-if="watch_next != ''">
-				<span class="np-next-label">Up next</span>{{watch_next}}
-			</div>
-		</div>
-
-		<!-- Video: auto-hiding transport bar over the frames. The timeline
-		     spans the full width of the bar, Kodi style. -->
-		<div id="watch-bar" data-if="watching && !watch_audio && info_visible">
-			<div class="watch-row">
-				<img class="watch-thumb" data-if="watch_image != ''" data-attr-src="watch_image"/>
-				<div class="watch-main">
-					<div class="watch-name">{{watch_name}}</div>
-					<div class="watch-tracks">
-						<span class="watch-track" data-if="watch_vtrack != ''">Video  {{watch_vtrack}}</span>
-						<span class="watch-track" data-if="watch_atrack != ''">Audio  {{watch_atrack}}</span>
+			<div class="osd-edge live" data-if="!watch_seekable"/>
+			<div class="osd-row">
+				<img class="osd-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
+				<div class="osd-art osd-glyph" data-if="watch_image == '' && watch_audio">🎵</div>
+				<div class="osd-main">
+					<div class="osd-title">
+						<span class="osd-state" data-if="watch_paused">⏸</span>
+						<span class="osd-state" data-if="!watch_paused">▶</span>
+						{{watch_name}}
+					</div>
+					<div class="osd-desc" data-if="watch_description != ''">{{watch_description}}</div>
+					<div class="osd-tracks">
+						<span class="osd-track" data-if="watch_vtrack != ''">{{watch_vtrack}}</span>
+						<span class="osd-track" data-if="watch_atrack != ''">{{watch_atrack}}</span>
+					</div>
+					<div class="osd-next" data-if="watch_next != ''">
+						<span class="osd-next-label">UP NEXT</span>{{watch_next}}
 					</div>
 				</div>
-				<div class="watch-side">
-					<div class="watch-clock">{{clock}}</div>
-					<div class="watch-ends">
+				<div class="osd-side">
+					<div class="osd-time">
+						<span class="osd-pos">{{watch_pos}}</span>
+						<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
+						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
+					</div>
+					<div class="osd-ends">
 						<span data-if="watch_speed != ''" class="badge">{{watch_speed}}</span>
 						<span data-if="watch_ends != ''">{{watch_ends}}</span>
 					</div>
 				</div>
 			</div>
-			<div class="timeline">
-				<span class="tl-state" data-if="watch_paused">⏸</span>
-				<span class="tl-state" data-if="!watch_paused">▶</span>
-				<span class="tl-pos">{{watch_pos}}</span>
-				<div class="tl-track" data-if="watch_seekable">
-					<div class="tl-buffered" data-style-width="watch_buffered"/>
-					<div class="tl-played" data-style-width="watch_progress"/>
-				</div>
-				<span class="tl-live" data-if="!watch_seekable">LIVE</span>
-				<span class="tl-dur" data-if="watch_dur != ''">{{watch_dur}}</span>
-			</div>
 		</div>
+
+		<!-- The clock in the corner while the OSD is up. -->
+		<div id="osd-clock" data-if="watching && (watch_audio || info_visible)">{{clock}}</div>
 
 		<!-- Launching the next track without leaving watch mode. -->
 		<div id="launch-overlay" data-if="watching && launch_status != ''">
@@ -190,7 +216,22 @@
 			<span class="launch-label">{{launch_status}}</span>
 		</div>
 
-		<div id="toast" data-if="toast != ''">{{toast}}</div>
+		<!-- ===================== Menus and dialogs ======================= -->
+		<div id="menu-scrim" data-if="menu_open"/>
+		<div id="menu" data-if="menu_open" data-class-dialog="menu_dialog">
+			<div class="menu-title">{{menu_title}}</div>
+			<div class="menu-row" data-for="m : menu"
+			     data-class-selected="it_index == sel_menu">
+				<span class="menu-label">{{m.label}}</span>
+				<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
+			</div>
+		</div>
+
+		<!-- Notification in the corner. -->
+		<div id="toast" data-if="toast != ''">
+			<span class="toast-icon">{{toast_icon}}</span>
+			<span class="toast-text">{{toast}}</span>
+		</div>
 
 		<!-- Screensaver: dims everything after a while without input. -->
 		<div id="saver" data-if="saver">

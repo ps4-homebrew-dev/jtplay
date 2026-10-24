@@ -58,6 +58,9 @@ public:
   void SetResume(const Ref& ref, int64_t position, int64_t duration);
   // Marks watched (drops the resume point) or clears both.
   void SetWatched(const Ref& ref, bool watched);
+  // Artwork remembered for an item (a snapshot of where it was stopped),
+  // or "".
+  std::string ImageFor(const std::string& source_key, const std::string& id) const;
   // Unfinished items, most recently played first.
   std::vector<std::pair<Ref, Progress>> InProgress() const;
 

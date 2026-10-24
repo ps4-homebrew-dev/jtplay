@@ -15,11 +15,17 @@
 
 namespace appdetail {
 
-// Row geometry; must match the stylesheets (.source-row / .entry-row height
-// + margin-bottom, .menu-row height) so keyboard scrolling can be computed
-// without layout queries on the generated rows.
-inline constexpr float kSourceRowPitch = 96.0f + 12.0f;
-inline constexpr float kEntryRowPitch = 72.0f + 6.0f;
+// Geometry; must match the stylesheets so keyboard scrolling can be
+// computed without layout queries on the generated rows.
+inline constexpr float kRailRowPitch = 80.0f + 8.0f;     // .rail-row
+inline constexpr float kShelfPitch = 380.0f;              // .shelf
+inline constexpr float kCardPitch = 384.0f + 24.0f;       // .card + gap
+inline constexpr float kEntryRowPitch = 72.0f + 6.0f;     // list .entry-row
+inline constexpr int kGridColumns = 6;                    // grid .entry-row
+inline constexpr float kGridRowPitch = 252.0f + 24.0f;    // tile + gap
+
+// Artwork requests waiting at most; older ones are dropped.
+inline constexpr size_t kArtQueueMax = 96;
 
 // Rows kept visible above/below the selection while scrolling, so the
 // next item is always in view before it is reached.

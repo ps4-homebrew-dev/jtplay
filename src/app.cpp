@@ -45,8 +45,8 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
   if (!player_->Initialize(player_error, options.fonts_dir))
     Rml::Log::Message(Rml::Log::LT_WARNING, "No playback: %s", player_error.c_str());
 
-  // Cache directory: artwork, plus the small settings file. If it can't be
-  // used, remote art is simply skipped and settings are not remembered.
+  // Cache directory: artwork, plus the settings and the library. If it
+  // can't be used, remote art is simply skipped and nothing is remembered.
   std::string cache_dir = options.cache_dir;
   if (cache_dir.empty()) {
     const char* base = std::getenv("XDG_CACHE_HOME");
@@ -61,6 +61,7 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
       "Cannot use cache directory '%s' (%s); remote artwork disabled",
       cache_dir.c_str(), std::strerror(errno));
   settings_path_ = cache_dir + "/settings.ini";
+  cache_dir_ = cache_dir;
   LoadSettings();
   library_.Load(cache_dir + "/library.xml");
   library_seen_ = library_.Generation();
@@ -68,7 +69,6 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
     library::LibrarySource::Kind::Favorites, library_, registry_);
   continue_source_ = std::make_shared<library::LibrarySource>(
     library::LibrarySource::Kind::ContinueWatching, library_, registry_);
-  RebuildSources();
 
   providers_.push_back(std::make_unique<browse::FsProvider>());
   providers_.push_back(std::make_unique<browse::DlnaProvider>(kDiscoveryWaitMs));
@@ -77,13 +77,21 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
 
   worker_running_ = true;
   worker_ = std::thread(&App::WorkerMain, this);
+  {
+    std::lock_guard<std::mutex> lock(art_mutex_);
+    art_running_ = true;
+  }
+  art_thread_ = std::thread(&App::ArtworkMain, this);
 
+  Set("view_mode", bind_view_mode_,
+      Rml::String(view_mode_ == ViewMode::Grid ? "grid" : "list"));
+  RebuildHome();
   StartDiscovery();
   return true;
 }
 
 void App::Shutdown() {
-  // Stop the worker first; its tasks capture 'this'.
+  // Stop the workers first; their tasks capture 'this'.
   if (worker_running_) {
     {
       std::lock_guard<std::mutex> lock(tasks_mutex_);
@@ -95,12 +103,20 @@ void App::Shutdown() {
       worker_.join();
   }
   {
+    std::lock_guard<std::mutex> lock(art_mutex_);
+    art_running_ = false;
+    art_queue_.clear();
+  }
+  art_cv_.notify_all();
+  if (art_thread_.joinable())
+    art_thread_.join();
+  {
     // Nothing is left to apply them to.
     std::lock_guard<std::mutex> lock(replies_mutex_);
     replies_.clear();
   }
 
-  artcache::Shutdown(); // after the worker is joined; it calls Fetch()
+  artcache::Shutdown(); // after both threads are joined; they call Fetch()
 
   if (bind_watching_)
     RecordProgress(true);
@@ -139,6 +155,8 @@ void App::LoadSettings() {
         sort_mode_ = (SortMode)mode;
     } else if (key == "sort_desc") {
       sort_desc_ = value == "1";
+    } else if (key == "view") {
+      view_mode_ = value == "grid" ? ViewMode::Grid : ViewMode::List;
     }
   }
 }
@@ -148,7 +166,8 @@ void App::SaveSettings() const {
     return;
   std::ofstream out(settings_path_, std::ios::trunc);
   out << "sort=" << (int)sort_mode_ << "\n"
-      << "sort_desc=" << (sort_desc_ ? 1 : 0) << "\n";
+      << "sort_desc=" << (sort_desc_ ? 1 : 0) << "\n"
+      << "view=" << (view_mode_ == ViewMode::Grid ? "grid" : "list") << "\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -209,15 +228,34 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     return false;
   }
 
-  if (auto row = ctor.RegisterStruct<SourceRow>()) {
-    row.RegisterMember("icon", &SourceRow::icon);
-    row.RegisterMember("name", &SourceRow::name);
-    row.RegisterMember("detail", &SourceRow::detail);
+  if (auto row = ctor.RegisterStruct<RailRow>()) {
+    row.RegisterMember("icon", &RailRow::icon);
+    row.RegisterMember("label", &RailRow::label);
+    row.RegisterMember("detail", &RailRow::detail);
   }
-  ctor.RegisterArray<std::vector<SourceRow>>();
+  ctor.RegisterArray<std::vector<RailRow>>();
+
+  if (auto row = ctor.RegisterStruct<CardRow>()) {
+    row.RegisterMember("title", &CardRow::title);
+    row.RegisterMember("subtitle", &CardRow::subtitle);
+    row.RegisterMember("glyph", &CardRow::glyph);
+    row.RegisterMember("kind", &CardRow::kind);
+    row.RegisterMember("art", &CardRow::art);
+    row.RegisterMember("progress", &CardRow::progress);
+    row.RegisterMember("watched", &CardRow::watched);
+  }
+  ctor.RegisterArray<std::vector<CardRow>>();
+
+  if (auto row = ctor.RegisterStruct<ShelfRow>()) {
+    row.RegisterMember("title", &ShelfRow::title);
+    row.RegisterMember("cards", &ShelfRow::cards);
+  }
+  ctor.RegisterArray<std::vector<ShelfRow>>();
 
   if (auto row = ctor.RegisterStruct<EntryRow>()) {
     row.RegisterMember("icon", &EntryRow::icon);
+    row.RegisterMember("kind", &EntryRow::kind);
+    row.RegisterMember("art", &EntryRow::art);
     row.RegisterMember("name", &EntryRow::name);
     row.RegisterMember("meta", &EntryRow::meta);
     row.RegisterMember("progress", &EntryRow::progress);
@@ -240,8 +278,11 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.RegisterArray<std::vector<MenuRow>>();
 
   ctor.Bind("view", &bind_view_);
+  ctor.Bind("view_mode", &bind_view_mode_);
   ctor.Bind("status", &bind_status_);
   ctor.Bind("toast", &bind_toast_);
+  ctor.Bind("toast_icon", &bind_toast_icon_);
+  ctor.Bind("backdrop", &bind_backdrop_);
   ctor.Bind("crumb", &bind_crumb_);
   ctor.Bind("source_name", &bind_source_name_);
   ctor.Bind("clock", &bind_clock_);
@@ -249,9 +290,16 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("busy", &bind_busy_);
   ctor.Bind("launch_status", &bind_launch_status_);
 
-  ctor.Bind("sources", &source_rows_);
-  ctor.Bind("source_count", &source_count_);
-  ctor.Bind("sel_source", &sel_source_);
+  ctor.Bind("rail", &rail_rows_);
+  ctor.Bind("sel_rail", &sel_rail_);
+  ctor.Bind("shelves", &shelf_rows_);
+  ctor.Bind("sel_shelf", &sel_shelf_);
+  ctor.Bind("sel_card", &sel_card_);
+  ctor.Bind("home_shelves", &bind_home_shelves_);
+  ctor.Bind("hero_icon", &bind_hero_icon_);
+  ctor.Bind("hero_title", &bind_hero_title_);
+  ctor.Bind("hero_detail", &bind_hero_detail_);
+  ctor.Bind("hero_note", &bind_hero_note_);
 
   ctor.Bind("entries", &entry_rows_);
   ctor.Bind("entry_count", &entry_count_);
@@ -271,6 +319,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("saver_now", &bind_saver_now_);
 
   ctor.Bind("menu_open", &bind_menu_open_);
+  ctor.Bind("menu_dialog", &bind_menu_dialog_);
   ctor.Bind("menu_title", &bind_menu_title_);
   ctor.Bind("menu", &menu_rows_);
   ctor.Bind("sel_menu", &sel_menu_);
@@ -288,6 +337,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_speed", &bind_watch_speed_);
   ctor.Bind("watch_ends", &bind_watch_ends_);
   ctor.Bind("watch_next", &bind_watch_next_);
+  ctor.Bind("watch_seek", &bind_watch_seek_);
   ctor.Bind("watch_progress", &bind_watch_progress_);
   ctor.Bind("watch_vtrack", &bind_watch_vtrack_);
   ctor.Bind("watch_atrack", &bind_watch_atrack_);
@@ -349,6 +399,7 @@ void App::Update() {
 
   if (image_refresh_pending_) {
     image_refresh_pending_ = false;
+    art_scan_pending_ = true;
     RefreshImageBindings();
   }
 
@@ -359,6 +410,8 @@ void App::Update() {
     if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
         now > info_deadline_)
       Set("info_visible", bind_info_visible_, false);
+    if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
+      Set("watch_seek", bind_watch_seek_, Rml::String());
   }
 
   if (!bind_toast_.empty() && now > toast_deadline_)
@@ -368,12 +421,44 @@ void App::Update() {
   // after the context update that follows the change, so scroll one frame
   // later using the fixed row pitch.
   if (scroll_entries_pending_) {
-    EnsureRowVisible("entry-list", sel_entry_, kEntryRowPitch);
+    if (view_mode_ == ViewMode::Grid)
+      EnsureRowVisible("entry-list", sel_entry_ / kGridColumns, kGridRowPitch);
+    else
+      EnsureRowVisible("entry-list", sel_entry_, kEntryRowPitch);
     scroll_entries_pending_ = false;
+    art_scan_pending_ = true;
   }
   if (scroll_sources_pending_) {
-    EnsureRowVisible("source-list", sel_source_, kSourceRowPitch);
+    EnsureRowVisible("rail", sel_rail_, kRailRowPitch);
+    if (Rml::Element* shelves = document_->GetElementById("shelves")) {
+      // The focused shelf in view, then the focused card in its row.
+      const float pitch = kShelfPitch;
+      const float view_h = shelves->GetClientHeight();
+      float top = shelves->GetScrollTop();
+      const float row_top = sel_shelf_ * pitch;
+      if (row_top < top)
+        top = row_top;
+      else if (row_top + pitch > top + view_h)
+        top = row_top + pitch - view_h;
+      shelves->SetScrollTop(std::max(0.0f, top));
+      const std::string id = "cards-" + std::to_string(sel_shelf_);
+      if (Rml::Element* row = document_->GetElementById(id)) {
+        const float view_w = row->GetClientWidth();
+        float left = row->GetScrollLeft();
+        const float card_left = sel_card_ * kCardPitch;
+        if (card_left < left + kCardPitch * 0.5f)
+          left = card_left - kCardPitch * 0.5f;
+        else if (card_left + kCardPitch * 1.5f > left + view_w)
+          left = card_left + kCardPitch * 1.5f - view_w;
+        row->SetScrollLeft(std::max(0.0f, left));
+      }
+    }
     scroll_sources_pending_ = false;
+  }
+
+  if (art_scan_pending_) {
+    art_scan_pending_ = false;
+    UpdateVisibleArt();
   }
 }
 
@@ -404,9 +489,10 @@ void App::EnsureRowVisible(const char* list_id, int index, float row_pitch) {
   list->SetScrollTop(std::max(0.0f, scroll));
 }
 
-void App::ShowToast(const std::string& text) {
+void App::ShowToast(const std::string& text, const char* icon) {
   toast_deadline_ = Now() + kToastSec;
   Set("toast", bind_toast_, text);
+  Set("toast_icon", bind_toast_icon_, Rml::String(icon ? icon : "ℹ"));
 }
 
 // ---------------------------------------------------------------------------
@@ -445,8 +531,8 @@ void App::ProcessEvent(Rml::Event& event) {
     HandleKeyWatch(event, key);
     return;
   }
-  if (view_ == View::Sources) {
-    HandleKeySources(event, key);
+  if (view_ == View::Home) {
+    HandleKeyHome(event, key);
     return;
   }
   HandleKeyBrowse(event, key);
@@ -456,12 +542,21 @@ void App::ProcessEvent(Rml::Event& event) {
 // Artwork
 // ---------------------------------------------------------------------------
 
-std::string App::ImagePathFor(const std::string& uri) {
+std::string App::CoverDecorator(const std::string& path) {
+  if (path.empty())
+    return "none";
+  // Quoted, so a path with spaces or parentheses stays one argument.
+  return "image(\"" + path + "\" cover)";
+}
+
+std::string App::ImagePathFor(const std::string& uri, bool thumb) {
   // artcache answers for a local file or an already-cached download without
-  // any I/O; everything else has to go to the worker, because RmlUi wants a
-  // path now and the download is a blocking request.
+  // any I/O; everything else goes to the artwork thread, because RmlUi
+  // wants a path now and the download is a blocking request.
   std::string path;
-  switch (artcache::Lookup(uri, path)) {
+  const artcache::Status status =
+    thumb ? artcache::LookupThumb(uri, path) : artcache::Lookup(uri, path);
+  switch (status) {
   case artcache::Status::Ready:
     return path;
   case artcache::Status::Failed:
@@ -470,18 +565,47 @@ std::string App::ImagePathFor(const std::string& uri) {
     break;
   }
 
-  if (!image_inflight_.insert(uri).second)
-    return {}; // already being fetched; the next Refresh picks it up
+  const std::string key = (thumb ? "t:" : "f:") + uri;
+  if (!image_inflight_.insert(key).second)
+    return {}; // already asked for; the next refresh picks it up
 
-  PostTask([this, uri] {
-    artcache::Fetch(uri); // the cache holds the result; we only signal
-    Reply([this, uri] {
-      image_inflight_.erase(uri);
+  {
+    std::lock_guard<std::mutex> lock(art_mutex_);
+    art_queue_.emplace_front(uri, thumb);
+    // Scrolling fast through a big wall asks for far more than it shows;
+    // what fell off the end is asked for again if it comes back on screen.
+    while (art_queue_.size() > kArtQueueMax) {
+      const auto& dropped = art_queue_.back();
+      image_inflight_.erase((dropped.second ? "t:" : "f:") + dropped.first);
+      art_queue_.pop_back();
+    }
+  }
+  art_cv_.notify_one();
+  return {};
+}
+
+void App::ArtworkMain() {
+  for (;;) {
+    std::pair<std::string, bool> job;
+    {
+      std::unique_lock<std::mutex> lock(art_mutex_);
+      art_cv_.wait(lock, [&] { return !art_queue_.empty() || !art_running_; });
+      if (!art_running_)
+        return;
+      job = std::move(art_queue_.front());
+      art_queue_.pop_front();
+    }
+    // The cache holds the result; the main thread only needs the signal.
+    if (job.second)
+      artcache::FetchThumb(job.first);
+    else
+      artcache::Fetch(job.first);
+    const std::string key = (job.second ? "t:" : "f:") + job.first;
+    Reply([this, key] {
+      image_inflight_.erase(key);
       image_refresh_pending_ = true; // coalesced: one refresh per frame
     });
-  });
-
-  return {};
+  }
 }
 
 void App::RefreshImageBindings() {
@@ -489,7 +613,7 @@ void App::RefreshImageBindings() {
   Rml::String detail;
   if (view_ == View::Browse) {
     if (const browse::Entry* entry = SelectedEntry())
-      detail = ImagePathFor(entry->image);
+      detail = ImagePathFor(ArtUri(*entry));
   }
   Set("detail_image", bind_detail_image_, detail);
 
@@ -498,4 +622,24 @@ void App::RefreshImageBindings() {
   if (bind_watching_)
     watch = ImagePathFor(playing_.image);
   Set("watch_image", bind_watch_image_, watch);
+
+  UpdateBackdrop();
+}
+
+// The selected item's artwork, large and dim behind everything (Kodi's
+// fanart): the focused card at home, the selection while browsing.
+void App::UpdateBackdrop() {
+  std::string uri;
+  if (view_ == View::Browse) {
+    if (const browse::Entry* entry = SelectedEntry())
+      uri = ArtUri(*entry);
+  } else if (bind_home_shelves_) {
+    if (const browse::Entry* card = SelectedCard())
+      uri = ArtUri(*card);
+  }
+  // Keep the last picture while the next one loads, rather than flash to
+  // nothing between two items that both have art.
+  const std::string path = uri.empty() ? std::string() : ImagePathFor(uri);
+  if (!path.empty() || uri.empty())
+    Set("backdrop", bind_backdrop_, CoverDecorator(path));
 }

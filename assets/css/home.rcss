@@ -1,0 +1,247 @@
+/*
+ * Home: the rail of places on the left, and on the right a hero for the
+ * place the rail is on, above shelves of cards from the library. Heights
+ * must stay in sync with kRailRowPitch / kShelfPitch / kCardPitch in
+ * src/app_internal.h.
+ */
+
+#home {
+	flex-direction: row;
+}
+
+/* ------------------------------------------------------------------ */
+/* Rail                                                               */
+/* ------------------------------------------------------------------ */
+
+#rail {
+	box-sizing: border-box;
+	width: 460px;
+	padding-top: 8px;
+	overflow-y: auto;
+}
+
+#rail scrollbarvertical { width: 0px; }
+
+.rail-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 80px;
+	margin-bottom: 8px;
+	padding: 0px 22px;
+	border-radius: 12px;
+	transition: background-color 0.12s linear-in-out;
+}
+
+.rail-icon {
+	width: 52px;
+	font-size: 32px;
+	text-align: center;
+	margin-right: 20px;
+	color: #aab6cc;
+}
+
+.rail-text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+}
+
+.rail-label {
+	font-size: 30px;
+	font-weight: bold;
+	color: #aab6cc;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.rail-detail {
+	margin-top: 2px;
+	font-size: 19px;
+	color: #6f7b92;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+/* Focused: the solid accent bar. */
+.rail-row.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.rail-row.selected .rail-icon,
+.rail-row.selected .rail-label { color: #06231d; }
+.rail-row.selected .rail-detail { color: #0d3d33; }
+
+/* Focus has moved on to the shelves: the rail keeps a quiet marker of
+ * where it is. */
+#rail.away .rail-row.selected {
+	decorator: none;
+	background-color: #ffffff10;
+	border-left: 4px #4dd6b8;
+}
+#rail.away .rail-row.selected .rail-icon,
+#rail.away .rail-row.selected .rail-label { color: #e8edf7; }
+#rail.away .rail-row.selected .rail-detail { color: #8593ab; }
+
+/* ------------------------------------------------------------------ */
+/* Hero                                                               */
+/* ------------------------------------------------------------------ */
+
+#home-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	margin-left: 56px;
+	overflow: hidden;
+}
+
+#hero {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	min-height: 200px;
+	margin-bottom: 24px;
+}
+
+.hero-icon {
+	width: 150px;
+	height: 150px;
+	margin-right: 40px;
+	font-size: 96px;
+	line-height: 150px;
+	text-align: center;
+	color: #4dd6b8;
+	background-color: #4dd6b81a;
+	border-radius: 28px;
+}
+
+.hero-text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+}
+
+.hero-title {
+	font-size: 64px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.hero-detail {
+	margin-top: 6px;
+	font-size: 26px;
+	color: #aab6cc;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.hero-note {
+	margin-top: 18px;
+	font-size: 24px;
+	color: #6f7b92;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shelves and cards                                                  */
+/* ------------------------------------------------------------------ */
+
+#shelves {
+	flex: 1;
+	overflow-y: auto;
+}
+
+#shelves scrollbarvertical { width: 0px; }
+
+.shelf {
+	box-sizing: border-box;
+	height: 380px;
+	padding-top: 8px;
+}
+
+.shelf-head {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	height: 44px;
+	padding-left: 4px;
+}
+
+.shelf-title {
+	font-size: 28px;
+	font-weight: bold;
+	color: #aab6cc;
+}
+
+#shelves.active .shelf.current .shelf-title {
+	color: #ffffff;
+}
+
+.shelf-count {
+	margin-left: 14px;
+	font-size: 20px;
+	color: #5a6478;
+}
+
+/* The row of cards scrolls sideways under program control; the padding
+ * leaves room for the focused card to grow without being clipped. */
+.cards {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: nowrap;
+	padding: 14px 20px 0px 6px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	white-space: nowrap;
+}
+
+.cards scrollbarhorizontal { height: 0px; }
+
+.card {
+	flex-shrink: 0;
+	width: 384px;
+	margin-right: 24px;
+	transform: scale(1);
+	transition: transform 0.15s cubic-out;
+}
+
+.card .art-tile {
+	width: 384px;
+	height: 216px;
+	border: 3px transparent;
+}
+
+.card .art-glyph {
+	font-size: 84px;
+}
+
+.card-title {
+	margin-top: 12px;
+	font-size: 25px;
+	font-weight: bold;
+	color: #c5cee0;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.card-sub {
+	margin-top: 2px;
+	font-size: 19px;
+	color: #6f7b92;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+/* Focused card: lifted, outlined in the accent. */
+.card.selected {
+	transform: scale(1.05);
+}
+.card.selected .art-tile {
+	border: 3px #4dd6b8;
+	box-shadow: #4dd6b855 0px 0px 24px 0px;
+}
+.card.selected .card-title { color: #ffffff; }
+.card.selected .card-sub { color: #aab6cc; }

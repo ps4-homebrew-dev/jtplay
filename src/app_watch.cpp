@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 #include "app.h"
 #include "app_internal.h"
@@ -51,8 +52,7 @@ size_t NextTrack(const std::vector<T>& tracks, int current, int direction) {
 } // namespace
 
 // Plays an item, offering to pick up where it was left off. The question
-// is the options side menu with two actions, so it looks like every other
-// choice in the app.
+// is a small dialog in the middle of the screen, Kodi style.
 void App::PlayEntry(const browse::Entry& entry) {
   library::Ref ref;
   library::Progress p;
@@ -66,6 +66,7 @@ void App::PlayEntry(const browse::Entry& entry) {
     menu_items_.push_back({"Play from beginning", nullptr,
       [this, entry](int) { Launch(entry, 0); }});
     Set("menu_title", bind_menu_title_, Rml::String(entry.name));
+    Set("menu_dialog", bind_menu_dialog_, true);
     sel_menu_ = 0;
     RebuildMenuRows();
     Set("menu_open", bind_menu_open_, true);
@@ -125,7 +126,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds) {
         if (ok)
           PostTask([this] { player_->Stop(); });
       } else if (!ok) {
-        ShowToast(error.empty() ? "Playback failed" : error);
+        ShowToast(error.empty() ? "Playback failed" : error, "⚠");
         const int direction = launch_direction_;
         const browse::Entry failed = launch_entry_;
         CancelLaunch();
@@ -148,7 +149,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds) {
         CancelLaunch();
         EnterWatch(playing_);
         if (start_seconds > 0)
-          ShowToast("Resumed at " + FormatTime(start_seconds * 1000000));
+          ShowToast("Resumed at " + FormatTime(start_seconds * 1000000), "⏯");
       }
     });
     busy_ops_--;
@@ -267,7 +268,7 @@ void App::CycleAudioTrack(int direction) {
   const size_t next = NextTrack(tracks, player_->CurrentAudioStream(), direction);
   if (player_->SelectAudioTrack(tracks[next].stream_index)) {
     ShowToast("Audio " + std::to_string(next + 1) + "/" +
-              std::to_string(tracks.size()) + ": " + tracks[next].label);
+              std::to_string(tracks.size()) + ": " + tracks[next].label, "🔊");
   }
 }
 
@@ -284,7 +285,7 @@ void App::CycleVideoTrack(int direction) {
   const size_t next = NextTrack(tracks, player_->CurrentVideoStream(), direction);
   if (player_->SelectVideoTrack(tracks[next].stream_index)) {
     ShowToast("Video " + std::to_string(next + 1) + "/" +
-              std::to_string(tracks.size()) + ": " + tracks[next].label);
+              std::to_string(tracks.size()) + ": " + tracks[next].label, "🎬");
   }
 }
 
@@ -304,6 +305,7 @@ void App::CycleSubtitleTrack(int direction) {
 void App::OpenWatchMenu() {
   menu_items_.clear();
   Set("menu_title", bind_menu_title_, Rml::String("Playback"));
+  Set("menu_dialog", bind_menu_dialog_, false);
 
   if (player_->AudioTracks().size() > 1) {
     menu_items_.push_back({"Audio",
@@ -426,6 +428,24 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
       if (key == Rml::Input::KI_UP)    delta = +kSeekLargeUs;
       if (key == Rml::Input::KI_DOWN)  delta = -kSeekLargeUs;
       player_->SeekRelative(delta);
+      // How far this run of presses has jumped, Kodi style ("+30 s"), in a
+      // bubble that rides on the knob.
+      if (Now() > seek_bubble_until_)
+        seek_accum_us_ = 0;
+      seek_accum_us_ += delta;
+      seek_bubble_until_ = Now() + 1.5;
+      const int64_t secs = std::llabs(seek_accum_us_) / 1000000;
+      char label[48];
+      if (secs >= 60 && secs % 60 == 0)
+        std::snprintf(label, sizeof(label), "%s %c%lld min",
+                      seek_accum_us_ < 0 ? "⏪" : "⏩", seek_accum_us_ < 0 ? '-' : '+',
+                      (long long)(secs / 60));
+      else
+        std::snprintf(label, sizeof(label), "%s %c%s",
+                      seek_accum_us_ < 0 ? "⏪" : "⏩", seek_accum_us_ < 0 ? '-' : '+',
+                      secs >= 60 ? FormatTime(secs * 1000000).c_str()
+                                 : (std::to_string(secs) + " s").c_str());
+      Set("watch_seek", bind_watch_seek_, Rml::String(label));
     }
     ShowWatchInfo(kWatchInfoSec);
     break;

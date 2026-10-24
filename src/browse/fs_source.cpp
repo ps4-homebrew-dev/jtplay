@@ -231,7 +231,7 @@ bool FsProvider::Discover(std::vector<SourcePtr>& out, std::string&) {
 #else
   if (const char* home = std::getenv("HOME")) {
     if (*home && IsDirectory(home) && std::string(home) != "/")
-      out.push_back(std::make_shared<FsSource>("Home", home));
+      out.push_back(std::make_shared<FsSource>("Home folder", home));
   }
 #endif
   out.push_back(std::make_shared<FsSource>("Local filesystem", "/"));

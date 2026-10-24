@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <SDL.h>
+#include <SDL_image.h>
+
 #include "artcache.h"
 #include "net/http_client.h"
 
@@ -25,7 +28,7 @@ constexpr long kStallTimeoutMs = 15000; // no data for this long: give up
 
 // Files kept across runs. A few hundred covers is a couple of tens of MiB,
 // and the oldest ones are dropped on the next start.
-constexpr size_t kMaxCachedFiles = 512;
+constexpr size_t kMaxCachedFiles = 1024; // covers and their thumbnails
 
 std::mutex g_mutex;               // guards everything below
 std::string g_dir;                // "" = cache unavailable
@@ -189,6 +192,117 @@ Status Lookup(const std::string& uri, std::string& path) {
   }
 
   return Status::Missing;
+}
+
+namespace {
+
+// The cache key of a thumbnail: its own entry, next to the original's.
+std::string ThumbKey(const std::string& uri) {
+  return uri + "#thumb";
+}
+
+// Box-filter downscale of an RGBA32 surface: every destination pixel is
+// the average of the source pixels it covers, which keeps fine detail from
+// turning into the shimmer a nearest-neighbour scale gives.
+SDL_Surface* Downscale(SDL_Surface* src, int w, int h) {
+  SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+  if (!dst)
+    return nullptr;
+  const int sw = src->w, sh = src->h;
+  for (int y = 0; y < h; y++) {
+    const int y0 = (int)((int64_t)y * sh / h);
+    const int y1 = std::max(y0 + 1, (int)((int64_t)(y + 1) * sh / h));
+    uint8_t* out = (uint8_t*)dst->pixels + (size_t)y * dst->pitch;
+    for (int x = 0; x < w; x++) {
+      const int x0 = (int)((int64_t)x * sw / w);
+      const int x1 = std::max(x0 + 1, (int)((int64_t)(x + 1) * sw / w));
+      uint32_t sum[4] = {0, 0, 0, 0};
+      for (int sy = y0; sy < y1; sy++) {
+        const uint8_t* in = (const uint8_t*)src->pixels + (size_t)sy * src->pitch + (size_t)x0 * 4;
+        for (int sx = x0; sx < x1; sx++, in += 4) {
+          sum[0] += in[0]; sum[1] += in[1]; sum[2] += in[2]; sum[3] += in[3];
+        }
+      }
+      const uint32_t n = (uint32_t)((y1 - y0) * (x1 - x0));
+      for (int c = 0; c < 4; c++)
+        out[x * 4 + c] = (uint8_t)(sum[c] / n);
+    }
+  }
+  return dst;
+}
+
+} // namespace
+
+Status LookupThumb(const std::string& uri, std::string& path) {
+  path.clear();
+  if (uri.empty())
+    return Status::Failed;
+  {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_dir.empty()) {
+      const std::string key = ThumbKey(uri);
+      auto it = g_index.find(key);
+      if (it != g_index.end()) {
+        path = it->second;
+        return path.empty() ? Status::Failed : Status::Ready;
+      }
+      auto disk = g_ondisk.find(HashKey(key));
+      if (disk != g_ondisk.end()) {
+        path = disk->second;
+        g_index[key] = path;
+        return Status::Ready;
+      }
+      return Status::Missing;
+    }
+  }
+  // No cache directory: nowhere to put a thumbnail, so the original it is.
+  return Lookup(uri, path);
+}
+
+std::string FetchThumb(const std::string& uri) {
+  std::string path;
+  const Status status = LookupThumb(uri, path);
+  if (status != Status::Missing)
+    return path;
+
+  const std::string original = Fetch(uri);
+  std::string result;
+  if (!original.empty()) {
+    if (SDL_Surface* loaded = IMG_Load(original.c_str())) {
+      const int w = loaded->w, h = loaded->h;
+      if (w <= kThumbSize && h <= kThumbSize) {
+        result = original; // small already
+      } else if (SDL_Surface* rgba = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA32, 0)) {
+        const double scale = (double)kThumbSize / (double)std::max(w, h);
+        const int tw = std::max(1, (int)(w * scale + 0.5));
+        const int th = std::max(1, (int)(h * scale + 0.5));
+        if (SDL_Surface* small = Downscale(rgba, tw, th)) {
+          std::string dir;
+          {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            dir = g_dir;
+          }
+          const std::string final_path = dir + "/art-" + HashKey(ThumbKey(uri)) + ".png";
+          const std::string tmp_path = final_path + ".tmp";
+          if (!dir.empty() && IMG_SavePNG(small, tmp_path.c_str()) == 0 &&
+              ::rename(tmp_path.c_str(), final_path.c_str()) == 0)
+            result = final_path;
+          else
+            ::remove(tmp_path.c_str());
+          SDL_FreeSurface(small);
+        }
+        SDL_FreeSurface(rgba);
+      }
+      SDL_FreeSurface(loaded);
+    }
+  }
+
+  std::lock_guard<std::mutex> lock(g_mutex);
+  const std::string key = ThumbKey(uri);
+  g_index[key] = result;
+  if (!result.empty() && result != original)
+    g_ondisk[HashKey(key)] = result;
+  return result;
 }
 
 std::string Fetch(const std::string& uri) {

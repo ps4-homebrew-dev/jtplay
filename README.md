@@ -11,49 +11,70 @@ plugins, in the spirit of Kodi.
 
 - **Local storage**: on the console, every connected USB drive, extended
   storage and `/data` are listed as their own sources; on a PC, the home
-  directory. The whole filesystem is always available as well.
+  folder. The whole filesystem is always available as well.
 - **UPnP/DLNA servers** on the local network (MiniDLNA, Jellyfin, Plex, ...).
 - **JavaScript plugins** (see below).
 
+## Home
+
+The home screen is a rail of places down the left (Home, every source,
+Rescan) and, on the right, shelves of cards from your library:
+**Continue watching** and **Favorites**. On Home the shelves hold
+everything; on a source, only what came from that source, under a header
+for it. Right moves from the rail onto the shelves, select on a card plays
+it (or opens a favorite folder), and select on a source browses it. The
+focused card's artwork fills the background.
+
 ## Browsing
 
-Folders are always listed first. The list can be sorted by name (natural
-order, so "Episode 2" comes before "Episode 10"), date or size, ascending or
-descending, or kept in the order the source returned it ("Default", which is
-track order on most DLNA servers). The right-hand column of the list shows
-whatever it is sorted by, and the info panel shows artwork, type, size,
-duration and date of the selected item. The sort order is remembered between
-sessions.
+Folders are always listed first. A folder is shown as a **list** (with a
+thumbnail per row and an info panel with artwork, type, size, duration,
+date and resume point) or as a **grid** of artwork tiles with the focused
+item's details along the bottom; switch with View in the options menu.
+Artwork is loaded in the background, newest request first, and shrunk to
+thumbnails so even a folder of camera photos stays light; the selected
+item's artwork is the backdrop.
 
-Moving past the last row of a list wraps around to the first, and the other
-way round.
+The list can be sorted by name (natural order, so "Episode 2" comes before
+"Episode 10"), date or size, ascending or descending, or kept in the order
+the source returned it ("Default", which is track order on most DLNA
+servers). The right-hand column of the list shows whatever it is sorted by.
+View and sort are remembered between sessions.
+
+Moving past the last row of a list (or the last row of the grid) wraps
+around to the first, and the other way round.
 
 The options button opens a side menu: what can be done with the selected
-item (add to favorites, mark as watched, play from the beginning) followed by
-the sort settings, refresh, and going back to the source list.
+item (play, resume, play from the beginning, add to favorites, mark as
+watched) followed by the view and sort settings, refresh, and Home.
 
 ## Favorites and Continue watching
 
-Any folder or item, from any source, can be added to **Favorites**, which is
-always the first entry of the source list. A favorite folder is a shortcut:
-it browses (and plays) through the source it came from, so a DLNA folder
-works as long as that server is on the network.
+Any folder or item, from any source, can be added to **Favorites**. A
+favorite folder is a shortcut: it browses (and plays) through the source it
+came from, so a DLNA folder works as long as that server is on the network.
 
 Videos (and audio longer than 20 minutes) remember where they were stopped.
-Playing one again offers to resume, unfinished items show a progress bar on
-their row and are collected under **Continue watching**, and anything played
-past 92% is marked watched with a tick. Moving to the next item in a folder
-resumes it without asking. All of this is stored in `library.xml` in the
-cache directory.
+Playing one again asks whether to resume, unfinished items show a progress
+bar on their art and gather under **Continue watching**, and anything played
+past 92% is marked watched with a tick. A video without artwork of its own
+gets a snapshot of the frame it was stopped on, so its card shows where you
+left off. Moving to the next item in a folder resumes it without asking.
+All of this is stored in `library.xml` in the cache directory.
 
 ## Playing
 
+The bar along the bottom shows title, tracks, time and when it will end;
+its top edge is the timeline, with the played part in the accent colour,
+what a network stream has buffered ahead in a lighter shade, and a knob at
+the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a
+paused video shows a large pause badge, and streams that cannot seek are
+marked LIVE. Audio keeps the bar up, with large cover art and what plays
+next, over the spectrum.
+
 The options button opens the playback menu: audio track, subtitles, video
-track, speed (0.5× to 2×), favorites, play next and stop. The info bar shows
-a full-width timeline with the buffered part of a network stream shaded
-ahead of the playhead, the time it will end (adjusted for the speed), and
-"LIVE" for streams that cannot seek. An item that fails to open while going
-through a folder is skipped.
+track, speed (0.5× to 2×), favorites, play next and stop. An item that
+fails to open while going through a folder is skipped.
 
 After three minutes without input (and no video running) the screen dims to
 a slowly drifting clock; the first key press only wakes it.
@@ -159,20 +180,20 @@ Keyboard, game controller (any pad SDL knows, and the DualShock 4 on a PS4)
 and media remote do the same things. The UI shows no button hints; the
 options button is the way into everything that is not on the d-pad.
 
-| Controller            | Key             | Browsing                         | Playing                    |
-|-----------------------|-----------------|----------------------------------|----------------------------|
-| d-pad up / down       | arrows          | move (wraps around; held: repeats) | seek +5 / -5 min         |
-| d-pad left / right    | arrows          | page up / down                   | seek -10 / +10 s           |
-| cross (A)             | Return          | open / play                      | pause                      |
-| circle (B)            | Backspace       | back                             | stop                       |
-| options (start)       | F1              | options menu                     | playback menu              |
-| square (X)            | Space           | next sort key (sources: rescan)  | next video track           |
-| triangle (Y)          | T               | reverse sort order               | next audio track           |
-| L1 / R1               | PageUp/PageDown | page up / down                   | previous / next item       |
-| L2 / R2               | Home / End      | first / last row                 |                            |
-| back (select)         | Escape          | back                             | stop                       |
+| Controller            | Key             | Home                         | Browsing                          | Playing                |
+|-----------------------|-----------------|------------------------------|-----------------------------------|------------------------|
+| d-pad up / down       | arrows          | rail / shelf (rail wraps)    | move (wraps around)               | seek +5 / -5 min       |
+| d-pad left / right    | arrows          | rail ↔ cards                 | list: page; grid: previous / next | seek -10 / +10 s       |
+| cross (A)             | Return          | open / play                  | open / play                       | pause                  |
+| circle (B)            | Backspace       | back to the rail             | back (Home from a source root)    | stop                   |
+| options (start)       | F1              | options for the card         | options menu                      | playback menu          |
+| square (X)            | Space           | rescan                       | next sort key                     | next video track       |
+| triangle (Y)          | T               |                              | reverse sort order                | next audio track       |
+| L1 / R1               | PageUp/PageDown |                              | page up / down                    | previous / next item   |
+| L2 / R2               | Home / End      | first / last                 | first / last                      |                        |
+| back (select)         | Escape          | back to the rail             | back                              | stop                   |
 
-Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
+Held directions repeat. Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
 
 ## Playback
 

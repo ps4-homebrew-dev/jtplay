@@ -1,8 +1,10 @@
 /*
  * Watch mode: hides the UI chrome so the video (drawn beneath the RmlUi
- * layer) shows through, and styles the auto-hiding transport bar over it.
- * Audio playback keeps a persistent now-playing card instead. Both share
- * the timeline: state, elapsed, the bar, total.
+ * layer) shows through, with the OSD bar along the bottom. The bar's top
+ * edge is the timeline: played in the accent, buffered ahead in a lighter
+ * shade, a knob at the playhead, and a bubble with the target time while
+ * seeking. For audio the bar stays up, with large cover art, over the
+ * spectrum.
  */
 
 /* Let the video drawn beneath the UI show through. */
@@ -15,75 +17,200 @@ body.watching #shell {
 }
 
 /* ------------------------------------------------------------------ */
-/* Timeline                                                           */
+/* OSD bar                                                            */
 /* ------------------------------------------------------------------ */
 
-.timeline {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	width: 100%;
+#osd {
+	z-index: 5;
+	position: absolute;
+	left: 0px;
+	right: 0px;
+	bottom: 0px;
+	box-sizing: border-box;
+	padding: 38px 72px 44px 72px;
+	background-color: #0a0e18f2;
+	animation: 0.2s cubic-out osd-in;
 }
 
-.tl-state {
-	width: 44px;
-	font-size: 30px;
-	color: #4dd6b8;
+@keyframes osd-in {
+	from { transform: translateY(40px); opacity: 0; }
+	to   { transform: translateY(0px); opacity: 1; }
 }
 
-.tl-pos,
-.tl-dur {
-	font-size: 26px;
-	color: #e8edf7;
-	white-space: nowrap;
+/* The timeline, along the top edge. */
+.osd-edge {
+	position: absolute;
+	left: 0px;
+	right: 0px;
+	top: 0px;
+	height: 8px;
+	background-color: #ffffff2e;
 }
 
-.tl-pos {
-	min-width: 112px;
+.osd-edge.live {
+	background-color: #ff6b6b;
 }
 
-.tl-dur {
-	min-width: 112px;
-	text-align: right;
-	color: #aab6cc;
-}
-
-/* The bar: what is buffered ahead in a lighter shade under what has been
- * played. Both children are positioned over the track, so the played part
- * always draws on top. */
-.tl-track {
-	position: relative;
-	flex: 1;
-	height: 10px;
-	margin: 0px 24px;
-	border-radius: 5px;
-	background-color: #ffffff1f;
-}
-
-.tl-buffered,
-.tl-played {
+.osd-buffered,
+.osd-played {
 	position: absolute;
 	left: 0px;
 	top: 0px;
-	height: 10px;
-	border-radius: 5px;
+	height: 8px;
 }
 
-.tl-buffered {
-	background-color: #ffffff33;
+.osd-buffered {
+	background-color: #ffffff40;
 }
 
-.tl-played {
+.osd-played {
+	decorator: linear-gradient(90deg, #2fa58c 0%, #4dd6b8 100%);
+	box-shadow: #4dd6b880 0px 0px 14px 0px;
+}
+
+.osd-knob {
+	position: absolute;
+	top: -8px;
+	width: 24px;
+	height: 24px;
+	margin-left: -12px;
+	background-color: #ffffff;
+	border: 5px #4dd6b8;
+	border-radius: 12px;
+	box-sizing: border-box;
+}
+
+/* Where a seek lands, over the knob's destination. */
+.osd-seek {
+	position: absolute;
+	bottom: 24px;
+	width: 200px;
+	margin-left: -100px;
+	padding: 8px 0px;
+	font-size: 26px;
+	font-weight: bold;
+	text-align: center;
+	color: #06231d;
 	background-color: #4dd6b8;
+	border-radius: 10px;
 }
 
-.tl-live {
+.osd-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+
+.osd-art {
+	display: block;
+	width: 176px;
+	max-height: 100px;
+	margin-right: 32px;
+	border-radius: 10px;
+}
+
+.osd-main {
+	display: flex;
+	flex-direction: column;
 	flex: 1;
-	margin-left: 24px;
+	overflow: hidden;
+}
+
+.osd-title {
+	font-size: 40px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.osd-state {
+	margin-right: 12px;
+	font-size: 32px;
+	color: #4dd6b8;
+}
+
+.osd-desc {
+	margin-top: 4px;
+	font-size: 24px;
+	color: #aab6cc;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.osd-tracks {
+	display: flex;
+	flex-direction: row;
+	margin-top: 8px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.osd-track {
+	margin-right: 14px;
+	padding: 3px 12px;
+	font-size: 19px;
+	color: #aab6cc;
+	background-color: #ffffff12;
+	border-radius: 6px;
+	white-space: nowrap;
+}
+
+.osd-next {
+	margin-top: 12px;
+	font-size: 22px;
+	color: #aab6cc;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.osd-next-label {
+	margin-right: 14px;
+	font-size: 17px;
+	font-weight: bold;
+	letter-spacing: 3px;
+	color: #4dd6b8;
+}
+
+.osd-side {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	margin-left: 48px;
+}
+
+.osd-time {
+	white-space: nowrap;
+}
+
+.osd-pos {
+	font-size: 46px;
+	font-weight: bold;
+	color: #ffffff;
+}
+
+.osd-dur {
+	margin-left: 10px;
+	font-size: 30px;
+	color: #8593ab;
+}
+
+.osd-live {
+	margin-left: 18px;
+	padding: 3px 12px;
 	font-size: 20px;
 	font-weight: bold;
-	letter-spacing: 4px;
-	color: #ff6b6b;
+	letter-spacing: 3px;
+	color: #ffffff;
+	background-color: #e04848;
+	border-radius: 6px;
+}
+
+.osd-ends {
+	margin-top: 6px;
+	font-size: 22px;
+	color: #8593ab;
+	white-space: nowrap;
 }
 
 .badge {
@@ -92,207 +219,81 @@ body.watching #shell {
 	padding: 2px 10px;
 	font-size: 20px;
 	font-weight: bold;
-	color: #0d1322;
+	color: #06231d;
 	background-color: #4dd6b8;
 	border-radius: 6px;
 }
 
+/* Audio: a persistent now-playing panel with large cover art. */
+#osd.audio {
+	padding: 48px 72px 56px 72px;
+	background-color: #0a0e18eb;
+	animation: none;
+}
+
+#osd.audio .osd-art {
+	width: 240px;
+	max-height: 240px;
+	margin-right: 44px;
+	border-radius: 14px;
+}
+
+#osd.audio .osd-glyph {
+	height: 240px;
+	font-size: 120px;
+	line-height: 240px;
+	text-align: center;
+	color: #a68bf0;
+	background-color: #2d2147;
+}
+
+#osd.audio .osd-title {
+	font-size: 48px;
+}
+
 /* ------------------------------------------------------------------ */
-/* Video transport bar                                                */
+/* Clock, pause badge, launch indicator                               */
 /* ------------------------------------------------------------------ */
 
-#watch-bar {
+#osd-clock {
+	z-index: 5;
 	position: absolute;
-	left: 0px;
-	right: 0px;
-	bottom: 0px;
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: column;
-	padding: 36px 64px 44px 64px;
-	background-color: #0a0e18e0;
-	border-top: 2px #ffffff14;
-}
-
-.watch-row {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	margin-bottom: 26px;
-}
-
-.watch-thumb {
-	display: block;
-	width: 148px;
-	max-height: 84px;
-	border-radius: 10px;
-	margin-right: 28px;
-}
-
-.watch-main {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	overflow: hidden;
-}
-
-.watch-name {
-	font-size: 40px;
+	top: 36px;
+	right: 64px;
+	font-size: 52px;
 	font-weight: bold;
-	color: #e8edf7;
-	white-space: nowrap;
-	overflow: hidden;
+	color: #ffffff;
+	font-effect: shadow(2px 2px #000000b0);
 }
 
-/* Codec line: the video and audio streams being decoded, side by side. */
-.watch-tracks {
-	display: flex;
-	flex-direction: row;
-	margin-top: 6px;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-.watch-track {
-	font-size: 24px;
-	color: #8593ab;
-	margin-right: 32px;
-	white-space: nowrap;
-}
-
-.watch-side {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	margin-left: 40px;
-}
-
-.watch-clock {
-	font-size: 40px;
-	font-weight: bold;
-	color: #e8edf7;
-}
-
-.watch-ends {
-	margin-top: 4px;
-	font-size: 22px;
-	color: #8593ab;
-	white-space: nowrap;
-}
-
-/* ------------------------------------------------------------------ */
-/* Audio now-playing card                                             */
-/* ------------------------------------------------------------------ */
-
-#audio-card {
+#pause-badge {
+	z-index: 5;
 	position: absolute;
 	left: 50%;
 	top: 50%;
-	box-sizing: border-box;
-	margin-left: -500px;
-	margin-top: -420px;
-	width: 1000px;
-	padding: 56px 64px;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	background-color: #101827f2;
-	border: 2px #ffffff14;
-	border-radius: 22px;
-	opacity: 0.7;
-}
-
-#audio-card .art {
-	width: 200px;
-	height: 200px;
-	font-size: 110px;
+	width: 180px;
+	height: 180px;
+	margin-left: -90px;
+	margin-top: -90px;
+	font-size: 84px;
+	line-height: 180px;
 	text-align: center;
-	line-height: 200px;
-	background-color: #4dd6b81a;
-	border-radius: 20px;
-	color: #4dd6b8;
-	margin-bottom: 36px;
+	color: #ffffff;
+	background-color: #0a0e18b0;
+	border-radius: 90px;
+	animation: 0.2s cubic-out pause-in;
 }
 
-/* Downloaded artwork replaces the note glyph. */
-#audio-card .np-art {
-	display: block;
-	width: 280px;
-	max-height: 280px;
-	border-radius: 20px;
-	margin-bottom: 36px;
+@keyframes pause-in {
+	from { transform: scale(0.7); opacity: 0; }
+	to   { transform: scale(1); opacity: 1; }
 }
-
-#audio-card .np-title {
-	font-size: 42px;
-	font-weight: bold;
-	color: #e8edf7;
-	text-align: center;
-	white-space: nowrap;
-	overflow: hidden;
-	max-width: 860px;
-}
-
-#audio-card .np-meta {
-	margin-top: 10px;
-	font-size: 27px;
-	color: #8593ab;
-	text-align: center;
-}
-
-#audio-card .np-atrack {
-	margin-top: 16px;
-	font-size: 23px;
-	color: #aab6cc;
-	text-align: center;
-}
-
-#audio-card .timeline {
-	margin-top: 40px;
-}
-
-#audio-card .tl-pos,
-#audio-card .tl-dur {
-	min-width: 80px;
-	font-size: 24px;
-}
-
-#audio-card .np-sub {
-	margin-top: 12px;
-	height: 30px;
-	font-size: 22px;
-	color: #8593ab;
-	text-align: center;
-}
-
-#audio-card .np-next {
-	margin-top: 26px;
-	padding-top: 22px;
-	width: 100%;
-	border-top: 1px #ffffff14;
-	font-size: 24px;
-	color: #aab6cc;
-	text-align: center;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-#audio-card .np-next-label {
-	margin-right: 16px;
-	font-size: 18px;
-	font-weight: bold;
-	letter-spacing: 3px;
-	color: #4dd6b8;
-}
-
-/* ------------------------------------------------------------------ */
-/* Loading the next track from inside watch mode                      */
-/* ------------------------------------------------------------------ */
 
 #launch-overlay {
+	z-index: 5;
 	position: absolute;
 	top: 48px;
-	right: 56px;
+	left: 64px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -313,6 +314,7 @@ body.watching #shell {
 /* ------------------------------------------------------------------ */
 
 #saver {
+	z-index: 30;
 	position: absolute;
 	left: 0px;
 	top: 0px;

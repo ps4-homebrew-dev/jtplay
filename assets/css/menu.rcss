@@ -1,36 +1,49 @@
 /*
- * Options menu: a side blade over the left edge of the screen, opened with
- * the options button. Left/right change a setting in place, select runs an
- * action, back or options closes it.
+ * Options menu: a side blade over the left edge, opened with the options
+ * button; or (#menu.dialog) a small dialog in the middle of the screen for
+ * a question that needs an answer before anything else (resume?). Left /
+ * right change a setting in place, select runs an action, back closes.
  */
 
+/* Stacking, bottom to top: backdrop 0, shell 1, OSD 5, menu 10,
+ * notifications 20, screensaver 30. */
 #menu-scrim {
+	z-index: 9;
 	position: absolute;
 	left: 0px;
 	top: 0px;
 	right: 0px;
 	bottom: 0px;
-	background-color: #05080fb0;
+	background-color: #05080fb8;
 }
 
 #menu {
+	z-index: 10;
 	position: absolute;
 	left: 0px;
 	top: 0px;
 	bottom: 0px;
 	box-sizing: border-box;
-	width: 600px;
+	width: 640px;
 	padding: 72px 40px;
-	background-color: #121a2c;
+	decorator: linear-gradient(90deg, #141c2e 0%, #10172a 100%);
 	border-right: 2px #ffffff14;
+	box-shadow: #000000a0 20px 0px 60px 0px;
+	animation: 0.18s cubic-out blade-in;
+}
+
+@keyframes blade-in {
+	from { transform: translateX(-80px); opacity: 0; }
+	to   { transform: translateX(0px); opacity: 1; }
 }
 
 .menu-title {
 	margin: 0px 0px 36px 24px;
-	font-size: 22px;
+	font-size: 30px;
 	font-weight: bold;
-	letter-spacing: 4px;
-	color: #4dd6b8;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
 }
 
 .menu-row {
@@ -41,13 +54,7 @@
 	height: 72px;
 	margin-bottom: 6px;
 	padding: 0px 24px;
-	border: 2px transparent;
 	border-radius: 10px;
-}
-
-.menu-row.selected {
-	background-color: #4dd6b82a;
-	border: 2px #4dd6b8;
 }
 
 .menu-label {
@@ -57,16 +64,54 @@
 	white-space: nowrap;
 }
 
-.menu-row.selected .menu-label {
-	color: #ffffff;
-}
-
 .menu-value {
 	font-size: 24px;
 	color: #8593ab;
 	white-space: nowrap;
 }
 
-.menu-row.selected .menu-value {
-	color: #4dd6b8;
+.menu-row.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.menu-row.selected .menu-label { color: #06231d; font-weight: bold; }
+.menu-row.selected .menu-value { color: #0d3d33; }
+
+/* ------------------------------------------------------------------ */
+/* Dialog                                                             */
+/* ------------------------------------------------------------------ */
+
+#menu.dialog {
+	left: 50%;
+	top: 50%;
+	bottom: auto;
+	width: 760px;
+	margin-left: -380px;
+	margin-top: -200px;
+	padding: 44px 48px 36px 48px;
+	border-right-width: 0px;
+	border-top: 4px #4dd6b8;
+	border-radius: 18px;
+	decorator: none;
+	background-color: #151d2f;
+	box-shadow: #000000c0 0px 30px 80px 0px;
+	animation: 0.2s cubic-out dialog-in;
+}
+
+@keyframes dialog-in {
+	from { transform: scale(0.94); opacity: 0; }
+	to   { transform: scale(1); opacity: 1; }
+}
+
+#menu.dialog .menu-title {
+	margin: 0px 0px 28px 0px;
+	font-size: 34px;
+	text-align: center;
+}
+
+#menu.dialog .menu-row {
+	justify-content: center;
+}
+
+#menu.dialog .menu-label {
+	flex: none;
 }

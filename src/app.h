@@ -57,7 +57,10 @@ public:
   void ProcessEvent(Rml::Event& event) override;
 
 private:
-  enum class View { Sources, Browse };
+  enum class View { Home, Browse };
+
+  // Browse lists draw as rows or as a wall of artwork tiles.
+  enum class ViewMode { List, Grid };
 
   // How a folder listing is ordered. Default keeps the source's own order
   // (a DLNA album in track order, a plugin's curated list); folders always
@@ -75,13 +78,30 @@ private:
   };
 
   // Rows exposed to the RmlUi data model.
-  struct SourceRow {
+  struct RailRow {      // home: the menu down the left edge
     Rml::String icon;
-    Rml::String name;
+    Rml::String label;
     Rml::String detail;
+  };
+  struct CardRow {      // home: one tile of a shelf
+    Rml::String title;
+    Rml::String subtitle;
+    Rml::String glyph;  // shown while there is no artwork
+    Rml::String kind;   // "video", "audio", ...: tints the glyph tile
+    // Decorator for the artwork; "none" while there is none (never empty:
+    // a data-style binding is evaluated even where its data-if hides it).
+    Rml::String art = "none";
+    Rml::String progress = "0%"; // never empty, see EntryRow
+    bool watched = false;
+  };
+  struct ShelfRow {
+    Rml::String title;
+    std::vector<CardRow> cards;
   };
   struct EntryRow {
     Rml::String icon;   // glyph for the type of entry
+    Rml::String kind;   // "video", "audio", ...: tints the glyph tile
+    Rml::String art = "none"; // decorator for the thumbnail, see CardRow
     Rml::String name;
     Rml::String meta;   // right-hand column: follows the sort key
     // Resume bar width ("37%"); "0%" = none. Never empty: a data-style
@@ -147,16 +167,34 @@ private:
   void RecordProgress(bool final, bool ended = false);
   // Library changed: refresh what shows it (rows, counts, library views).
   void OnLibraryChanged();
-  void RebuildSources();   // library sources + discovered ones
 
-  // --- Sources view ------------------------------------------------------
+  // --- Home view -----------------------------------------------------------
+  // A rail of places on the left (Home, every source, Rescan) and, on the
+  // right, shelves of cards from the library (Continue watching,
+  // Favorites) for the place the rail is on. Kodi's home, more or less.
+  enum class RailKind { Home, Source, Rescan };
+  struct RailItem {
+    RailKind kind;
+    browse::SourcePtr source;
+  };
+  struct Shelf {
+    std::string title;
+    std::shared_ptr<library::LibrarySource> source; // what its cards open in
+    browse::Listing entries;                        // ids encoded
+  };
   void StartDiscovery();
-  void RebuildSourceRows();
-  void MoveSourceSelection(int delta);
-  void HandleKeySources(Rml::Event& event, int key);
+  void RebuildHome();          // rail, then shelves for its selection
+  void RebuildShelves();
+  void RebuildCards();         // card rows from shelves_ (artwork, progress)
+  void MoveRail(int delta);
+  void ActivateRail();
+  void ActivateCard();
+  void HandleKeyHome(Rml::Event& event, int key);
+  const browse::Entry* SelectedCard() const;
+  void GoHome();
 
   // --- Browse view -------------------------------------------------------
-  void OpenSource(int index);            // browse the root of a source
+  void OpenSource(const browse::SourcePtr& source); // browse its root
   void EnterContainer(const browse::Entry& entry);
   void LeaveContainer();                 // back one level (or to sources)
   void RefreshContainer();               // re-list the current folder
@@ -170,6 +208,12 @@ private:
   void MoveSelection(int delta);
   void ActivateSelection();
   void HandleKeyBrowse(Rml::Event& event, int key);
+  void SetViewMode(ViewMode mode);
+  // Asks for the artwork of the rows (or cards) on screen and around them,
+  // and fills in what has arrived. Cheap when nothing changed.
+  void UpdateVisibleArt();
+  // "image(\"path\" cover)" for a decorator, "none" for no path.
+  static std::string CoverDecorator(const std::string& path);
   const browse::Entry* SelectedEntry() const;
   BrowseLevel* CurrentLevel();
 
@@ -182,6 +226,7 @@ private:
 
   // --- Options menu ------------------------------------------------------
   void OpenMenu();
+  void AddEntryActions(const browse::Entry& entry);
   void CloseMenu();
   void RebuildMenuRows();
   void HandleKeyMenu(Rml::Event& event, int key);
@@ -216,7 +261,8 @@ private:
   void UpdateScreensaver(double now);
 
   void EnsureRowVisible(const char* list_id, int index, float row_pitch);
-  void ShowToast(const std::string& text);
+  // A notification in the corner; 'icon' is a glyph ("⭐", "⚠", ...).
+  void ShowToast(const std::string& text, const char* icon = nullptr);
 
   // --- Artwork -----------------------------------------------------------
   // Entry::image is a URI: file:// (or a bare path) for local artwork,
@@ -225,14 +271,23 @@ private:
   // where that happens, for every source alike.
   // Returns the displayable path, or "" while a download is (or has been
   // scheduled to be) fetched in the background, or if it failed.
-  std::string ImagePathFor(const std::string& uri);
+  // 'thumb': the small copy, for tiles and rows.
+  std::string ImagePathFor(const std::string& uri, bool thumb = false);
+  void ArtworkMain();             // the artwork thread
+  // The artwork URI for an entry: its own, or else a snapshot the library
+  // remembers for it.
+  std::string ArtUri(const browse::Entry& entry) const;
+  void UpdateBackdrop();          // fanart behind home/browse
   void RefreshImageBindings();     // re-resolve detail/now-playing artwork
 
   // Data model bound state (main thread only).
   Rml::DataModelHandle model_;
-  Rml::String bind_view_ = "sources";
-  Rml::String bind_status_;       // sources view status line
+  Rml::String bind_view_ = "home";
+  Rml::String bind_view_mode_ = "list"; // browse: "list" / "grid"
+  Rml::String bind_status_;       // discovery status line
   Rml::String bind_toast_;
+  Rml::String bind_toast_icon_;
+  Rml::String bind_backdrop_ = "none"; // fanart decorator
   Rml::String bind_crumb_;        // breadcrumb of the browse path
   Rml::String bind_source_name_;  // pane title: connected source
   Rml::String bind_clock_;
@@ -260,6 +315,9 @@ private:
   Rml::String bind_watch_buffered_ = "0%"; // buffered-ahead bar width
   Rml::String bind_watch_speed_;   // "1.5×", "" at normal speed
   Rml::String bind_watch_next_;    // name of the item that plays next
+  Rml::String bind_watch_seek_;    // seek bubble over the knob, "" = none
+  double seek_bubble_until_ = 0.0;
+  int64_t seek_accum_us_ = 0;      // jump of the current run of presses
   Rml::String bind_watch_progress_ = "0%"; // data-style-width; never empty
   // Codec lines shown in the watch bar: the label of the video and audio
   // track being decoded ("h264 1920x1080", "eng · ac3 5.1(side)"), or ""
@@ -278,21 +336,33 @@ private:
   Rml::String bind_watch_image_;   // now-playing artwork path, "" = none
 
   bool bind_menu_open_ = false;
+  bool bind_menu_dialog_ = false;  // centered dialog rather than side blade
   Rml::String bind_menu_title_;
   std::vector<MenuRow> menu_rows_;
   int sel_menu_ = 0;
   std::vector<MenuItem> menu_items_;
 
-  std::vector<SourceRow> source_rows_;
+  // Home.
+  std::vector<RailRow> rail_rows_;
+  std::vector<ShelfRow> shelf_rows_;
+  int sel_rail_ = 0;
+  int sel_shelf_ = 0;
+  int sel_card_ = 0;
+  bool bind_home_shelves_ = false;     // focus is on the shelves
+  Rml::String bind_hero_icon_;
+  Rml::String bind_hero_title_;
+  Rml::String bind_hero_detail_;
+  Rml::String bind_hero_note_;
+  std::vector<RailItem> rail_;
+  std::vector<Shelf> shelves_;
+  std::vector<int> shelf_card_sel_;    // remembered column per shelf
+
   std::vector<EntryRow> entry_rows_;
-  int sel_source_ = 0;
-  int source_count_ = 0;
   int sel_entry_ = 0;
   int entry_count_ = 0;
 
   // Backing data (main thread).
   std::vector<std::unique_ptr<browse::Provider>> providers_;
-  std::vector<browse::SourcePtr> sources_;
   browse::SourcePtr current_source_;   // source being browsed, or null
   std::vector<BrowseLevel> path_;      // root first
   browse::Entry playing_;              // item in the player right now
@@ -318,12 +388,14 @@ private:
 
   SortMode sort_mode_ = SortMode::Default;
   bool sort_desc_ = false;
+  ViewMode view_mode_ = ViewMode::List;
   std::string settings_path_;          // "" = settings are not persisted
+  std::string cache_dir_;              // snapshots of where videos stopped
 
   std::unique_ptr<Player> player_;
   Rml::Context* context_ = nullptr;
   Rml::ElementDocument* document_ = nullptr;
-  View view_ = View::Sources;
+  View view_ = View::Home;
 
   // Worker plumbing: jobs going out, results coming back.
   std::thread worker_;
@@ -334,10 +406,19 @@ private:
   std::mutex replies_mutex_;
   std::deque<std::function<void()>> replies_;
 
-  // Artwork (main thread). The cache itself is artcache; this is only the
-  // set of URIs a worker task is already fetching, so the UI asks once.
+  // Artwork. The cache itself is artcache. Downloads and thumbnailing run
+  // on a thread of their own, so a wall of posters never holds up a
+  // browse, and newest request first, so what is on screen now comes
+  // before what was scrolled past. image_inflight_ (main thread) is what
+  // has been asked for, so the UI asks once.
   std::set<std::string> image_inflight_;
   bool image_refresh_pending_ = false;
+  bool art_scan_pending_ = false;     // UpdateVisibleArt() has work
+  std::thread art_thread_;
+  std::mutex art_mutex_;
+  std::condition_variable art_cv_;
+  std::deque<std::pair<std::string, bool>> art_queue_; // (uri, thumb)
+  bool art_running_ = false;          // guarded by art_mutex_
   uint32_t browse_request_ = 0;     // id of the browse we are waiting for
   std::atomic<int> busy_ops_{0};
 

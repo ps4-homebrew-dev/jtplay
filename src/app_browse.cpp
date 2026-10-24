@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The sources view (results from all browse::Providers) and the browse
-// view (the content tree of the chosen source). Everything here is
-// protocol-agnostic; the per-protocol work lives behind browse::Source.
+// The browse view: the content tree of a source, as a list with an info
+// panel or as a wall of artwork tiles. Everything here is protocol-
+// agnostic; the per-protocol work lives behind browse::Source.
 #include <algorithm>
 #include <cstdlib>
 
@@ -25,96 +25,22 @@ int StepIndex(int index, int delta, int count) {
   return std::clamp(index + delta, 0, count - 1);
 }
 
+const char* KindName(const browse::Entry& e) {
+  switch (e.type) {
+  case browse::Entry::Type::Folder: return "folder";
+  case browse::Entry::Type::Audio:  return "audio";
+  case browse::Entry::Type::Video:  return "video";
+  case browse::Entry::Type::Image:  return "image";
+  default:                          return "other";
+  }
+}
+
 const char* SortModeName(int mode) {
   static const char* const kNames[] = {"Default", "Name", "Date", "Size"};
   return kNames[mode];
 }
 
 } // namespace
-
-// ---------------------------------------------------------------------------
-// Sources view
-// ---------------------------------------------------------------------------
-
-void App::StartDiscovery() {
-  Set("status", bind_status_, Rml::String("Searching for media sources..."));
-
-  busy_ops_++;
-  PostTask([this] {
-    std::vector<browse::SourcePtr> sources;
-    std::string errors;
-    for (const std::unique_ptr<browse::Provider>& p : providers_) {
-      std::string error;
-      if (!p->Discover(sources, error) && !error.empty()) {
-        if (!errors.empty())
-          errors += "; ";
-        errors += std::string(p->Name()) + ": " + error;
-      }
-    }
-
-    Reply([this, sources = std::move(sources), errors]() mutable {
-      discovered_ = std::move(sources);
-      registry_.Set(discovered_);
-      RebuildSources(); // keeps the cursor on the same source
-
-      Rml::String status;
-      if (discovered_.empty()) {
-        status = errors.empty() ? "No media sources found." : errors;
-      } else {
-        status = std::to_string(discovered_.size()) +
-          (discovered_.size() == 1 ? " source found" : " sources found");
-        if (!errors.empty())
-          status += "  ·  " + errors;
-      }
-      Set("status", bind_status_, status);
-    });
-    busy_ops_--;
-  });
-}
-
-void App::RebuildSourceRows() {
-  source_rows_.clear();
-  for (const browse::SourcePtr& s : sources_) {
-    SourceRow row;
-    row.icon = s->Icon();
-    row.name = s->Name();
-    row.detail = s->Detail();
-    source_rows_.push_back(std::move(row));
-  }
-  source_count_ = (int)sources_.size();
-  sel_source_ = std::clamp(sel_source_, 0, std::max(0, source_count_ - 1));
-  model_.DirtyVariable("sources");
-  model_.DirtyVariable("source_count");
-  model_.DirtyVariable("sel_source");
-  scroll_sources_pending_ = true;
-}
-
-void App::MoveSourceSelection(int delta) {
-  if (source_count_ == 0)
-    return;
-  sel_source_ = StepIndex(sel_source_, delta, source_count_);
-  model_.DirtyVariable("sel_source");
-  scroll_sources_pending_ = true;
-}
-
-void App::HandleKeySources(Rml::Event& event, int key) {
-  switch (key) {
-  case Rml::Input::KI_UP:    MoveSourceSelection(-1); break;
-  case Rml::Input::KI_DOWN:  MoveSourceSelection(+1); break;
-  case Rml::Input::KI_HOME:  MoveSourceSelection(-source_count_); break;
-  case Rml::Input::KI_END:   MoveSourceSelection(+source_count_); break;
-  case Rml::Input::KI_SPACE: StartDiscovery(); break;
-  case Rml::Input::KI_F1:    OpenMenu(); break;
-  case Rml::Input::KI_RETURN:
-  case Rml::Input::KI_NUMPADENTER:
-    if (sel_source_ < (int)sources_.size())
-      OpenSource(sel_source_);
-    break;
-  default:
-    return;
-  }
-  event.StopPropagation();
-}
 
 // ---------------------------------------------------------------------------
 // Browse view
@@ -133,11 +59,11 @@ const browse::Entry* App::SelectedEntry() const {
   return &level.entries[sel_entry_];
 }
 
-void App::OpenSource(int index) {
-  if (index < 0 || index >= (int)sources_.size())
+void App::OpenSource(const browse::SourcePtr& source) {
+  if (!source)
     return;
   CancelLaunch();
-  current_source_ = sources_[index];
+  current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
 
@@ -173,12 +99,10 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       if (request != browse_request_)
         return; // superseded while it was in flight
       if (!error.empty()) {
-        ShowToast(error);
-        // A failed root browse drops back to the source list.
-        if (path_.empty()) {
-          view_ = View::Sources;
-          Set("view", bind_view_, Rml::String("sources"));
-        }
+        ShowToast(error, "⚠");
+        // A failed root browse drops back home.
+        if (path_.empty())
+          GoHome();
         return;
       }
 
@@ -232,13 +156,7 @@ void App::LeaveContainer() {
   CancelLaunch();    // ... otherwise playback pops up over another folder
   browse_request_++; // invalidate any browse that is still in flight
   if (path_.size() <= 1) {
-    // At the root: back to the source list.
-    path_.clear();
-    current_source_.reset();
-    view_ = View::Sources;
-    Set("view", bind_view_, Rml::String("sources"));
-    RefreshImageBindings();
-    scroll_sources_pending_ = true;
+    GoHome(); // at the root: back home, where the rail still points here
     return;
   }
   path_.pop_back();
@@ -255,6 +173,7 @@ void App::RebuildEntryRows() {
     for (const browse::Entry& e : level->entries) {
       EntryRow row;
       row.icon = IconFor(e);
+      row.kind = KindName(e);
       row.name = e.name.empty() ? "(untitled)" : e.name;
       row.meta = EntryMeta(e);
       row.folder = e.IsFolder();
@@ -278,12 +197,16 @@ void App::RebuildEntryRows() {
   model_.DirtyVariable("entry_count");
   model_.DirtyVariable("sel_entry");
   Set("sort_label", bind_sort_label_, SortLabel());
+  art_scan_pending_ = true; // artwork for the new rows, this frame
 }
 
 void App::RebuildCrumb() {
-  // The source is the pane title already; the crumb is the path below it.
+  // The source is the pane title already; the crumb is the path below it
+  // (all of it when the browse started at a favorite folder, not the root).
   std::string crumb;
-  for (size_t i = 1; i < path_.size(); i++) {
+  const size_t first =
+    !path_.empty() && current_source_ && path_[0].id == current_source_->RootId() ? 1 : 0;
+  for (size_t i = first; i < path_.size(); i++) {
     if (!crumb.empty())
       crumb += "  ›  ";
     crumb += path_[i].name;
@@ -360,13 +283,44 @@ void App::ActivateSelection() {
 }
 
 void App::HandleKeyBrowse(Rml::Event& event, int key) {
+  const bool grid = view_mode_ == ViewMode::Grid;
+  // Grid: up/down move a row, staying in the column, and wrap from the
+  // last row to the first (and back) like the list does.
+  auto grid_row = [this](int direction) {
+    const int n = entry_count_;
+    if (n == 0)
+      return;
+    const int col = sel_entry_ % kGridColumns;
+    int target = sel_entry_ + direction * kGridColumns;
+    if (target >= n)
+      target = col;                          // past the bottom: top row
+    else if (target < 0) {
+      target = ((n - 1) / kGridColumns) * kGridColumns + col; // bottom row
+      if (target >= n)
+        target = n - 1;
+    }
+    MoveSelection(target - sel_entry_);
+  };
+
   switch (key) {
-  case Rml::Input::KI_UP:    MoveSelection(-1); break;
-  case Rml::Input::KI_DOWN:  MoveSelection(+1); break;
+  case Rml::Input::KI_UP:
+    if (grid) grid_row(-1); else MoveSelection(-1);
+    break;
+  case Rml::Input::KI_DOWN:
+    if (grid) grid_row(+1); else MoveSelection(+1);
+    break;
   case Rml::Input::KI_LEFT:  // remotes rarely have page keys
-  case Rml::Input::KI_PRIOR: MoveSelection(-kPageRows); break;
+    MoveSelection(grid ? -1 : -kPageRows);
+    break;
   case Rml::Input::KI_RIGHT:
-  case Rml::Input::KI_NEXT:  MoveSelection(+kPageRows); break;
+    MoveSelection(grid ? +1 : +kPageRows);
+    break;
+  case Rml::Input::KI_PRIOR:
+    MoveSelection(grid ? -3 * kGridColumns : -kPageRows);
+    break;
+  case Rml::Input::KI_NEXT:
+    MoveSelection(grid ? +3 * kGridColumns : +kPageRows);
+    break;
   case Rml::Input::KI_HOME:  MoveSelection(-entry_count_); break;
   case Rml::Input::KI_END:   MoveSelection(+entry_count_); break;
   case Rml::Input::KI_SPACE: CycleSortMode(+1); break;
@@ -381,7 +335,7 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     // While something is opening, back cancels that rather than the folder.
     if (launch_request_) {
       CancelLaunch();
-      ShowToast("Cancelled");
+      ShowToast("Cancelled", "⏹");
     } else {
       LeaveContainer();
     }
@@ -512,33 +466,52 @@ std::string App::EntryMeta(const browse::Entry& e) const {
 // Options menu (the options button, or F1)
 // ---------------------------------------------------------------------------
 
+// The actions for one entry, Kodi's context menu style: shared by the
+// browse list and the home shelves.
+void App::AddEntryActions(const browse::Entry& entry) {
+  library::Ref ref;
+  if (!Identify(entry, ref))
+    return;
+  if (!entry.IsFolder()) {
+    library::Progress p;
+    const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
+    if (known && !p.watched && p.position > 0) {
+      const int64_t at = p.position;
+      menu_items_.push_back({"Resume from " + FormatTime(at * 1000000), nullptr,
+        [this, entry, at](int) { Launch(entry, at); }});
+      menu_items_.push_back({"Play from beginning", nullptr,
+        [this, entry](int) { Launch(entry, 0); }});
+    } else {
+      menu_items_.push_back({"Play", nullptr,
+        [this, entry](int) { Launch(entry, 0); }});
+    }
+  }
+  const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
+  menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
+    nullptr, [this, entry](int) { ToggleFavorite(entry); }});
+  if (entry.IsVideo() || entry.IsAudio()) {
+    library::Progress p;
+    const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
+    const bool watched = known && p.watched;
+    menu_items_.push_back({watched ? "Mark as unwatched" : "Mark as watched",
+      nullptr, [this, entry, watched](int) { SetWatched(entry, !watched); }});
+  }
+}
+
 void App::OpenMenu() {
   menu_items_.clear();
+  Set("menu_dialog", bind_menu_dialog_, false);
 
   if (view_ == View::Browse) {
-    Set("menu_title", bind_menu_title_, Rml::String("Options"));
-
-    // What can be done with the selected entry comes first, Kodi's
-    // context menu style; then the settings of the list.
-    if (const browse::Entry* e = SelectedEntry()) {
-      const browse::Entry entry = *e;
-      library::Ref ref;
-      if (Identify(entry, ref)) {
-        const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-        menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
-          nullptr, [this, entry](int) { ToggleFavorite(entry); }});
-        if (entry.IsVideo() || entry.IsAudio()) {
-          library::Progress p;
-          const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
-          if (known && !p.watched && p.position > 0)
-            menu_items_.push_back({"Play from beginning", nullptr,
-              [this, entry](int) { Launch(entry, 0); }});
-          const bool watched = known && p.watched;
-          menu_items_.push_back({watched ? "Mark as unwatched" : "Mark as watched",
-            nullptr, [this, entry, watched](int) { SetWatched(entry, !watched); }});
-        }
-      }
-    }
+    const browse::Entry* e = SelectedEntry();
+    Set("menu_title", bind_menu_title_, e ? e->name : Rml::String("Options"));
+    if (e)
+      AddEntryActions(*e);
+    menu_items_.push_back({"View",
+      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
+      [this](int) {
+        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
+      }});
     menu_items_.push_back({"Sort by",
       [this] { return std::string(SortModeName((int)sort_mode_)); },
       [this](int d) { CycleSortMode(d == 0 ? +1 : d); }});
@@ -549,12 +522,16 @@ void App::OpenMenu() {
       [this](int) { RefreshContainer(); }});
     menu_items_.push_back({"Go to top", nullptr,
       [this](int) { MoveSelection(-entry_count_); }});
-    menu_items_.push_back({"Close source", nullptr,
-      [this](int) {
-        while (path_.size() > 1)
-          path_.pop_back();
-        LeaveContainer();
-      }});
+    menu_items_.push_back({"Home", nullptr, [this](int) { GoHome(); }});
+  } else if (bind_home_shelves_ && SelectedCard()) {
+    const browse::Entry card = *SelectedCard();
+    Set("menu_title", bind_menu_title_, card.name);
+    if (card.IsFolder())
+      menu_items_.push_back({"Open", nullptr, [this](int) { ActivateCard(); }});
+    AddEntryActions(card);
+    if (shelves_[sel_shelf_].source == continue_source_)
+      menu_items_.push_back({"Remove from Continue watching", nullptr,
+        [this, card](int) { SetWatched(card, false); }});
   } else {
     Set("menu_title", bind_menu_title_, Rml::String("Options"));
     menu_items_.push_back({"Rescan sources", nullptr,
@@ -621,4 +598,76 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
   default:
     break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// View modes and artwork
+// ---------------------------------------------------------------------------
+
+void App::SetViewMode(ViewMode mode) {
+  if (mode == view_mode_)
+    return;
+  view_mode_ = mode;
+  SaveSettings();
+  Set("view_mode", bind_view_mode_, Rml::String(mode == ViewMode::Grid ? "grid" : "list"));
+  scroll_entries_pending_ = true;
+  art_scan_pending_ = true;
+}
+
+void App::UpdateVisibleArt() {
+  if (view_ == View::Browse) {
+    const BrowseLevel* level = CurrentLevel();
+    if (!level || entry_rows_.size() != level->entries.size())
+      return;
+    // What is on screen and a screenful either side, so scrolling finds
+    // the next rows ready. The art thread takes the newest request first,
+    // so the selection's neighbourhood always wins.
+    int first, last;
+    if (view_mode_ == ViewMode::Grid) {
+      const int row = sel_entry_ / kGridColumns;
+      first = (row - 4) * kGridColumns;
+      last = (row + 5) * kGridColumns;
+    } else {
+      first = sel_entry_ - 16;
+      last = sel_entry_ + 17;
+    }
+    first = std::max(0, first);
+    last = std::min((int)level->entries.size(), last);
+    bool changed = false;
+    // Outwards from the selection, so it is asked for last (= fetched first).
+    for (int i = last - 1; i >= first; i--) {
+      EntryRow& row = entry_rows_[i];
+      if (row.art != "none")
+        continue;
+      const std::string uri = ArtUri(level->entries[i]);
+      if (uri.empty())
+        continue;
+      const std::string path = ImagePathFor(uri, true);
+      if (!path.empty()) {
+        row.art = CoverDecorator(path);
+        changed = true;
+      }
+    }
+    if (changed)
+      model_.DirtyVariable("entries");
+    return;
+  }
+
+  // Home: every card of every shelf; there are only a few.
+  bool changed = false;
+  for (size_t s = 0; s < shelves_.size() && s < shelf_rows_.size(); s++) {
+    for (size_t c = 0; c < shelves_[s].entries.size() && c < shelf_rows_[s].cards.size(); c++) {
+      CardRow& card = shelf_rows_[s].cards[c];
+      const std::string& uri = shelves_[s].entries[c].image;
+      if (uri.empty() || card.art != "none")
+        continue;
+      const std::string path = ImagePathFor(uri, true);
+      if (!path.empty()) {
+        card.art = CoverDecorator(path);
+        changed = true;
+      }
+    }
+  }
+  if (changed)
+    model_.DirtyVariable("shelves");
 }

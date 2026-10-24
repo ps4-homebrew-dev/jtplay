@@ -3,7 +3,9 @@
 // The app's side of the library (favorites, resume points, watched marks)
 // and the screensaver.
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
+#include <functional>
 
 #include "app.h"
 #include "app_internal.h"
@@ -42,6 +44,15 @@ bool App::Identify(const browse::Entry& entry, library::Ref& out) const {
   return true;
 }
 
+std::string App::ArtUri(const browse::Entry& entry) const {
+  if (!entry.image.empty() || entry.IsFolder())
+    return entry.image;
+  library::Ref ref;
+  if (!Identify(entry, ref))
+    return {};
+  return library_.ImageFor(ref.source_key, ref.entry.id);
+}
+
 void App::ToggleFavorite(const browse::Entry& entry) {
   library::Ref ref;
   if (!Identify(entry, ref))
@@ -51,7 +62,7 @@ void App::ToggleFavorite(const browse::Entry& entry) {
     ref.source_name = current_source_ ? current_source_->Name() : std::string();
   const bool now = library_.ToggleFavorite(ref);
   library_.Save();
-  ShowToast(now ? "Added to favorites" : "Removed from favorites");
+  ShowToast(now ? "Added to favorites" : "Removed from favorites", "⭐");
 }
 
 void App::SetWatched(const browse::Entry& entry, bool watched) {
@@ -60,7 +71,7 @@ void App::SetWatched(const browse::Entry& entry, bool watched) {
     return;
   library_.SetWatched(ref, watched);
   library_.Save();
-  ShowToast(watched ? "Marked as watched" : "Marked as unwatched");
+  ShowToast(watched ? "Marked as watched" : "Marked as unwatched", "✔");
 }
 
 void App::RecordProgress(bool final, bool ended) {
@@ -75,9 +86,35 @@ void App::RecordProgress(bool final, bool ended) {
   if (!e.IsVideo() && !(e.IsAudio() && dur >= kMinResumableAudioSec))
     return;
 
+  // A video without artwork of its own gets the frame it was stopped on,
+  // so its Continue watching card shows where it left off. One file per
+  // item and position: the thumbnail cache keys on the name.
+  const std::string snap_prefix = "file://" + cache_dir_ + "/snap-";
+  const std::string& image = playing_ref_.entry.image;
+  const bool own_art = !image.empty() && image.compare(0, snap_prefix.size(), snap_prefix) != 0;
+  auto drop_snapshot = [&] {
+    if (!own_art && !image.empty()) {
+      ::remove(image.substr(7).c_str());
+      playing_ref_.entry.image.clear();
+    }
+  };
+
   if ((double)pos >= kWatchedFraction * (double)dur) {
+    drop_snapshot();
     library_.SetWatched(playing_ref_, true);
   } else if (pos >= kMinResumeSec) {
+    if (final && !own_art && e.IsVideo() && !cache_dir_.empty()) {
+      char name[64];
+      std::snprintf(name, sizeof(name), "%016zx-%lld.jpg",
+                    std::hash<std::string>()(playing_ref_.source_key + '\n' +
+                                             playing_ref_.entry.id),
+                    (long long)pos);
+      const std::string path = cache_dir_ + "/snap-" + name;
+      if (player_->Snapshot(path)) {
+        drop_snapshot();
+        playing_ref_.entry.image = "file://" + path;
+      }
+    }
     library_.SetResume(playing_ref_, pos, dur);
   } else {
     return; // barely started: leave whatever was recorded before
@@ -91,30 +128,10 @@ void App::RecordProgress(bool final, bool ended) {
   }
 }
 
-void App::RebuildSources() {
-  const std::string selected = sel_source_ < (int)sources_.size()
-    ? sources_[sel_source_]->Key() : std::string();
-
+void App::OnLibraryChanged() {
   favorites_source_->UpdateDetail();
   continue_source_->UpdateDetail();
-
-  sources_.clear();
-  sources_.push_back(favorites_source_);
-  if (continue_source_->Count() > 0)
-    sources_.push_back(continue_source_);
-  sources_.insert(sources_.end(), discovered_.begin(), discovered_.end());
-
-  for (size_t i = 0; i < sources_.size() && !selected.empty(); i++) {
-    if (sources_[i]->Key() == selected) {
-      sel_source_ = (int)i;
-      break;
-    }
-  }
-  RebuildSourceRows();
-}
-
-void App::OnLibraryChanged() {
-  RebuildSources();
+  RebuildHome();
   if (view_ != View::Browse)
     return;
 

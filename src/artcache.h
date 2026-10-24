@@ -50,6 +50,15 @@ Status Lookup(const std::string& uri, std::string& path);
 // Blocking; worker thread only.
 std::string Fetch(const std::string& uri);
 
+// The same for a small copy (at most kThumbSize pixels on the long side),
+// for tiles and list rows: a folder of camera photos must not turn into
+// dozens of full-size textures. Artwork already that small is used as is.
+// LookupThumb() never does I/O; FetchThumb() decodes, scales and stores
+// (worker thread only).
+constexpr int kThumbSize = 400;
+Status LookupThumb(const std::string& uri, std::string& path);
+std::string FetchThumb(const std::string& uri);
+
 } // namespace artcache
 
 #endif

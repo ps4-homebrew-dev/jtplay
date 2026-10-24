@@ -22,6 +22,7 @@ add_executable(jtplay
     src/main.cpp
     src/app.cpp
     src/app_browse.cpp
+    src/app_home.cpp
     src/app_library.cpp
     src/app_watch.cpp
     src/artcache.cpp

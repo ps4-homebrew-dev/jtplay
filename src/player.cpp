@@ -771,3 +771,10 @@ bool Player::SelectSubtitleTrack(int stream_index) {
   sub_id_ = stream_index;
   return true;
 }
+
+bool Player::Snapshot(const std::string& path) {
+  if (!mpv_ || !active_ || video_id_ < 0)
+    return false;
+  const char* cmd[] = {"screenshot-to-file", path.c_str(), "video", nullptr};
+  return mpv_command(mpv_, cmd) >= 0;
+}

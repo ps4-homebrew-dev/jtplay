@@ -93,6 +93,11 @@ public:
   // Returns the new paused state.
   bool TogglePause();
   bool IsPaused() const { return paused_; }
+  // Saves the current video frame (no subtitles or OSD) to 'path'; the
+  // format follows the extension. Blocks until written. False when there
+  // is no video or mpv could not do it.
+  bool Snapshot(const std::string& path);
+
   // Playback speed, 1.0 = normal. Reset to normal for every file.
   void SetSpeed(double speed);
   double Speed() const { return speed_.load(); }
