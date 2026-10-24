@@ -5,6 +5,7 @@
 // auto-hiding info/transport bar. For audio a persistent now-playing card
 // is shown instead.
 #include <algorithm>
+#include <cstdio>
 
 #include "app.h"
 #include "app_internal.h"
@@ -49,7 +50,7 @@ void App::PlayEntry(const browse::Entry& entry) {
 
     Reply([this, request, ok, error] {
       if (!launch_request_ || request != launch_request_) {
-        // Abandoned while it was opening (circle, or another item started).
+        // Abandoned while it was opening (back, or another item started).
         // If it did open, take it down again rather than showing it.
         if (ok)
           PostTask([this] { player_->Stop(); });
@@ -87,10 +88,9 @@ void App::EnterWatch(const browse::Entry& entry) {
   Set("watch_paused", bind_watch_paused_, false);
   Set("watch_time", bind_watch_time_, Rml::String());
   Set("watch_progress", bind_watch_progress_, Rml::String("0%"));
+  Set("watch_ends", bind_watch_ends_, Rml::String());
   Set("watch_vtrack", bind_watch_vtrack_, Rml::String());
   Set("watch_atrack", bind_watch_atrack_, Rml::String());
-  Set("watch_multi_video", bind_watch_multi_video_, false);
-  Set("watch_multi_audio", bind_watch_multi_audio_, false);
   RefreshImageBindings();
   ShowWatchInfo(kWatchInfoSec);
 }
@@ -117,31 +117,43 @@ void App::UpdateWatchOverlay() {
   const int64_t dur = player_->DurationUs();
 
   Rml::String time;
+  Rml::String ends;
   Rml::String progress = "0%";
   if (pos >= 0) {
     time = FormatTime(pos);
     if (dur > 0) {
       time += " / " + FormatTime(dur);
-      const int pct = std::clamp((int)(pos * 100 / dur), 0, 100);
-      progress = std::to_string(pct) + "%";
+      // Fractional percentages keep the bar moving smoothly on long files.
+      const double pct = std::clamp((double)pos * 100.0 / (double)dur, 0.0, 100.0);
+      char buf[16];
+      std::snprintf(buf, sizeof(buf), "%.2f%%", pct);
+      progress = buf;
+      if (dur > pos)
+        ends = "Ends at " + ClockIn((dur - pos) / 1000000);
     }
   }
   Set("watch_time", bind_watch_time_, time);
+  Set("watch_ends", bind_watch_ends_, ends);
   Set("watch_progress", bind_watch_progress_, progress);
   Set("watch_paused", bind_watch_paused_, player_->IsPaused());
   Set("watch_seekable", bind_watch_seekable_, player_->CanSeek());
 
   // The labels of the streams actually being decoded, so they follow a
-  // track switch; the counts only decide whether the switch hints show.
+  // track switch.
   Set("watch_vtrack", bind_watch_vtrack_, player_->CurrentVideoLabel());
   Set("watch_atrack", bind_watch_atrack_, player_->CurrentAudioLabel());
-  Set("watch_multi_video", bind_watch_multi_video_,
-      player_->VideoTrackCount() > 1);
-  Set("watch_multi_audio", bind_watch_multi_audio_,
-      player_->AudioTrackCount() > 1);
+
+  // What plays after this one, for the audio card's "Up next" line.
+  Rml::String next;
+  if (bind_watch_audio_ && !path_.empty()) {
+    const int i = NeighborIndex(+1);
+    if (i >= 0)
+      next = path_.back().entries[i].name;
+  }
+  Set("watch_next", bind_watch_next_, next);
 }
 
-// Triangle / T: switches to the next audio track (wrapping around) and
+// T (triangle): switches to the next audio track (wrapping around) and
 // announces the choice with a toast.
 void App::CycleAudioTrack() {
   const std::vector<AudioTrackInfo> tracks = player_->AudioTracks();
@@ -163,7 +175,7 @@ void App::CycleAudioTrack() {
   }
 }
 
-// Square: switches to the next video track (wrapping around). Streams that
+// Space (square): switches to the next video track (wrapping around). Streams that
 // carry several camera angles or bitrate variants show up as separate video
 // streams in one container, which is what this walks.
 void App::CycleVideoTrack() {
@@ -187,38 +199,44 @@ void App::CycleVideoTrack() {
 }
 
 // Finds the next (direction=+1) or previous (direction=-1) playable
-// non-container item in the current folder and starts it. Used by the
-// track-skip keys and by audio auto-advance.
-bool App::PlayNeighbor(int direction) {
-  const BrowseLevel* level = path_.empty() ? nullptr : &path_.back();
-  if (!level)
-    return false;
+// non-folder item in the current folder, in display order. Used by the
+// track-skip keys, audio auto-advance and the "Up next" line.
+int App::NeighborIndex(int direction) const {
+  if (path_.empty())
+    return -1;
+  const browse::Listing& entries = path_.back().entries;
 
   // Locate the playing item by id; the selection may have moved. While a
   // launch is in flight that item is the reference, not the one on screen.
   const std::string& from = launch_request_ ? launch_entry_.id : playing_.id;
   int index = -1;
-  for (size_t i = 0; i < level->entries.size(); i++) {
-    if (level->entries[i].id == from) {
+  for (size_t i = 0; i < entries.size(); i++) {
+    if (entries[i].id == from) {
       index = (int)i;
       break;
     }
   }
   if (index < 0)
-    return false;
+    return -1;
 
-  for (int i = index + direction; i >= 0 && i < (int)level->entries.size(); i += direction) {
-    const browse::Entry& e = level->entries[i];
-    if (e.IsFolder() || e.IsImage())
-      continue;
-    sel_entry_ = i;
-    model_.DirtyVariable("sel_entry");
-    RebuildDetail();
-    scroll_entries_pending_ = true;
-    PlayEntry(e);
-    return true;
+  for (int i = index + direction; i >= 0 && i < (int)entries.size(); i += direction) {
+    if (!entries[i].IsFolder() && !entries[i].IsImage())
+      return i;
   }
-  return false;
+  return -1;
+}
+
+bool App::PlayNeighbor(int direction) {
+  const int i = NeighborIndex(direction);
+  if (i < 0)
+    return false;
+  sel_entry_ = i;
+  path_.back().selection = i;
+  model_.DirtyVariable("sel_entry");
+  RebuildDetail();
+  scroll_entries_pending_ = true;
+  PlayEntry(path_.back().entries[i]);
+  return true;
 }
 
 void App::HandlePlaybackEnd() {
@@ -252,22 +270,22 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     break;
 
   case Rml::Input::KI_RETURN:
-  case Rml::Input::KI_NUMPADENTER: // cross: play / pause
+  case Rml::Input::KI_NUMPADENTER: // play / pause
     player_->TogglePause();
     ShowWatchInfo(kWatchInfoSec);
     break;
 
-  case Rml::Input::KI_T: // triangle: next audio track
+  case Rml::Input::KI_T:     // next audio track
     CycleAudioTrack();
     ShowWatchInfo(kWatchInfoSec);
     break;
 
-  case Rml::Input::KI_SPACE: // square: next video track
+  case Rml::Input::KI_SPACE: // next video track
     CycleVideoTrack();
     ShowWatchInfo(kWatchInfoSec);
     break;
 
-  case Rml::Input::KI_F1: // options: toggle the info bar
+  case Rml::Input::KI_F1:    // toggle the info bar
     if (bind_info_visible_ && !bind_watch_audio_) {
       bind_info_visible_ = false;
       model_.DirtyVariable("info_visible");
@@ -276,7 +294,7 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     }
     break;
 
-  case Rml::Input::KI_BACK:   // circle: back to the browse list
+  case Rml::Input::KI_BACK:  // back to the browse list
   case Rml::Input::KI_ESCAPE:
     StopPlayback();
     break;

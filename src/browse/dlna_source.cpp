@@ -6,6 +6,7 @@
 #include "browse/dlna_source.h"
 
 #include <algorithm>
+#include <cstdio>
 
 #include "upnp/http.h"
 #include "upnp/ssdp.h"
@@ -50,6 +51,29 @@ std::string DescriptionOf(const upnp::DidlObject& o) {
   return desc;
 }
 
+// Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's
+// days_from_civil); avoids timegm(), which not every libc has.
+int64_t DaysFromCivil(int64_t y, unsigned m, unsigned d) {
+  y -= m <= 2;
+  const int64_t era = (y >= 0 ? y : y - 399) / 400;
+  const unsigned yoe = (unsigned)(y - era * 400);
+  const unsigned doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + (int64_t)doe - 719468;
+}
+
+// dc:date is ISO 8601: "YYYY", "YYYY-MM-DD" or "YYYY-MM-DDThh:mm:ss[...]".
+// Any zone suffix is ignored. Returns seconds since the epoch, 0 if none.
+int64_t ParseDate(const std::string& s) {
+  int y = 0, mo = 1, d = 1, h = 0, mi = 0, sec = 0;
+  const int n = std::sscanf(s.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d",
+                            &y, &mo, &d, &h, &mi, &sec);
+  if (n < 1 || y < 1900 || mo < 1 || mo > 12 || d < 1 || d > 31)
+    return 0;
+  return DaysFromCivil(y, (unsigned)mo, (unsigned)d) * 86400 +
+         h * 3600 + mi * 60 + sec;
+}
+
 Entry Convert(const upnp::DidlObject& o) {
   Entry e;
   e.id = o.id;
@@ -58,6 +82,9 @@ Entry Convert(const upnp::DidlObject& o) {
   e.description = DescriptionOf(o);
   e.image = o.ArtUrl();  // absolute http URL, or ""
   e.uri = o.res_url;
+  e.size = o.res_size;
+  e.date = ParseDate(o.date);
+  e.duration = o.res_duration;
   return e;
 }
 

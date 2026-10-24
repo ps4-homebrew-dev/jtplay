@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
 
 #include <sys/stat.h>
 
@@ -18,7 +19,6 @@
 #include "browse/js_source.h"
 
 using namespace appdetail;
-
 
 App::App() : player_(std::make_unique<Player>()) {}
 
@@ -45,9 +45,8 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
   if (!player_->Initialize(player_error))
     Rml::Log::Message(Rml::Log::LT_WARNING, "No playback: %s", player_error.c_str());
 
-
-  // Artwork cache; if the directory can't be used, remote art is simply
-  // skipped and local art still works.
+  // Cache directory: artwork, plus the small settings file. If it can't be
+  // used, remote art is simply skipped and settings are not remembered.
   std::string cache_dir = options.cache_dir;
   if (cache_dir.empty()) {
     const char* base = std::getenv("XDG_CACHE_HOME");
@@ -61,6 +60,8 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
     Rml::Log::Message(Rml::Log::LT_WARNING,
       "Cannot use cache directory '%s' (%s); remote artwork disabled",
       cache_dir.c_str(), std::strerror(errno));
+  settings_path_ = cache_dir + "/settings.ini";
+  LoadSettings();
 
   providers_.push_back(std::make_unique<browse::FsProvider>());
   providers_.push_back(std::make_unique<browse::DlnaProvider>(kDiscoveryWaitMs));
@@ -104,6 +105,39 @@ void App::Shutdown() {
     document_->Close();
     document_ = nullptr;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+// A handful of "key=value" lines; unknown keys and bad values are ignored,
+// so the file never stops the app from starting.
+void App::LoadSettings() {
+  std::ifstream in(settings_path_);
+  std::string line;
+  while (std::getline(in, line)) {
+    const size_t eq = line.find('=');
+    if (eq == std::string::npos)
+      continue;
+    const std::string key = line.substr(0, eq);
+    const std::string value = line.substr(eq + 1);
+    if (key == "sort") {
+      const int mode = std::atoi(value.c_str());
+      if (mode >= 0 && mode < (int)SortMode::Count)
+        sort_mode_ = (SortMode)mode;
+    } else if (key == "sort_desc") {
+      sort_desc_ = value == "1";
+    }
+  }
+}
+
+void App::SaveSettings() const {
+  if (settings_path_.empty())
+    return;
+  std::ofstream out(settings_path_, std::ios::trunc);
+  out << "sort=" << (int)sort_mode_ << "\n"
+      << "sort_desc=" << (sort_desc_ ? 1 : 0) << "\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -174,10 +208,22 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   if (auto row = ctor.RegisterStruct<EntryRow>()) {
     row.RegisterMember("icon", &EntryRow::icon);
     row.RegisterMember("name", &EntryRow::name);
-    row.RegisterMember("description", &EntryRow::description);
+    row.RegisterMember("meta", &EntryRow::meta);
     row.RegisterMember("folder", &EntryRow::folder);
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
+
+  if (auto row = ctor.RegisterStruct<PropRow>()) {
+    row.RegisterMember("label", &PropRow::label);
+    row.RegisterMember("value", &PropRow::value);
+  }
+  ctor.RegisterArray<std::vector<PropRow>>();
+
+  if (auto row = ctor.RegisterStruct<MenuRow>()) {
+    row.RegisterMember("label", &MenuRow::label);
+    row.RegisterMember("value", &MenuRow::value);
+  }
+  ctor.RegisterArray<std::vector<MenuRow>>();
 
   ctor.Bind("view", &bind_view_);
   ctor.Bind("status", &bind_status_);
@@ -185,6 +231,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("crumb", &bind_crumb_);
   ctor.Bind("source_name", &bind_source_name_);
   ctor.Bind("clock", &bind_clock_);
+  ctor.Bind("date", &bind_date_);
   ctor.Bind("busy", &bind_busy_);
   ctor.Bind("launch_status", &bind_launch_status_);
 
@@ -195,10 +242,18 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("entries", &entry_rows_);
   ctor.Bind("entry_count", &entry_count_);
   ctor.Bind("sel_entry", &sel_entry_);
+  ctor.Bind("sort_label", &bind_sort_label_);
 
   ctor.Bind("detail_name", &bind_detail_name_);
+  ctor.Bind("detail_icon", &bind_detail_icon_);
   ctor.Bind("detail_description", &bind_detail_description_);
-  ctor.Bind("player_status", &bind_player_status_);
+  ctor.Bind("detail_props", &detail_props_);
+  ctor.Bind("detail_image", &bind_detail_image_);
+
+  ctor.Bind("menu_open", &bind_menu_open_);
+  ctor.Bind("menu_title", &bind_menu_title_);
+  ctor.Bind("menu", &menu_rows_);
+  ctor.Bind("sel_menu", &sel_menu_);
 
   ctor.Bind("watching", &bind_watching_);
   ctor.Bind("info_visible", &bind_info_visible_);
@@ -208,44 +263,12 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_name", &bind_watch_name_);
   ctor.Bind("watch_description", &bind_watch_description_);
   ctor.Bind("watch_time", &bind_watch_time_);
+  ctor.Bind("watch_ends", &bind_watch_ends_);
+  ctor.Bind("watch_next", &bind_watch_next_);
   ctor.Bind("watch_progress", &bind_watch_progress_);
   ctor.Bind("watch_vtrack", &bind_watch_vtrack_);
   ctor.Bind("watch_atrack", &bind_watch_atrack_);
-  ctor.Bind("watch_multi_video", &bind_watch_multi_video_);
-  ctor.Bind("watch_multi_audio", &bind_watch_multi_audio_);
-  ctor.Bind("detail_image", &bind_detail_image_);
   ctor.Bind("watch_image", &bind_watch_image_);
-
-  // Mouse/touch support on the lists.
-  ctor.BindEventCallback("select_source",
-    [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
-      if (args.size() != 1)
-        return;
-      const int index = args[0].Get<int>(-1);
-      if (index < 0 || index >= (int)sources_.size())
-        return;
-      if (sel_source_ == index)
-        OpenSource(index);
-      sel_source_ = index;
-      model_.DirtyVariable("sel_source");
-    });
-  ctor.BindEventCallback("select_entry",
-    [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
-      if (args.size() != 1)
-        return;
-      const int index = args[0].Get<int>(-1);
-      BrowseLevel* level = CurrentLevel();
-      if (!level || index < 0 || index >= (int)level->entries.size())
-        return;
-      if (sel_entry_ == index) {
-        ActivateSelection();
-      } else {
-        sel_entry_ = index;
-        level->selection = index;
-        model_.DirtyVariable("sel_entry");
-        RebuildDetail();
-      }
-    });
 
   model_ = ctor.GetModelHandle();
   return true;
@@ -258,14 +281,16 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
 void App::Update() {
   const double now = Now();
 
-  // Clock in the top bar.
+  // Clock and date in the top bar.
   {
-    char buf[16] = {};
     const std::time_t t = std::time(nullptr);
     std::tm tm = {};
     localtime_r(&t, &tm);
-    std::snprintf(buf, sizeof(buf), "%02d:%02d", tm.tm_hour, tm.tm_min);
+    char buf[32] = {};
+    std::strftime(buf, sizeof(buf), "%H:%M", &tm);
     Set("clock", bind_clock_, Rml::String(buf));
+    std::strftime(buf, sizeof(buf), "%A, %d %B", &tm);
+    Set("date", bind_date_, Rml::String(buf));
   }
 
   Set("busy", bind_busy_, busy_ops_.load() > 0);
@@ -289,8 +314,6 @@ void App::Update() {
     image_refresh_pending_ = false;
     RefreshImageBindings();
   }
-
-  Set("player_status", bind_player_status_, player_->StatusText());
 
   if (bind_watching_) {
     UpdateWatchOverlay();
@@ -327,16 +350,20 @@ void App::EnsureRowVisible(const char* list_id, int index, float row_pitch) {
   if (!list)
     return;
 
+  // Keep a few rows of context around the selection (fewer if the list is
+  // too short for that), so the next item is visible before it is reached.
   const float view_h = list->GetClientHeight();
-  const float row_top = index * row_pitch;
-  const float row_bottom = row_top + row_pitch;
+  const int fit = (int)(view_h / row_pitch);
+  const int margin = std::max(0, std::min(kScrollMarginRows, (fit - 1) / 2));
+  const float row_top = (index - margin) * row_pitch;
+  const float row_bottom = (index + 1 + margin) * row_pitch;
   float scroll = list->GetScrollTop();
 
   if (row_top < scroll)
     scroll = row_top;
   else if (row_bottom > scroll + view_h)
     scroll = row_bottom - view_h;
-  list->SetScrollTop(scroll);
+  list->SetScrollTop(std::max(0.0f, scroll));
 }
 
 void App::ShowToast(const std::string& text) {
@@ -354,7 +381,7 @@ void App::ProcessEvent(Rml::Event& event) {
 
   const int key = event.GetParameter<int>("key_identifier", 0);
 
-  // Global quit (keyboard only; controllers use the launcher).
+  // Global quit (keyboard only; controllers use the system's own menu).
   if (key == Rml::Input::KI_Q &&
       (event.GetParameter<int>("ctrl_key", 0) != 0)) {
     SDL_Event quit = {};
@@ -364,6 +391,10 @@ void App::ProcessEvent(Rml::Event& event) {
     return;
   }
 
+  if (bind_menu_open_) {
+    HandleKeyMenu(event, key);
+    return;
+  }
   if (bind_watching_) {
     HandleKeyWatch(event, key);
     return;

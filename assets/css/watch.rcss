@@ -30,12 +30,13 @@ body.watching #shell {
 	border-top: 2px #ffffff14;
 }
 
+/* Play/pause state, left of the title. */
 .watch-glyph {
-	width: 96px;
-	font-size: 56px;
+	width: 72px;
+	font-size: 48px;
 	text-align: center;
 	color: #4dd6b8;
-	margin-right: 40px;
+	margin-right: 28px;
 }
 
 .watch-main {
@@ -49,14 +50,6 @@ body.watching #shell {
 	font-size: 40px;
 	font-weight: bold;
 	color: #e8edf7;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-.watch-now {
-	margin-top: 6px;
-	font-size: 28px;
-	color: #8593ab;
 	white-space: nowrap;
 	overflow: hidden;
 }
@@ -103,14 +96,10 @@ body.watching #shell {
 	color: #e8edf7;
 }
 
-.watch-hints {
-	margin-top: 18px;
-}
-.watch-hints .chip {
-	margin-right: 0px;
-	margin-left: 14px;
-	font-size: 19px;
-	color: #aab6cc;
+.watch-ends {
+	margin-top: 8px;
+	font-size: 22px;
+	color: #8593ab;
 }
 
 /* ------------------------------------------------------------------ */
@@ -121,10 +110,11 @@ body.watching #shell {
 	position: absolute;
 	left: 50%;
 	top: 50%;
-	margin-left: -506px;
-	margin-top: -400px;
-	width: 900px;
-	padding: 56px 64px;
+	box-sizing: border-box;
+	margin-left: -500px;
+	margin-top: -420px;
+	width: 1000px;
+	padding: 56px 72px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -172,20 +162,52 @@ body.watching #shell {
 
 #audio-card .watch-progress {
 	margin-top: 40px;
-	width: 700px;
+	width: 100%;
+	max-width: none;
+}
+
+/* State glyph, elapsed / total ... ends at, under the progress bar. */
+#audio-card .np-timeline {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	width: 100%;
+	margin-top: 16px;
+}
+
+#audio-card .np-state {
+	margin-right: 14px;
+	font-size: 26px;
+	color: #4dd6b8;
 }
 
 #audio-card .np-time {
-	margin-top: 14px;
 	font-size: 26px;
 	color: #aab6cc;
 }
 
-#audio-card .np-state {
-	margin-top: 20px;
+#audio-card .np-ends {
 	font-size: 22px;
+	color: #8593ab;
+}
+
+#audio-card .np-next {
+	margin-top: 32px;
+	padding-top: 22px;
+	width: 100%;
+	border-top: 1px #ffffff14;
+	font-size: 24px;
+	color: #aab6cc;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+#audio-card .np-next-label {
+	margin-right: 16px;
+	font-size: 18px;
 	font-weight: bold;
-	letter-spacing: 4px;
+	letter-spacing: 3px;
 	color: #4dd6b8;
 }
 
@@ -198,7 +220,7 @@ body.watching #shell {
 	margin-bottom: 36px;
 }
 
-/* ...and accompanies the state glyph on the video transport bar. */
+/* ...and sits next to the state glyph on the video transport bar. */
 .watch-thumb {
 	display: block;
 	width: 148px;

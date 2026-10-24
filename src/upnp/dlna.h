@@ -42,6 +42,8 @@ struct DidlObject {
   std::string thumb;        // image <res> on a non-image item (JPEG_TN etc)
 
   std::string res_url;      // best playable resource (http-get preferred)
+  int64_t res_size = -1;    // <res size="...">, bytes; -1 = unknown
+  int64_t res_duration = 0; // <res duration="H:MM:SS.F">, seconds; 0 = unknown
 
   // Best artwork URL for this object: cover art if announced, otherwise a
   // server-generated thumbnail (videos), otherwise nothing.

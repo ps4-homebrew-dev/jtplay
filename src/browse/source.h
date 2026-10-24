@@ -11,6 +11,7 @@
 #ifndef BROWSE_SOURCE_H
 #define BROWSE_SOURCE_H
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,9 +20,9 @@ namespace browse {
 
 // One entry of a listing: either a folder or a (hopefully) playable item.
 //
-// Six fields, deliberately: what the UI draws and what the player opens,
-// and nothing else. It is not modelled on any one protocol; every source
-// projects its native objects onto this, dropping whatever does not fit.
+// What the UI draws, sorts on and what the player opens, and nothing else.
+// It is not modelled on any one protocol; every source projects its native
+// objects onto this, dropping whatever does not fit.
 struct Entry {
   enum class Type { Folder, Audio, Video, Image, Other };
 
@@ -43,6 +44,12 @@ struct Entry {
   // demand (see Source::Resolve).
   std::string image;
   std::string uri;
+
+  // Optional facts for sorting and the info panel; a source fills in what
+  // it knows and leaves the rest at "unknown".
+  int64_t size = -1;      // bytes, -1 = unknown
+  int64_t date = 0;       // seconds since the epoch (UTC), 0 = unknown
+  int64_t duration = 0;   // seconds, 0 = unknown
 
   bool IsFolder() const { return type == Type::Folder; }
   bool IsAudio() const { return type == Type::Audio; }

@@ -4,12 +4,6 @@
 #include <RmlUi/Core/StringUtilities.h>
 #include <RmlUi/Core/SystemInterface.h>
 
-static Rml::TouchList TouchEventToTouchList(SDL_Event& ev, Rml::Context* context, SDL_FingerID finger_id)
-{
-	const Rml::Vector2f position = Rml::Vector2f{ev.tfinger.x, ev.tfinger.y} * Rml::Vector2f{context->GetDimensions()};
-	return {Rml::Touch{static_cast<Rml::TouchId>(finger_id), position}};
-}
-
 SystemInterface_SDL::SystemInterface_SDL()
 {
 #if SDL_MAJOR_VERSION >= 3
@@ -143,7 +137,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 	#define RMLSDL_WINDOW_EVENTS_END
 	auto GetKey = [](const SDL_Event& event) { return event.key.key; };
 	auto GetPixelDensity = [](SDL_Window* target_window) { return SDL_GetWindowPixelDensity(target_window); };
-	auto GetFingerId = [](const SDL_Event& event) { return event.tfinger.fingerID; };
 	constexpr auto event_mouse_motion = SDL_EVENT_MOUSE_MOTION;
 	constexpr auto event_mouse_down = SDL_EVENT_MOUSE_BUTTON_DOWN;
 	constexpr auto event_mouse_up = SDL_EVENT_MOUSE_BUTTON_UP;
@@ -153,9 +146,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 	constexpr auto event_text_input = SDL_EVENT_TEXT_INPUT;
 	constexpr auto event_window_size_changed = SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
 	constexpr auto event_window_leave = SDL_EVENT_WINDOW_MOUSE_LEAVE;
-	constexpr auto event_finger_down = SDL_EVENT_FINGER_DOWN;
-	constexpr auto event_finger_up = SDL_EVENT_FINGER_UP;
-	constexpr auto event_finger_motion = SDL_EVENT_FINGER_MOTION;
 
 	constexpr auto rmlsdl_true = true;
 	constexpr auto rmlsdl_false = false;
@@ -172,7 +162,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 		break;
 	auto GetKey = [](const SDL_Event& event) { return event.key.keysym.sym; };
 	auto GetPixelDensity = [](SDL_Window* /*target_window*/) { return 1.f; };
-	auto GetFingerId = [](const SDL_Event& event) { return event.tfinger.fingerId; };
 	constexpr auto event_mouse_motion = SDL_MOUSEMOTION;
 	constexpr auto event_mouse_down = SDL_MOUSEBUTTONDOWN;
 	constexpr auto event_mouse_up = SDL_MOUSEBUTTONUP;
@@ -182,9 +171,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 	constexpr auto event_text_input = SDL_TEXTINPUT;
 	constexpr auto event_window_size_changed = SDL_WINDOWEVENT_SIZE_CHANGED;
 	constexpr auto event_window_leave = SDL_WINDOWEVENT_LEAVE;
-	constexpr auto event_finger_down = SDL_FINGERDOWN;
-	constexpr auto event_finger_up = SDL_FINGERUP;
-	constexpr auto event_finger_motion = SDL_FINGERMOTION;
 
 	constexpr auto rmlsdl_true = SDL_TRUE;
 	constexpr auto rmlsdl_false = SDL_FALSE;
@@ -194,7 +180,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 
 	switch (ev.type)
 	{
-#ifndef RMLUI_BACKEND_SIMULATE_TOUCH
 	case event_mouse_motion:
 	{
 		const float pixel_density = GetPixelDensity(window);
@@ -213,7 +198,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 		result = context->ProcessMouseButtonUp(ConvertMouseButton(ev.button.button), GetKeyModifierState());
 	}
 	break;
-#endif
 
 	case event_mouse_wheel:
 	{
@@ -235,24 +219,6 @@ bool RmlSDL::InputEventHandler(Rml::Context* context, SDL_Window* window, SDL_Ev
 	case event_text_input:
 	{
 		result = context->ProcessTextInput(Rml::String(&ev.text.text[0]));
-	}
-	break;
-	case event_finger_down:
-	{
-		const Rml::TouchList touches = TouchEventToTouchList(ev, context, GetFingerId(ev));
-		result = context->ProcessTouchStart(touches, GetKeyModifierState());
-	}
-	break;
-	case event_finger_motion:
-	{
-		const Rml::TouchList touches = TouchEventToTouchList(ev, context, GetFingerId(ev));
-		result = context->ProcessTouchMove(touches, GetKeyModifierState());
-	}
-	break;
-	case event_finger_up:
-	{
-		const Rml::TouchList touches = TouchEventToTouchList(ev, context, GetFingerId(ev));
-		result = context->ProcessTouchEnd(touches, GetKeyModifierState());
 	}
 	break;
 

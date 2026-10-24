@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include <cinttypes>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -80,6 +82,17 @@ std::string XmlEscape(const std::string& s)
 	return out;
 }
 
+// "H+:MM:SS[.F+]" (UPnP AV, res@duration) -> whole seconds; 0 if malformed.
+int64_t ParseDuration(const char* s)
+{
+	int64_t h = 0, m = 0, sec = 0;
+	if (std::sscanf(s, "%" SCNd64 ":%" SCNd64 ":%" SCNd64, &h, &m, &sec) != 3)
+		return 0;
+	if (h < 0 || m < 0 || m > 59 || sec < 0 || sec > 59)
+		return 0;
+	return h * 3600 + m * 60 + sec;
+}
+
 // Picks the resource to hand to the player. Everything DLNA streams over
 // plain HTTP announces "http-get" protocolInfo; among those, the first one
 // wins (servers list the original file first and transcodes after it).
@@ -118,6 +131,9 @@ void PickResource(const XMLElement* obj, DidlObject& out)
 		return;
 
 	out.res_url = chosen->GetText();
+	out.res_size = chosen->Int64Attribute("size", -1);
+	if (const char* d = chosen->Attribute("duration"))
+		out.res_duration = ParseDuration(d);
 }
 
 DidlObject ParseObject(const XMLElement* e, bool container, const std::string& base_url)

@@ -5,6 +5,7 @@
 		<link type="text/rcss" href="theme.rcss"/>
 		<link type="text/rcss" href="css/layout.rcss"/>
 		<link type="text/rcss" href="css/browse.rcss"/>
+		<link type="text/rcss" href="css/menu.rcss"/>
 		<link type="text/rcss" href="css/watch.rcss"/>
 		<link type="text/rcss" href="css/busy.rcss"/>
 	</head>
@@ -13,30 +14,34 @@
 		<div id="shell">
 			<div id="topbar">
 				<img class="brand-logo" src="icons/logo.png"/>
-				<span class="brand-label">
-				</span>
-				<span class="crumb" data-if="view == 'browse'">{{crumb}}</span>
+				<div class="location">
+					<span class="location-source" data-if="view == 'browse'">{{source_name}}</span>
+					<span class="location-source" data-if="view == 'sources'">Media sources</span>
+					<span class="location-path" data-if="view == 'browse' && crumb != ''">›  {{crumb}}</span>
+				</div>
 				<span class="busy">
 					<span class="busy-dot busy-dot0"/>
 					<span class="busy-dot busy-dot1" data-if="busy"/>
 					<span class="busy-dot busy-dot2" data-if="busy"/>
 					<span class="busy-dot busy-dot3" data-if="busy"/>
 				</span>
-				<span class="spacer"/>
-				<span class="clock">{{clock}}</span>
+				<div class="clockbox">
+					<div class="clock">{{clock}}</div>
+					<div class="date">{{date}}</div>
+				</div>
 			</div>
 
 			<!-- ========================== Sources ========================== -->
-			<div id="content" data-if="view == 'sources'">
-				<div id="sources" class="pane active">
+			<div id="content-sources" class="content" data-if="view == 'sources'">
+				<div id="sources" class="pane">
 					<div class="pane-head">
-						<span class="eyebrow">Media sources</span>
-						<span class="count" data-if="source_count > 0">{{source_count}}</span>
+						<span class="eyebrow">Sources</span>
+						<span class="spacer"/>
+						<span class="position" data-if="source_count > 0">{{sel_source + 1}} / {{source_count}}</span>
 					</div>
 					<div id="source-list" class="list">
 						<div class="source-row" data-for="src : sources"
-						     data-class-selected="it_index == sel_source"
-						     data-event-click="select_source(it_index)">
+						     data-class-selected="it_index == sel_source">
 							<div class="srcicon">{{src.icon}}</div>
 							<div class="srcinfo">
 								<div class="srcname">{{src.name}}</div>
@@ -55,21 +60,21 @@
 			</div>
 
 			<!-- =========================== Browse ========================== -->
-			<div id="content" data-if="view == 'browse'">
-				<div id="entries" class="pane active">
+			<div id="content-browse" class="content" data-if="view == 'browse'">
+				<div id="entries" class="pane">
 					<div class="pane-head">
-						<span class="eyebrow">{{source_name}}</span>
-						<span class="count" data-if="entry_count > 0">{{entry_count}}</span>
+						<span class="eyebrow">{{entry_count}} items</span>
+						<span class="spacer"/>
+						<span class="sort">{{sort_label}}</span>
+						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
 					</div>
 					<div id="entry-list" class="list">
 						<div class="entry-row" data-for="e : entries"
 						     data-class-selected="it_index == sel_entry"
-						     data-class-folder="e.folder"
-						     data-event-click="select_entry(it_index)">
+						     data-class-folder="e.folder">
 							<div class="eicon">{{e.icon}}</div>
-							<div class="einfo">
-								<div class="etitle">{{e.name}}</div>
-							</div>
+							<div class="etitle">{{e.name}}</div>
+							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
 						</div>
 						<div class="empty" data-if="entry_count == 0 && !busy">
 							This folder is empty.
@@ -81,21 +86,32 @@
 				</div>
 
 				<div id="details" class="pane">
-					<div class="pane-head">
-						<span class="eyebrow">Details</span>
-					</div>
-					<div class="detail-body" data-if="detail_description != '' || detail_image != ''">
+					<div class="detail-body" data-if="detail_name != ''">
+						<div class="detail-artbox">
+							<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
+							<div class="detail-glyph" data-if="detail_image == ''">{{detail_icon}}</div>
+						</div>
+						<div class="detail-title">{{detail_name}}</div>
+						<div class="detail-props">
+							<div class="prop" data-for="p : detail_props">
+								<span class="prop-label">{{p.label}}</span>
+								<span class="prop-value">{{p.value}}</span>
+							</div>
+						</div>
 						<div class="detail-desc" data-if="detail_description != ''">{{detail_description}}</div>
-						<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
 					</div>
 				</div>
 			</div>
+		</div>
 
-			<div id="footer">
-				<span class="chip" data-if="view == 'sources'"><img class="key-icon" src="icons/cross.png"/>&nbsp;Select</span>
-				<span class="chip" data-if="view == 'sources'"><img class="key-icon" src="icons/square.png"/>&nbsp;Rescan</span>
-				<span class="chip" data-if="view == 'browse'"><img class="key-icon" src="icons/cross.png"/>&nbsp;Select</span>
-				<span class="chip" data-if="view == 'browse'"><img class="key-icon" src="icons/circle.png"/>&nbsp;Back</span>
+		<!-- ========================= Options menu ======================== -->
+		<div id="menu-scrim" data-if="menu_open"/>
+		<div id="menu" data-if="menu_open">
+			<div class="menu-title">{{menu_title}}</div>
+			<div class="menu-row" data-for="m : menu"
+			     data-class-selected="it_index == sel_menu">
+				<span class="menu-label">{{m.label}}</span>
+				<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
 			</div>
 		</div>
 
@@ -107,22 +123,32 @@
 			<div class="art" data-if="watch_image == ''">🎵</div>
 			<div class="np-title">{{watch_name}}</div>
 			<div class="np-meta" data-if="watch_description != ''">{{watch_description}}</div>
-			<div class="np-atrack" data-if="watch_multi_audio"><img class="key-icon" src="icons/triangle.png"/>&nbsp;{{watch_atrack}}</div>
+			<div class="np-atrack" data-if="watch_atrack != ''">{{watch_atrack}}</div>
 			<div class="watch-progress" data-if="watch_seekable">
 				<div class="bar" data-style-width="watch_progress"/>
 			</div>
-			<div class="np-time">{{watch_time}}</div>
-			<div class="np-state" data-if="watch_paused">PAUSED</div>
+			<div class="np-timeline">
+				<span class="np-state" data-if="watch_paused">⏸</span>
+				<span class="np-state" data-if="!watch_paused">▶</span>
+				<span class="np-time">{{watch_time}}</span>
+				<span class="spacer"/>
+				<span class="np-ends" data-if="watch_ends != ''">{{watch_ends}}</span>
+			</div>
+			<div class="np-next" data-if="watch_next != ''">
+				<span class="np-next-label">Up next</span>{{watch_next}}
+			</div>
 		</div>
 
 		<!-- Video: auto-hiding transport bar over the frames. -->
 		<div id="watch-bar" data-if="watching && !watch_audio && info_visible">
+			<div class="watch-glyph" data-if="watch_paused">⏸</div>
+			<div class="watch-glyph" data-if="!watch_paused">▶</div>
 			<img class="watch-thumb" data-if="watch_image != ''" data-attr-src="watch_image"/>
 			<div class="watch-main">
 				<div class="watch-name">{{watch_name}}</div>
 				<div class="watch-tracks">
-					<span class="watch-track" data-if="watch_vtrack != ''">Video: {{watch_vtrack}}</span>
-					<span class="watch-track" data-if="watch_atrack != ''">Audio: {{watch_atrack}}</span>
+					<span class="watch-track" data-if="watch_vtrack != ''">Video  {{watch_vtrack}}</span>
+					<span class="watch-track" data-if="watch_atrack != ''">Audio  {{watch_atrack}}</span>
 				</div>
 				<div class="watch-progress" data-if="watch_seekable">
 					<div class="bar" data-style-width="watch_progress"/>
@@ -130,14 +156,7 @@
 			</div>
 			<div class="watch-side">
 				<div class="watch-time">{{watch_time}}</div>
-				<div class="watch-hints">
-					<span class="chip" data-if="watch_seekable"><img class="key-icon" src="icons/dpad.png"/>&nbsp;Seek</span>
-					<span class="chip" data-if="watch_multi_video"><img class="key-icon" src="icons/square.png"/>&nbsp;Video track</span>
-					<span class="chip" data-if="watch_multi_audio"><img class="key-icon" src="icons/triangle.png"/>&nbsp;Audio track</span>
-					<span class="chip"><img class="key-icon" src="icons/cross.png"/>&nbsp;Play/Pause</span>
-					<span class="chip"><img class="key-icon" src="icons/circle.png"/>&nbsp;Stop</span>
-					<span class="chip"><img class="key-icon" src="icons/options.png"/>&nbsp;Info</span>
-				</div>
+				<div class="watch-ends" data-if="watch_ends != ''">{{watch_ends}}</div>
 			</div>
 		</div>
 

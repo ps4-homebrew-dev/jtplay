@@ -3,6 +3,34 @@
 An audio/video player for jailbroken PS4s and PS5s where the majority of the code
 was produced by claude.ai
 
+It is built for the couch: a 10-foot UI driven entirely by a remote or game
+controller, browsing local drives, UPnP/DLNA media servers and JavaScript
+plugins, in the spirit of Kodi.
+
+## Sources
+
+- **Local storage**: on the console, every connected USB drive, extended
+  storage and `/data` are listed as their own sources; on a PC, the home
+  directory. The whole filesystem is always available as well.
+- **UPnP/DLNA servers** on the local network (MiniDLNA, Jellyfin, Plex, ...).
+- **JavaScript plugins** (see below).
+
+## Browsing
+
+Folders are always listed first. The list can be sorted by name (natural
+order, so "Episode 2" comes before "Episode 10"), date or size, ascending or
+descending, or kept in the order the source returned it ("Default", which is
+track order on most DLNA servers). The right-hand column of the list shows
+whatever it is sorted by, and the info panel shows artwork, type, size,
+duration and date of the selected item. The sort order is remembered between
+sessions.
+
+Moving past the last row of a list wraps around to the first, and the other
+way round.
+
+The options button opens a side menu with the sort settings, refresh, and
+going back to the source list.
+
 ## JavaScript plugins
 
 Besides UPnP/DLNA servers and the local filesystem, media sources can be
@@ -51,9 +79,11 @@ the RmlUi log, and the `http` object below. There is no event loop:
 `async` function returns a promise and is reported as an error), and a call
 that spends more than 10 seconds *executing* is interrupted.
 
-An entry has six fields and no more: `id`, `type`, `name`, `description`,
-`image` and `uri` (see `browse::Entry` in `src/browse/source.h`). Only `name`
-is required; a `folder` entry is browsed by handing its `id` back to
+An entry has the fields `id`, `type`, `name`, `description`, `image` and
+`uri`, plus optional `size` (bytes), `date` (anything `new Date(x)` accepts:
+milliseconds since the epoch, an ISO 8601 string or a `Date`) and `duration`
+(seconds), which are used for sorting and shown in the info panel (see
+`browse::Entry` in `src/browse/source.h`). Only `name` is required; a `folder` entry is browsed by handing its `id` back to
 `browse()`, anything else is opened by its `uri`. A source that serves signed
 or otherwise short-lived URIs can leave `uri` out and add a
 `resolve(id, entry)` function returning a fresh one (as a string, or as an
@@ -98,20 +128,22 @@ requests fail with a certificate error.
 
 ## Controls
 
-Keyboard and game controller (any pad SDL knows, and the DualShock 4 on a
-PS4) do the same things:
+Keyboard, game controller (any pad SDL knows, and the DualShock 4 on a PS4)
+and media remote do the same things. The UI shows no button hints; the
+options button is the way into everything that is not on the d-pad.
 
-| Controller            | Key             | Browsing                 | Playing                    |
-|-----------------------|-----------------|--------------------------|----------------------------|
-| d-pad / left stick    | arrows          | move (held: repeats)     | seek ±10 s / ±5 min        |
-| cross (A)             | Return          | open / play              | pause                      |
-| circle (B)            | Backspace       | back                     | stop                       |
-| square (X)            | Space           | rescan (sources)         | next video track           |
-| triangle (Y)          | T               |                          | next audio track           |
-| L1 / R1               | PageUp/PageDown | page up / down           | previous / next item       |
-| L2 / R2               | Home / End      | first / last row         |                            |
-| options (start)       | F1              |                          | info bar                   |
-| back (select)         | Escape          | back                     | stop                       |
+| Controller            | Key             | Browsing                         | Playing                    |
+|-----------------------|-----------------|----------------------------------|----------------------------|
+| d-pad up / down       | arrows          | move (wraps around; held: repeats) | seek +5 / -5 min         |
+| d-pad left / right    | arrows          | page up / down                   | seek -10 / +10 s           |
+| cross (A)             | Return          | open / play                      | pause                      |
+| circle (B)            | Backspace       | back                             | stop                       |
+| options (start)       | F1              | options menu                     | info bar                   |
+| square (X)            | Space           | next sort key (sources: rescan)  | next video track           |
+| triangle (Y)          | T               | reverse sort order               | next audio track           |
+| L1 / R1               | PageUp/PageDown | page up / down                   | previous / next item       |
+| L2 / R2               | Home / End      | first / last row                 |                            |
+| back (select)         | Escape          | back                             | stop                       |
 
 Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
 

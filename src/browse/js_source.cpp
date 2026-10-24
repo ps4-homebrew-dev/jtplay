@@ -3,6 +3,7 @@
 #include <dirent.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <sstream>
@@ -126,6 +127,47 @@ namespace browse {
       return ToStdString(ctx, v.get());
     }
 
+    // A finite number field, or 'fallback' when absent or not a number.
+    double FieldNumber(JSContext* ctx, JSValue obj, const char* key,
+		       double fallback) {
+      Ref v(ctx, JS_GetPropertyStr(ctx, obj, key));
+      if (JS_IsException(v.get())) {
+	JS_FreeValue(ctx, JS_GetException(ctx));
+	return fallback;
+      }
+      double d = 0;
+      if (!JS_IsNumber(v.get()) || JS_ToFloat64(ctx, &d, v.get()) < 0 ||
+	  !std::isfinite(d))
+	return fallback;
+      return d;
+    }
+
+    // A date field as seconds since the epoch, 0 when absent or invalid.
+    // Accepts whatever 'new Date(x)' does: milliseconds since the epoch, an
+    // ISO 8601 string or a Date object.
+    int64_t FieldDate(JSContext* ctx, JSValue obj, const char* key) {
+      Ref v(ctx, JS_GetPropertyStr(ctx, obj, key));
+      if (JS_IsException(v.get())) {
+	JS_FreeValue(ctx, JS_GetException(ctx));
+	return 0;
+      }
+      if (JS_IsUndefined(v.get()) || JS_IsNull(v.get()))
+	return 0;
+      Ref global(ctx, JS_GetGlobalObject(ctx));
+      Ref ctor(ctx, JS_GetPropertyStr(ctx, global.get(), "Date"));
+      JSValue arg = v.get();
+      Ref date(ctx, JS_CallConstructor(ctx, ctor.get(), 1, &arg));
+      double ms = 0;
+      if (JS_IsException(date.get()) ||
+	  JS_ToFloat64(ctx, &ms, date.get()) < 0) {
+	JS_FreeValue(ctx, JS_GetException(ctx));
+	return 0;
+      }
+      if (!std::isfinite(ms) || ms <= 0)
+	return 0;
+      return (int64_t)(ms / 1000.0);
+    }
+
     // Length of an array (or any array-like). JS_IsArray() has an
     // incompatible signature across QuickJS forks, so duck-type instead.
     bool ArrayLength(JSContext* ctx, JSValue v, int64_t& out) {
@@ -179,6 +221,9 @@ namespace browse {
       out.uri = FieldString(ctx, v, "uri");
       out.id = FieldString(ctx, v, "id",
 			   out.uri.empty() ? out.name : out.uri);
+      out.size = (int64_t)FieldNumber(ctx, v, "size", -1);
+      out.date = FieldDate(ctx, v, "date");
+      out.duration = (int64_t)FieldNumber(ctx, v, "duration", 0);
       return true;
     }
 
@@ -200,6 +245,13 @@ namespace browse {
       set_str("description", e.description);
       set_str("image", e.image);
       set_str("uri", e.uri);
+      if (e.size >= 0)
+	JS_SetPropertyStr(ctx, obj, "size", JS_NewFloat64(ctx, (double)e.size));
+      if (e.date > 0)
+	JS_SetPropertyStr(ctx, obj, "date", JS_NewFloat64(ctx, e.date * 1000.0));
+      if (e.duration > 0)
+	JS_SetPropertyStr(ctx, obj, "duration",
+			  JS_NewFloat64(ctx, (double)e.duration));
       return obj;
     }
 

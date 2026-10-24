@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <sys/stat.h>
 #include <string>
 
 #include <RmlUi/Core.h>
@@ -13,7 +13,7 @@
 #define SCREEN_WIDTH  1920
 #define SCREEN_HEIGHT 1080
 
-
+#if defined(__ORBIS__)
 typedef struct SceAppContentInitParam {
   char reserved[32];
 } SceAppContentInitParam;
@@ -28,18 +28,17 @@ typedef struct SceAppContentMountPoint {
   char data[16];
 } SceAppContentMountPoint;
 
-
 extern "C" {
   int sceSystemServiceLoadExec(const char* path, char* const argv[]);
-  int sceAppContentInitialize(const SceAppContentInitParam *initParam,
-			      SceAppContentBootParam *bootParam);
-  int sceAppContentTemporaryDataMount2(uint32_t option, SceAppContentMountPoint *mountPoint);
-  int sceAppContentTemporaryDataUnmount(const SceAppContentMountPoint *mountPoint);
+  int sceAppContentInitialize(const SceAppContentInitParam* initParam,
+                              SceAppContentBootParam* bootParam);
+  int sceAppContentTemporaryDataMount2(uint32_t option, SceAppContentMountPoint* mountPoint);
+  int sceAppContentTemporaryDataUnmount(const SceAppContentMountPoint* mountPoint);
   int sceSysmoduleLoadModule(uint64_t);
 }
 
-#if defined(__ORBIS__)
-static SceAppContentMountPoint  g_tmpmnt = {0};
+// /temp0 (the artwork cache and settings) is mounted before main() runs.
+static SceAppContentMountPoint g_tmpmnt = {};
 
 __attribute__((constructor))
 static void OrbisInit(void) {

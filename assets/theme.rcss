@@ -18,7 +18,5 @@ body {
 	height: 100%;
 	font-size: 26px;
 	color: #e8edf7;
-	/* Flat color: gradient decorators need shader support, which the SDL
-	   software renderer does not provide. */
 	background-color: #0d1322;
 }

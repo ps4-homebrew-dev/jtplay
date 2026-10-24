@@ -1,0 +1,72 @@
+/*
+ * Options menu: a side blade over the left edge of the screen, opened with
+ * the options button. Left/right change a setting in place, select runs an
+ * action, back or options closes it.
+ */
+
+#menu-scrim {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	background-color: #05080fb0;
+}
+
+#menu {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	bottom: 0px;
+	box-sizing: border-box;
+	width: 600px;
+	padding: 72px 40px;
+	background-color: #121a2c;
+	border-right: 2px #ffffff14;
+}
+
+.menu-title {
+	margin: 0px 0px 36px 24px;
+	font-size: 22px;
+	font-weight: bold;
+	letter-spacing: 4px;
+	color: #4dd6b8;
+}
+
+.menu-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 72px;
+	margin-bottom: 6px;
+	padding: 0px 24px;
+	border: 2px transparent;
+	border-radius: 10px;
+}
+
+.menu-row.selected {
+	background-color: #4dd6b82a;
+	border: 2px #4dd6b8;
+}
+
+.menu-label {
+	flex: 1;
+	font-size: 28px;
+	color: #c5cee0;
+	white-space: nowrap;
+}
+
+.menu-row.selected .menu-label {
+	color: #ffffff;
+}
+
+.menu-value {
+	font-size: 24px;
+	color: #8593ab;
+	white-space: nowrap;
+}
+
+.menu-row.selected .menu-value {
+	color: #4dd6b8;
+}

@@ -7,13 +7,15 @@
 //
 // The app itself is source-agnostic: it browses browse::Source objects that
 // browse::Providers discover (DLNA servers, local directories, ...).
+//
+// The UI is driven by a TV remote or game controller only; every action is
+// a key press (see gamepad.cpp for how buttons map to keys).
 #pragma once
 
 #include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -55,12 +57,18 @@ public:
 private:
   enum class View { Sources, Browse };
 
+  // How a folder listing is ordered. Default keeps the source's own order
+  // (a DLNA album in track order, a plugin's curated list); folders always
+  // come before items regardless.
+  enum class SortMode { Default, Name, Date, Size, Count };
+
   // One level of the browse tree; kept on a stack so backing out is
   // instant and restores the selection.
   struct BrowseLevel {
     std::string id;
     std::string name;
-    browse::Listing entries;
+    browse::Listing raw;       // as the source returned it
+    browse::Listing entries;   // 'raw', sorted for display
     int selection = 0;
   };
 
@@ -73,8 +81,25 @@ private:
   struct EntryRow {
     Rml::String icon;   // glyph for the type of entry
     Rml::String name;
-    Rml::String description;
+    Rml::String meta;   // right-hand column: follows the sort key
     bool folder = false;
+  };
+  struct PropRow {      // one "label: value" line in the info panel
+    Rml::String label;
+    Rml::String value;
+  };
+  struct MenuRow {
+    Rml::String label;
+    Rml::String value;  // current setting, "" for plain actions
+  };
+
+  // An entry of the options menu. 'value' reports the current setting;
+  // 'change' is called with -1/+1 for left/right and 0 for select. Actions
+  // without a value close the menu when selected.
+  struct MenuItem {
+    std::string label;
+    std::function<std::string()> value;
+    std::function<void(int)> change;
   };
 
   bool SetupDataModel(Rml::Context* context, std::string& error);
@@ -99,24 +124,46 @@ private:
     model_.DirtyVariable(name);
   }
 
+  // --- Settings ----------------------------------------------------------
+  void LoadSettings();
+  void SaveSettings() const;
+
   // --- Sources view ------------------------------------------------------
   void StartDiscovery();
   void RebuildSourceRows();
+  void MoveSourceSelection(int delta);
   void HandleKeySources(Rml::Event& event, int key);
 
   // --- Browse view -------------------------------------------------------
   void OpenSource(int index);            // browse the root of a source
   void EnterContainer(const browse::Entry& entry);
   void LeaveContainer();                 // back one level (or to sources)
-  void RequestBrowse(const std::string& id, const std::string& name);
+  void RefreshContainer();               // re-list the current folder
+  void RequestBrowse(const std::string& id, const std::string& name,
+                     bool replace);
   void RebuildEntryRows();
   void RebuildDetail();
   void RebuildCrumb();
+  // Moves the selection; single steps wrap around the ends of the list,
+  // larger jumps stop at them.
   void MoveSelection(int delta);
   void ActivateSelection();
   void HandleKeyBrowse(Rml::Event& event, int key);
   const browse::Entry* SelectedEntry() const;
   BrowseLevel* CurrentLevel();
+
+  // --- Sorting -----------------------------------------------------------
+  void SortLevel(BrowseLevel& level) const;   // raw -> entries
+  void SetSort(SortMode mode, bool descending);
+  void CycleSortMode(int direction);
+  std::string SortLabel() const;
+  std::string EntryMeta(const browse::Entry& entry) const;
+
+  // --- Options menu ------------------------------------------------------
+  void OpenMenu();
+  void CloseMenu();
+  void RebuildMenuRows();
+  void HandleKeyMenu(Rml::Event& event, int key);
 
   // --- Playback ----------------------------------------------------------
   void PlayEntry(const browse::Entry& entry);
@@ -130,9 +177,12 @@ private:
   void UpdateWatchOverlay();
   // AtEnd(): audio advances to the next track in the folder, video exits.
   void HandlePlaybackEnd();
+  // Index of the next (+1) / previous (-1) playable item after the one
+  // playing (or being launched), or -1.
+  int NeighborIndex(int direction) const;
   bool PlayNeighbor(int direction);      // next/previous playable item
-  void CycleAudioTrack();                // triangle: next audio track
-  void CycleVideoTrack();                // square: next video track
+  void CycleAudioTrack();
+  void CycleVideoTrack();
   void HandleKeyWatch(Rml::Event& event, int key);
 
   void EnsureRowVisible(const char* list_id, int index, float row_pitch);
@@ -154,11 +204,14 @@ private:
   Rml::String bind_status_;       // sources view status line
   Rml::String bind_toast_;
   Rml::String bind_crumb_;        // breadcrumb of the browse path
-  Rml::String bind_source_name_;  // topbar: connected source
+  Rml::String bind_source_name_;  // pane title: connected source
   Rml::String bind_clock_;
+  Rml::String bind_date_;
+  Rml::String bind_sort_label_;   // "Name ▲" in the list header
   Rml::String bind_detail_name_;
+  Rml::String bind_detail_icon_;  // type glyph when there is no artwork
   Rml::String bind_detail_description_;
-  Rml::String bind_player_status_;
+  std::vector<PropRow> detail_props_;
   bool bind_busy_ = false;         // a browse/discovery is in flight
   // Phase of an in-flight launch ("Opening stream..."), or "" when idle.
   // The browse view's own feedback is the topbar busy indicator, which
@@ -172,17 +225,22 @@ private:
   Rml::String bind_watch_name_;
   Rml::String bind_watch_description_;
   Rml::String bind_watch_time_;
+  Rml::String bind_watch_ends_;    // "Ends at 21:45"
+  Rml::String bind_watch_next_;    // name of the item that plays next
   Rml::String bind_watch_progress_ = "0%"; // data-style-width; never empty
   // Codec lines shown in the watch bar: the label of the video and audio
   // track being decoded ("h264 1920x1080", "eng · ac3 5.1(side)"), or ""
-  // when the file has no stream of that kind. The multi_ flags say whether
-  // there is anything to switch to, and gate the button hints.
+  // when the file has no stream of that kind.
   Rml::String bind_watch_vtrack_;
   Rml::String bind_watch_atrack_;
-  bool bind_watch_multi_video_ = false;
-  bool bind_watch_multi_audio_ = false;
   Rml::String bind_detail_image_;  // local image path, "" = none
   Rml::String bind_watch_image_;   // now-playing artwork path, "" = none
+
+  bool bind_menu_open_ = false;
+  Rml::String bind_menu_title_;
+  std::vector<MenuRow> menu_rows_;
+  int sel_menu_ = 0;
+  std::vector<MenuItem> menu_items_;
 
   std::vector<SourceRow> source_rows_;
   std::vector<EntryRow> entry_rows_;
@@ -197,6 +255,10 @@ private:
   browse::SourcePtr current_source_;   // source being browsed, or null
   std::vector<BrowseLevel> path_;      // root first
   browse::Entry playing_;              // item in the player right now
+
+  SortMode sort_mode_ = SortMode::Default;
+  bool sort_desc_ = false;
+  std::string settings_path_;          // "" = settings are not persisted
 
   std::unique_ptr<Player> player_;
   Rml::Context* context_ = nullptr;
