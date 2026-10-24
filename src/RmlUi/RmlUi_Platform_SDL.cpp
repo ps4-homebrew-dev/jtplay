@@ -53,6 +53,17 @@ void SystemInterface_SDL::SetWindow(SDL_Window* in_window)
 	window = in_window;
 }
 
+void SystemInterface_SDL::JoinPath(Rml::String& translated_path, const Rml::String& document_path, const Rml::String& path)
+{
+	// Keep Unix-absolute paths intact (art cache, local media)
+	if (!path.empty() && path[0] == '/')
+	{
+		translated_path = path;
+		return;
+	}
+	Rml::SystemInterface::JoinPath(translated_path, document_path, path);
+}
+
 double SystemInterface_SDL::GetElapsedTime()
 {
 	static const Uint64 start = SDL_GetPerformanceCounter();

@@ -78,7 +78,7 @@ if(ORBIS)
         libvulkan.so.1
     )
 
-    set(PKG_FILES eboot.bin sce_sys/param.sfo sce_sys/icon0.png ca-bundle.crt)
+    set(PKG_FILES eboot.bin sce_sys/param.sfo sce_sys/icon0.png sce_sys/pic1.png ca-bundle.crt)
     set(PKG_OUTPUTS)
 
     add_custom_command(
@@ -104,13 +104,16 @@ if(ORBIS)
         VERBATIM
     )
 
-    add_custom_command(
-        OUTPUT ${PKG_DIR}/sce_sys/icon0.png
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${PKG_DIR}/sce_sys
-        COMMAND convert -size 512x512 -gravity center label:${TITLE}
-                ${PKG_DIR}/sce_sys/icon0.png
-        VERBATIM
-    )
+    foreach(img icon0.png pic1.png)
+        add_custom_command(
+            OUTPUT ${PKG_DIR}/sce_sys/${img}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${PKG_DIR}/sce_sys
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CMAKE_CURRENT_SOURCE_DIR}/sce_sys/${img}
+                    ${PKG_DIR}/sce_sys/${img}
+            DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sce_sys/${img}
+        )
+    endforeach()
 
     add_custom_command(
         OUTPUT ${PKG_DIR}/ca-bundle.crt

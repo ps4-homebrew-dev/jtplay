@@ -26,6 +26,9 @@ public:
 
 	double GetElapsedTime() override;
 
+	// Keeps Unix-absolute paths ("/home/..."), which RmlUi would otherwise strip.
+	void JoinPath(Rml::String& translated_path, const Rml::String& document_path, const Rml::String& path) override;
+
 	void SetMouseCursor(const Rml::String& cursor_name) override;
 
 	void SetClipboardText(const Rml::String& text) override;
