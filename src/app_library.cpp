@@ -153,7 +153,8 @@ void App::OnLibraryChanged() {
 
 void App::UpdateScreensaver(double now) {
   const bool video_running =
-    bind_watching_ && !bind_watch_audio_ && !player_->IsPaused();
+    (bind_watching_ && !bind_watch_audio_ && !player_->IsPaused()) ||
+    (bind_photo_ && bind_photo_playing_);
   if (video_running) {
     last_input_ = now; // a film is not idleness
     Set("saver", bind_saver_, false);
@@ -161,7 +162,7 @@ void App::UpdateScreensaver(double now) {
   }
 
   if (!bind_saver_) {
-    if (now - last_input_ < kScreensaverSec)
+    if (screensaver_sec_ <= 0 || now - last_input_ < screensaver_sec_)
       return;
     Set("saver", bind_saver_, true);
     saver_moved_at_ = 0.0;

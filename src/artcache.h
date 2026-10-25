@@ -59,6 +59,14 @@ constexpr int kThumbSize = 400;
 Status LookupThumb(const std::string& uri, std::string& path);
 std::string FetchThumb(const std::string& uri);
 
+// The same again at screen size, for the photo viewer: a 24-megapixel
+// camera photo is a 96 MiB texture, a 1920-pixel copy a tenth of that.
+// Both variants are turned upright first when the JPEG's EXIF data says
+// the camera was held sideways.
+constexpr int kScreenSize = 1920;
+Status LookupScreen(const std::string& uri, std::string& path);
+std::string FetchScreen(const std::string& uri);
+
 } // namespace artcache
 
 #endif

@@ -470,3 +470,125 @@ body.watching #shell {
 	white-space: nowrap;
 	overflow: hidden;
 }
+
+/* ------------------------------------------------------------------ */
+/* Chapters, play modes                                               */
+/* ------------------------------------------------------------------ */
+
+/* A notch in the timeline where each chapter starts. */
+.osd-chapter-mark,
+.np-chapter-mark {
+	position: absolute;
+	top: -4px;
+	width: 4px;
+	margin-left: -2px;
+	height: 16px;
+	border-radius: 2px;
+	background-color: #e8edf7c0;
+}
+
+.osd-chapter {
+	margin-top: 6px;
+	font-size: 22px;
+	color: #4dd6b8;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.np-chapter {
+	margin-top: 10px;
+	font-size: 22px;
+	color: #4dd6b8;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.osd-modes,
+.np-modes {
+	color: #4dd6b8;
+}
+.np-modes {
+	margin-left: 14px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Up next                                                            */
+/* ------------------------------------------------------------------ */
+
+#upnext {
+	z-index: 6;
+	position: absolute;
+	right: 72px;
+	bottom: 250px; /* clear of the OSD bar */
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	box-sizing: border-box;
+	width: 820px;
+	padding: 24px;
+	background-color: #0a0e18eb;
+	border-left: 6px #4dd6b8;
+	border-radius: 14px;
+	box-shadow: #000000a0 0px 20px 60px 0px;
+	animation: 0.3s cubic-out upnext-in;
+}
+
+@keyframes upnext-in {
+	from { transform: translateX(60px); opacity: 0; }
+	to   { transform: translateX(0px); opacity: 1; }
+}
+
+.upnext-art {
+	width: 288px;
+	height: 162px;
+	margin-right: 28px;
+	border-radius: 10px;
+	background-color: #ffffff12;
+}
+
+.upnext-img {
+	width: 100%;
+	height: 100%;
+	border-radius: 10px;
+}
+
+.upnext-glyph {
+	padding-top: 40px;
+	font-size: 64px;
+	text-align: center;
+	color: #4dd6b8;
+}
+
+.upnext-text {
+	flex: 1;
+	overflow: hidden;
+}
+
+.upnext-label {
+	font-size: 18px;
+	font-weight: bold;
+	letter-spacing: 3px;
+	color: #4dd6b8;
+}
+
+.upnext-name {
+	margin-top: 6px;
+	font-size: 32px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.upnext-count {
+	margin-top: 6px;
+	font-size: 24px;
+	color: #c5cee0;
+}
+
+.upnext-keys {
+	margin-top: 14px;
+	font-size: 20px;
+	color: #8593ab;
+}

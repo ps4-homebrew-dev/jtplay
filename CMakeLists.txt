@@ -24,6 +24,7 @@ add_executable(jtplay
     src/app_browse.cpp
     src/app_home.cpp
     src/app_library.cpp
+    src/app_photo.cpp
     src/app_watch.cpp
     src/artcache.cpp
     src/gamepad.cpp

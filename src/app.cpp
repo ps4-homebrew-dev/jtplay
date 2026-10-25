@@ -26,6 +26,8 @@ App::~App() = default;
 
 bool App::Initialize(Rml::Context* context, const Options& options, std::string& error) {
   context_ = context;
+  std::srand((unsigned)std::time(nullptr));
+  shuffle_seed_ = (uint32_t)std::rand() | 1u;
 
   if (!SetupDataModel(context, error))
     return false;
@@ -63,6 +65,7 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
   settings_path_ = cache_dir + "/settings.ini";
   cache_dir_ = cache_dir;
   LoadSettings();
+  ApplyLanguages();
   library_.Load(cache_dir + "/library.xml");
   library_seen_ = library_.Generation();
   favorites_source_ = std::make_shared<library::LibrarySource>(
@@ -158,6 +161,38 @@ void App::LoadSettings() {
       sort_desc_ = value == "1";
     } else if (key == "view") {
       view_mode_ = value == "grid" ? ViewMode::Grid : ViewMode::List;
+    } else if (key == "photo_interval") {
+      photo_interval_ = std::clamp(std::atoi(value.c_str()), 2, 120);
+    } else if (key == "photo_effect") {
+      const int effect = std::atoi(value.c_str());
+      if (effect >= 0 && effect < (int)PhotoEffect::Count)
+        photo_effect_ = (PhotoEffect)effect;
+    } else if (key == "photo_shuffle") {
+      photo_shuffle_ = value == "1";
+    } else if (key == "repeat") {
+      const int mode = std::atoi(value.c_str());
+      if (mode >= 0 && mode < (int)Repeat::Count)
+        repeat_ = (Repeat)mode;
+    } else if (key == "shuffle") {
+      shuffle_ = value == "1";
+    } else if (key == "autoplay") {
+      autoplay_ = value != "0";
+    } else if (key == "night_mode") {
+      player_->SetNightMode(value == "1");
+    } else if (key == "fit") {
+      const int fit = std::atoi(value.c_str());
+      if (fit >= 0 && fit < (int)Player::Fit::Count)
+        player_->SetFit((Player::Fit)fit);
+    } else if (key == "audio_delay") {
+      player_->SetAudioDelay(std::clamp(std::atof(value.c_str()), -5.0, 5.0));
+    } else if (key == "audio_lang") {
+      audio_lang_ = value;
+    } else if (key == "sub_lang") {
+      sub_lang_ = value;
+    } else if (key == "screensaver") {
+      screensaver_sec_ = std::max(0.0, std::atof(value.c_str()));
+    } else if (key == "sub_scale") {
+      player_->SetSubtitleScale(std::clamp(std::atof(value.c_str()), 0.5, 2.5));
     }
   }
 }
@@ -168,7 +203,20 @@ void App::SaveSettings() const {
   std::ofstream out(settings_path_, std::ios::trunc);
   out << "sort=" << (int)sort_mode_ << "\n"
       << "sort_desc=" << (sort_desc_ ? 1 : 0) << "\n"
-      << "view=" << (view_mode_ == ViewMode::Grid ? "grid" : "list") << "\n";
+      << "view=" << (view_mode_ == ViewMode::Grid ? "grid" : "list") << "\n"
+      << "photo_interval=" << photo_interval_ << "\n"
+      << "photo_effect=" << (int)photo_effect_ << "\n"
+      << "photo_shuffle=" << (photo_shuffle_ ? 1 : 0) << "\n"
+      << "repeat=" << (int)repeat_ << "\n"
+      << "shuffle=" << (shuffle_ ? 1 : 0) << "\n"
+      << "autoplay=" << (autoplay_ ? 1 : 0) << "\n"
+      << "night_mode=" << (player_->NightMode() ? 1 : 0) << "\n"
+      << "fit=" << (int)player_->GetFit() << "\n"
+      << "audio_delay=" << player_->AudioDelay() << "\n"
+      << "sub_scale=" << player_->SubtitleScale() << "\n"
+      << "audio_lang=" << audio_lang_ << "\n"
+      << "sub_lang=" << sub_lang_ << "\n"
+      << "screensaver=" << screensaver_sec_ << "\n";
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +325,9 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("value", &MenuRow::value);
   }
   ctor.RegisterArray<std::vector<MenuRow>>();
+  if (auto row = ctor.RegisterStruct<MarkRow>())
+    row.RegisterMember("at", &MarkRow::at);
+  ctor.RegisterArray<std::vector<MarkRow>>();
 
   ctor.Bind("view", &bind_view_);
   ctor.Bind("view_mode", &bind_view_mode_);
@@ -306,6 +357,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("entry_count", &entry_count_);
   ctor.Bind("sel_entry", &sel_entry_);
   ctor.Bind("sort_label", &bind_sort_label_);
+  ctor.Bind("jump_letter", &bind_jump_letter_);
 
   ctor.Bind("detail_name", &bind_detail_name_);
   ctor.Bind("detail_icon", &bind_detail_icon_);
@@ -325,6 +377,21 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("menu", &menu_rows_);
   ctor.Bind("sel_menu", &sel_menu_);
 
+  ctor.Bind("photo", &bind_photo_);
+  ctor.Bind("photo_info", &bind_photo_info_);
+  ctor.Bind("photo_playing", &bind_photo_playing_);
+  ctor.Bind("photo_loading", &bind_photo_loading_);
+  ctor.Bind("photo_fade", &bind_photo_fade_);
+  ctor.Bind("photo_front", &bind_photo_front_);
+  ctor.Bind("photo_art0", &bind_photo_art_[0]);
+  ctor.Bind("photo_art1", &bind_photo_art_[1]);
+  ctor.Bind("photo_anim0", &bind_photo_anim_[0]);
+  ctor.Bind("photo_anim1", &bind_photo_anim_[1]);
+  ctor.Bind("photo_rotate", &bind_photo_rotate_);
+  ctor.Bind("photo_sideways", &bind_photo_sideways_);
+  ctor.Bind("photo_name", &bind_photo_name_);
+  ctor.Bind("photo_meta", &bind_photo_meta_);
+
   ctor.Bind("watching", &bind_watching_);
   ctor.Bind("info_visible", &bind_info_visible_);
   ctor.Bind("watch_audio", &bind_watch_audio_);
@@ -340,6 +407,13 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_seek", &bind_watch_seek_);
   ctor.Bind("watch_seek_at", &bind_watch_seek_at_);
   ctor.Bind("watch_progress", &bind_watch_progress_);
+  ctor.Bind("watch_chapter", &bind_watch_chapter_);
+  ctor.Bind("chapter_marks", &chapter_marks_);
+  ctor.Bind("watch_modes", &bind_watch_modes_);
+  ctor.Bind("upnext", &bind_upnext_);
+  ctor.Bind("upnext_name", &bind_upnext_name_);
+  ctor.Bind("upnext_art", &bind_upnext_art_);
+  ctor.Bind("upnext_count", &bind_upnext_count_);
   ctor.Bind("watch_vtrack", &bind_watch_vtrack_);
   ctor.Bind("watch_atrack", &bind_watch_atrack_);
   ctor.Bind("watch_image", &bind_watch_image_);
@@ -397,6 +471,8 @@ void App::Update() {
   }
 
   UpdateScreensaver(now);
+  UpdatePhotos(now);
+  UpdateSleepTimer(now);
 
   if (image_refresh_pending_) {
     image_refresh_pending_ = false;
@@ -415,6 +491,8 @@ void App::Update() {
       Set("watch_seek", bind_watch_seek_, Rml::String());
   }
 
+  if (!bind_jump_letter_.empty() && now > jump_letter_until_)
+    Set("jump_letter", bind_jump_letter_, Rml::String());
   if (!bind_toast_.empty() && now > toast_deadline_)
     Set("toast", bind_toast_, Rml::String());
 
@@ -428,6 +506,10 @@ void App::Update() {
       EnsureRowVisible("entry-list", sel_entry_, kEntryRowPitch);
     scroll_entries_pending_ = false;
     art_scan_pending_ = true;
+  }
+  if (scroll_menu_pending_) {
+    EnsureRowVisible("menu-rows", sel_menu_, kMenuRowPitch);
+    scroll_menu_pending_ = false;
   }
   if (scroll_sources_pending_) {
     EnsureRowVisible("rail", sel_rail_, kRailRowPitch);
@@ -534,6 +616,10 @@ void App::ProcessEvent(Rml::Event& event) {
     HandleKeyMenu(event, key);
     return;
   }
+  if (bind_photo_) {
+    HandleKeyPhoto(event, key);
+    return;
+  }
   if (bind_watching_) {
     HandleKeyWatch(event, key);
     return;
@@ -557,12 +643,13 @@ std::string App::CoverDecorator(const std::string& path) {
 }
 
 std::string App::ImagePathFor(const std::string& uri, bool thumb) {
-  // artcache answers for a local file or an already-cached download without
-  // any I/O; everything else goes to the artwork thread, because RmlUi
+  // Anything shown large (details, backdrop, now playing, the photo viewer)
+  // uses the screen-sized copy, so a camera original never becomes a
+  // texture. artcache answers for an already-made copy without any I/O; everything else goes to the artwork thread, because RmlUi
   // wants a path now and the download is a blocking request.
   std::string path;
   const artcache::Status status =
-    thumb ? artcache::LookupThumb(uri, path) : artcache::Lookup(uri, path);
+    thumb ? artcache::LookupThumb(uri, path) : artcache::LookupScreen(uri, path);
   switch (status) {
   case artcache::Status::Ready:
     return path;
@@ -606,7 +693,7 @@ void App::ArtworkMain() {
     if (job.second)
       artcache::FetchThumb(job.first);
     else
-      artcache::Fetch(job.first);
+      artcache::FetchScreen(job.first);
     const std::string key = (job.second ? "t:" : "f:") + job.first;
     Reply([this, key] {
       image_inflight_.erase(key);

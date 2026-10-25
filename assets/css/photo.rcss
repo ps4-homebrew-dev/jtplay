@@ -1,0 +1,143 @@
+/*
+ * Photo viewer: pictures full screen on black. Two layers cross-fade
+ * (opacity transition on .front); during a slideshow each picture drifts
+ * through one of the Ken Burns moves below, set per picture from the app as
+ * an animation. A caption with the name, position and date slides up from
+ * the bottom on demand.
+ */
+
+body.photo {
+	background-color: #000000;
+	decorator: none;
+}
+body.photo #shell,
+body.photo #backdrop,
+body.photo #backdrop-shade {
+	display: none;
+}
+
+#photo {
+	z-index: 4;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	background-color: #000000;
+	overflow: hidden;
+}
+
+/* A manual quarter turn. Turned sideways, the box swaps its sides so the
+ * picture still fits the screen. */
+.photo-turn {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 1920px;
+	height: 1080px;
+	transform-origin: center center;
+}
+.photo-turn.sideways {
+	left: 420px;
+	top: -420px;
+	width: 1080px;
+	height: 1920px;
+}
+
+.photo-layer {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	opacity: 0;
+	transform-origin: center center;
+}
+.photo-layer.front {
+	opacity: 1;
+}
+#photo.fade .photo-layer {
+	transition: opacity 1.1s cubic-in-out;
+}
+
+/* Ken Burns: a slow zoom with a drift, in or out, each from its own corner. */
+@keyframes kb0 {
+	from { transform: scale(1.0) translate(0px, 0px); }
+	to   { transform: scale(1.16) translate(-50px, -24px); }
+}
+@keyframes kb1 {
+	from { transform: scale(1.18) translate(60px, 20px); }
+	to   { transform: scale(1.02) translate(0px, 0px); }
+}
+@keyframes kb2 {
+	from { transform: scale(1.04) translate(40px, -20px); }
+	to   { transform: scale(1.2) translate(-30px, 26px); }
+}
+@keyframes kb3 {
+	from { transform: scale(1.2) translate(-50px, 10px); }
+	to   { transform: scale(1.05) translate(30px, -16px); }
+}
+@keyframes kb4 {
+	from { transform: scale(1.02) translate(-20px, 30px); }
+	to   { transform: scale(1.16) translate(40px, -10px); }
+}
+
+.photo-loading {
+	position: absolute;
+	right: 72px;
+	top: 60px;
+	z-index: 2;
+}
+
+.photo-caption {
+	z-index: 2;
+	position: absolute;
+	left: 0px;
+	right: 0px;
+	bottom: 0px;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 90px 72px 48px 72px;
+	decorator: linear-gradient(180deg, #00000000 0%, #000000d0 100%);
+	animation: 0.25s cubic-out photo-caption-in;
+}
+
+@keyframes photo-caption-in {
+	from { transform: translateY(30px); opacity: 0; }
+	to   { transform: translateY(0px); opacity: 1; }
+}
+
+.photo-state {
+	margin-right: 24px;
+	font-size: 34px;
+	color: #4dd6b8;
+}
+
+.photo-text {
+	flex: 1;
+	overflow: hidden;
+}
+
+.photo-name {
+	font-size: 36px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.photo-meta {
+	margin-top: 6px;
+	font-size: 24px;
+	color: #c5cee0;
+	white-space: nowrap;
+}
+
+.photo-clock {
+	margin-left: 40px;
+	font-size: 34px;
+	font-weight: bold;
+	color: #ffffff;
+}

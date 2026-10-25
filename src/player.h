@@ -34,6 +34,12 @@ using AudioTrackInfo = TrackInfo; // "eng · ac3 5.1(side)"
 using VideoTrackInfo = TrackInfo; // "h264 1920x1080"
 using SubtitleTrackInfo = TrackInfo; // "eng · Forced · subrip"
 
+// A chapter of the open file.
+struct ChapterInfo {
+  int64_t start_us = 0;
+  std::string title;     // "" when the file has none
+};
+
 // Threads:
 //   mpv's own    demuxing, decoding, audio output
 //   event thread mpv_wait_event(): file and property changes into the
@@ -112,6 +118,38 @@ public:
   void SetSpeed(double speed);
   double Speed() const { return speed_.load(); }
 
+  // --- Chapters -------------------------------------------------------------
+  std::vector<ChapterInfo> Chapters() const;
+  // Index of the chapter playing, or -1 (none, or before the first).
+  int CurrentChapter() const { return chapter_.load(); }
+  // Jumps to the start of chapter 'index'. False without chapters or when
+  // 'index' is out of range.
+  bool SeekChapter(int index);
+
+  // --- Picture and sound adjustments ----------------------------------------
+  // Sticky across files (they are about the room, not the file), except
+  // the subtitle delay, which belongs to one file's timing and is reset by
+  // Open().
+  enum class Fit { Fit, Fill, Stretch, Count };
+  void SetFit(Fit fit);
+  Fit GetFit() const { return fit_; }
+  // Seconds; positive = later.
+  void SetAudioDelay(double seconds);
+  double AudioDelay() const { return audio_delay_; }
+  void SetSubtitleDelay(double seconds);
+  double SubtitleDelay() const { return sub_delay_; }
+  // 1.0 = normal.
+  void SetSubtitleScale(double scale);
+  double SubtitleScale() const { return sub_scale_; }
+  // Dynamic range compression, for watching late without waking the house:
+  // quiet dialogue up, explosions down.
+  void SetNightMode(bool on);
+  bool NightMode() const { return night_mode_; }
+  // Languages tried first when a file opens, as mpv's alang/slang lists
+  // ("swe,eng"); "" = the file's default. A subtitle track in a preferred
+  // language is switched on by itself. Applies from the next file.
+  void SetPreferredLanguages(const std::string& audio, const std::string& subs);
+
   // --- Video tracks -------------------------------------------------------
   // The video streams of the open file, in file order (cover art excluded).
   std::vector<VideoTrackInfo> VideoTracks() const;
@@ -141,6 +179,8 @@ public:
 private:
   void EventThread();
   void UpdateTracks(const mpv_node* list);
+  void UpdateChapters(const mpv_node* list);
+  void SetDouble(const char* name, double value);
   // Feeds audio track 'aid' to the spectrum filter, or (-1) turns it off.
   void SetVisualizer(int aid);
   void Command(const char* const* args);
@@ -177,6 +217,15 @@ private:
   std::atomic<int64_t> buffered_us_{-1};
   std::atomic<double> speed_{1.0};
   std::atomic<int> vis_aid_{-1}; // audio track feeding the spectrum, or -1
+  std::atomic<int> chapter_{-1};
+  std::vector<ChapterInfo> chapters_;   // guarded by tracks_mutex_
+
+  // Adjustments (main thread).
+  Fit fit_ = Fit::Fit;
+  double audio_delay_ = 0.0;
+  double sub_delay_ = 0.0;
+  double sub_scale_ = 1.0;
+  bool night_mode_ = false;
 
   mutable std::mutex tracks_mutex_;
   std::vector<VideoTrackInfo> video_tracks_;

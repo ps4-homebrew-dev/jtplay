@@ -23,6 +23,7 @@ inline constexpr float kCardPitch = 384.0f + 24.0f;       // .card + gap
 inline constexpr float kEntryRowPitch = 72.0f + 6.0f;     // list .entry-row
 inline constexpr int kGridColumns = 6;                    // grid .entry-row
 inline constexpr float kGridRowPitch = 252.0f + 24.0f;    // tile + gap
+inline constexpr float kMenuRowPitch = 72.0f + 6.0f;      // .menu-row
 
 // Artwork requests waiting at most; older ones are dropped.
 inline constexpr size_t kArtQueueMax = 96;
@@ -40,7 +41,6 @@ inline constexpr double kToastSec = 3.0;
 // appears once the open has taken at least this long.
 inline constexpr double kLaunchFeedbackSec = 0.3;
 inline constexpr double kWatchInfoSec = 5.0;      // watch info bar auto-hide
-inline constexpr double kScreensaverSec = 180.0;  // idle time before dimming
 inline constexpr double kScreensaverMoveSec = 20.0;
 inline constexpr int kDiscoveryWaitMs = 2500;
 

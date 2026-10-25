@@ -196,9 +196,11 @@ Status Lookup(const std::string& uri, std::string& path) {
 
 namespace {
 
-// The cache key of a thumbnail: its own entry, next to the original's.
-std::string ThumbKey(const std::string& uri) {
-  return uri + "#thumb";
+// The cache key of a scaled copy: its own entry, next to the original's.
+// The thumbnail keeps the suffix it always had, so existing caches stay
+// valid.
+std::string ScaledKey(const std::string& uri, int size) {
+  return size == kThumbSize ? uri + "#thumb" : uri + "#s" + std::to_string(size);
 }
 
 // Box-filter downscale of an RGBA32 surface: every destination pixel is
@@ -231,16 +233,94 @@ SDL_Surface* Downscale(SDL_Surface* src, int w, int h) {
   return dst;
 }
 
-} // namespace
+// The EXIF orientation of a JPEG (1..8; 1 = as stored), from the APP1
+// segment at the start of the file. Cameras and phones store the sensor's
+// pixels as they came and only note how the camera was held; SDL_image
+// ignores the note, so without this every portrait photo lies on its side.
+int ExifOrientation(const std::string& path) {
+  FILE* f = std::fopen(path.c_str(), "rb");
+  if (!f)
+    return 1;
+  std::vector<uint8_t> b(128 * 1024);
+  b.resize(std::fread(b.data(), 1, b.size(), f));
+  std::fclose(f);
+  if (b.size() < 4 || b[0] != 0xff || b[1] != 0xd8)
+    return 1;
 
-Status LookupThumb(const std::string& uri, std::string& path) {
+  size_t at = 2;
+  while (at + 4 <= b.size() && b[at] == 0xff) {
+    const uint8_t marker = b[at + 1];
+    const size_t len = ((size_t)b[at + 2] << 8) | b[at + 3];
+    if (marker == 0xda || len < 2) // start of scan: no more metadata
+      break;
+    const size_t seg = at + 4;
+    if (marker == 0xe1 && seg + 14 <= b.size() && std::memcmp(&b[seg], "Exif\0\0", 6) == 0) {
+      const size_t tiff = seg + 6;
+      const bool le = b[tiff] == 'I';
+      auto u16 = [&](size_t o) -> unsigned {
+        if (o + 2 > b.size()) return 0;
+        return le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1];
+      };
+      auto u32 = [&](size_t o) -> size_t {
+        if (o + 4 > b.size()) return 0;
+        return le ? (size_t)b[o] | ((size_t)b[o + 1] << 8) | ((size_t)b[o + 2] << 16) | ((size_t)b[o + 3] << 24)
+                  : ((size_t)b[o] << 24) | ((size_t)b[o + 1] << 16) | ((size_t)b[o + 2] << 8) | (size_t)b[o + 3];
+      };
+      const size_t ifd = tiff + u32(tiff + 4);
+      const unsigned count = u16(ifd);
+      for (unsigned i = 0; i < count; i++) {
+        const size_t entry = ifd + 2 + i * 12;
+        if (entry + 12 > b.size())
+          break;
+        if (u16(entry) == 0x0112) {
+          const unsigned v = u16(entry + 8);
+          return v >= 1 && v <= 8 ? (int)v : 1;
+        }
+      }
+      return 1;
+    }
+    at = seg + len - 2;
+  }
+  return 1;
+}
+
+// A copy of 'src' (RGBA32) turned upright for EXIF 'orientation'.
+SDL_Surface* Orient(SDL_Surface* src, int orientation) {
+  const bool swap = orientation >= 5;
+  const int w = swap ? src->h : src->w;
+  const int h = swap ? src->w : src->h;
+  SDL_Surface* dst = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA32);
+  if (!dst)
+    return nullptr;
+  const int sw = src->w, sh = src->h;
+  for (int y = 0; y < sh; y++) {
+    const uint32_t* in = (const uint32_t*)((const uint8_t*)src->pixels + (size_t)y * src->pitch);
+    for (int x = 0; x < sw; x++) {
+      int dx = x, dy = y;
+      switch (orientation) {
+      case 2: dx = sw - 1 - x; break;                       // mirrored
+      case 3: dx = sw - 1 - x; dy = sh - 1 - y; break;      // 180
+      case 4: dy = sh - 1 - y; break;                       // mirrored 180
+      case 5: dx = y; dy = x; break;                        // transpose
+      case 6: dx = sh - 1 - y; dy = x; break;               // 90 cw
+      case 7: dx = sh - 1 - y; dy = sw - 1 - x; break;      // transverse
+      case 8: dx = y; dy = sw - 1 - x; break;               // 90 ccw
+      default: break;
+      }
+      *(uint32_t*)((uint8_t*)dst->pixels + (size_t)dy * dst->pitch + (size_t)dx * 4) = in[x];
+    }
+  }
+  return dst;
+}
+
+Status LookupScaled(const std::string& uri, int size, std::string& path) {
   path.clear();
   if (uri.empty())
     return Status::Failed;
   {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!g_dir.empty()) {
-      const std::string key = ThumbKey(uri);
+      const std::string key = ScaledKey(uri, size);
       auto it = g_index.find(key);
       if (it != g_index.end()) {
         path = it->second;
@@ -255,13 +335,17 @@ Status LookupThumb(const std::string& uri, std::string& path) {
       return Status::Missing;
     }
   }
-  // No cache directory: nowhere to put a thumbnail, so the original it is.
+  // No cache directory: nowhere to put a scaled copy, so the original it is.
   return Lookup(uri, path);
 }
 
-std::string FetchThumb(const std::string& uri) {
+// Decodes the original, turns it upright, scales it to fit 'size' and
+// stores it; the original itself when it is small and upright already.
+// Thumbnails are PNG (they may have alpha: logos, station icons); the
+// screen-sized copies of photos are JPEG, a tenth of the size.
+std::string FetchScaled(const std::string& uri, int size) {
   std::string path;
-  const Status status = LookupThumb(uri, path);
+  const Status status = LookupScaled(uri, size, path);
   if (status != Status::Missing)
     return path;
 
@@ -269,28 +353,44 @@ std::string FetchThumb(const std::string& uri) {
   std::string result;
   if (!original.empty()) {
     if (SDL_Surface* loaded = IMG_Load(original.c_str())) {
+      const int orientation = ExifOrientation(original);
       const int w = loaded->w, h = loaded->h;
-      if (w <= kThumbSize && h <= kThumbSize) {
+      if (w <= size && h <= size && orientation == 1) {
         result = original; // small already
       } else if (SDL_Surface* rgba = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA32, 0)) {
-        const double scale = (double)kThumbSize / (double)std::max(w, h);
+        const double scale = std::min(1.0, (double)size / (double)std::max(w, h));
         const int tw = std::max(1, (int)(w * scale + 0.5));
         const int th = std::max(1, (int)(h * scale + 0.5));
-        if (SDL_Surface* small = Downscale(rgba, tw, th)) {
+        SDL_Surface* small = scale < 1.0 ? Downscale(rgba, tw, th) : rgba;
+        SDL_Surface* upright = small && orientation != 1 ? Orient(small, orientation) : small;
+        if (upright) {
           std::string dir;
           {
             std::lock_guard<std::mutex> lock(g_mutex);
             dir = g_dir;
           }
-          const std::string final_path = dir + "/art-" + HashKey(ThumbKey(uri)) + ".png";
+          const bool jpeg = size != kThumbSize;
+          const std::string final_path = dir + "/art-" + HashKey(ScaledKey(uri, size)) +
+                                         (jpeg ? ".jpg" : ".png");
           const std::string tmp_path = final_path + ".tmp";
-          if (!dir.empty() && IMG_SavePNG(small, tmp_path.c_str()) == 0 &&
-              ::rename(tmp_path.c_str(), final_path.c_str()) == 0)
+          int rc = -1;
+          if (!dir.empty()) {
+#if SDL_IMAGE_VERSION_ATLEAST(2, 0, 2)
+            rc = jpeg ? IMG_SaveJPG(upright, tmp_path.c_str(), 88)
+                      : IMG_SavePNG(upright, tmp_path.c_str());
+#else
+            rc = IMG_SavePNG(upright, tmp_path.c_str());
+#endif
+          }
+          if (rc == 0 && ::rename(tmp_path.c_str(), final_path.c_str()) == 0)
             result = final_path;
           else
             ::remove(tmp_path.c_str());
-          SDL_FreeSurface(small);
         }
+        if (upright && upright != small)
+          SDL_FreeSurface(upright);
+        if (small && small != rgba)
+          SDL_FreeSurface(small);
         SDL_FreeSurface(rgba);
       }
       SDL_FreeSurface(loaded);
@@ -298,11 +398,29 @@ std::string FetchThumb(const std::string& uri) {
   }
 
   std::lock_guard<std::mutex> lock(g_mutex);
-  const std::string key = ThumbKey(uri);
+  const std::string key = ScaledKey(uri, size);
   g_index[key] = result;
   if (!result.empty() && result != original)
     g_ondisk[HashKey(key)] = result;
   return result;
+}
+
+} // namespace
+
+Status LookupThumb(const std::string& uri, std::string& path) {
+  return LookupScaled(uri, kThumbSize, path);
+}
+
+std::string FetchThumb(const std::string& uri) {
+  return FetchScaled(uri, kThumbSize);
+}
+
+Status LookupScreen(const std::string& uri, std::string& path) {
+  return LookupScaled(uri, kScreenSize, path);
+}
+
+std::string FetchScreen(const std::string& uri) {
+  return FetchScaled(uri, kScreenSize);
 }
 
 std::string Fetch(const std::string& uri) {

@@ -9,8 +9,9 @@
 		<link type="text/rcss" href="css/menu.rcss"/>
 		<link type="text/rcss" href="css/watch.rcss"/>
 		<link type="text/rcss" href="css/busy.rcss"/>
+		<link type="text/rcss" href="css/photo.rcss"/>
 	</head>
-	<body data-model="jtplay" data-class-watching="watching">
+	<body data-model="jtplay" data-class-watching="watching" data-class-photo="photo">
 
 		<!-- Fanart: the focused item's artwork, large and dim, behind it all. -->
 		<div id="backdrop" data-if="backdrop != 'none' && !watching" data-style-decorator="backdrop"/>
@@ -100,6 +101,8 @@
 						<span class="sort">{{sort_label}}</span>
 						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
 					</div>
+					<!-- The letter a left / right jump landed on, briefly and large. -->
+					<div id="jump-letter" data-if="jump_letter != ''">{{jump_letter}}</div>
 					<div id="entry-list" class="list">
 						<div class="entry-row" data-for="e : entries"
 						     data-class-selected="it_index == sel_entry">
@@ -168,6 +171,7 @@
 			<div class="osd-edge" data-if="watch_seekable">
 				<div class="osd-buffered" data-style-width="watch_buffered"/>
 				<div class="osd-played" data-style-width="watch_progress"/>
+				<div class="osd-chapter-mark" data-for="cm : chapter_marks" data-style-left="cm.at"/>
 				<div class="osd-knob" data-style-left="watch_progress"/>
 				<div class="osd-seek" data-if="watch_seek != ''" data-style-left="watch_seek_at">{{watch_seek}}</div>
 			</div>
@@ -180,9 +184,11 @@
 						{{watch_name}}
 					</div>
 					<div class="osd-desc" data-if="watch_description != ''">{{watch_description}}</div>
+					<div class="osd-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</div>
 					<div class="osd-tracks">
 						<span class="osd-track" data-if="watch_vtrack != ''">{{watch_vtrack}}</span>
 						<span class="osd-track" data-if="watch_atrack != ''">{{watch_atrack}}</span>
+						<span class="osd-track osd-modes" data-if="watch_modes != ''">{{watch_modes}}</span>
 					</div>
 					<div class="osd-next" data-if="watch_next != ''">
 						<span class="osd-next-label">UP NEXT</span>{{watch_next}}
@@ -214,6 +220,7 @@
 			<div class="np-progress" data-if="watch_seekable">
 				<div class="np-buffered" data-style-width="watch_buffered"/>
 				<div class="np-played" data-style-width="watch_progress"/>
+				<div class="np-chapter-mark" data-for="cm : chapter_marks" data-style-left="cm.at"/>
 				<div class="np-knob" data-style-left="watch_progress"/>
 			</div>
 			<div class="np-status">
@@ -223,13 +230,29 @@
 				<span data-if="watch_dur != ''"> / {{watch_dur}}</span>
 				<span class="np-live" data-if="!watch_seekable">LIVE</span>
 				<span class="badge" data-if="watch_speed != ''">{{watch_speed}}</span>
+				<span class="np-modes" data-if="watch_modes != ''">{{watch_modes}}</span>
 			</div>
+			<div class="np-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</div>
 			<div class="np-seek" data-if="watch_seek != ''">{{watch_seek}}</div>
 			<div class="np-next" data-if="watch_next != ''">
 				<span class="np-next-label">UP NEXT</span>{{watch_next}}
 			</div>
 		</div>
 
+		<!-- Up next: over the end of an episode, counting down to the next. -->
+		<div id="upnext" data-if="watching && upnext && !menu_open">
+			<div class="upnext-art">
+				<div class="upnext-img" data-if="upnext_art != 'none'" data-style-decorator="upnext_art"/>
+				<div class="upnext-glyph" data-if="upnext_art == 'none'">🎬</div>
+			</div>
+			<div class="upnext-text">
+				<div class="upnext-label">UP NEXT</div>
+				<div class="upnext-name">{{upnext_name}}</div>
+				<div class="upnext-count">{{upnext_count}}</div>
+				<div class="upnext-keys">Select to play now, back to stay</div>
+			</div>
+		</div>
+		
 		<!-- The clock in the corner while the OSD is up. -->
 		<div id="osd-clock" data-if="watching && (watch_audio || info_visible)">{{clock}}</div>
 
@@ -241,14 +264,42 @@
 			<span class="launch-label">{{launch_status}}</span>
 		</div>
 
+		<!-- ======================== Photo viewer ========================= -->
+		<!-- Two layers take turns: the new picture fades in on one while the
+		     old one is still on the other (src/app_photo.cpp). -->
+		<div id="photo" data-if="photo" data-class-fade="photo_fade">
+			<div class="photo-turn" data-style-transform="photo_rotate"
+			     data-class-sideways="photo_sideways">
+				<div class="photo-layer" data-class-front="photo_front == 0"
+				     data-style-decorator="photo_art0" data-style-animation="photo_anim0"/>
+				<div class="photo-layer" data-class-front="photo_front == 1"
+				     data-style-decorator="photo_art1" data-style-animation="photo_anim1"/>
+			</div>
+			<div class="photo-loading" data-if="photo_loading">
+				<span class="busy-dot busy-dot1"/>
+				<span class="busy-dot busy-dot2"/>
+				<span class="busy-dot busy-dot3"/>
+			</div>
+			<div class="photo-caption" data-if="photo_info">
+				<span class="photo-state" data-if="photo_playing">▶</span>
+				<div class="photo-text">
+					<div class="photo-name">{{photo_name}}</div>
+					<div class="photo-meta">{{photo_meta}}</div>
+				</div>
+				<div class="photo-clock">{{clock}}</div>
+			</div>
+		</div>
+
 		<!-- ===================== Menus and dialogs ======================= -->
 		<div id="menu-scrim" data-if="menu_open"/>
 		<div id="menu" data-if="menu_open" data-class-dialog="menu_dialog">
 			<div class="menu-title">{{menu_title}}</div>
-			<div class="menu-row" data-for="m : menu"
-			     data-class-selected="it_index == sel_menu">
-				<span class="menu-label">{{m.label}}</span>
-				<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
+			<div id="menu-rows">
+				<div class="menu-row" data-for="m : menu"
+				     data-class-selected="it_index == sel_menu">
+					<span class="menu-label">{{m.label}}</span>
+					<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
+				</div>
 			</div>
 		</div>
 

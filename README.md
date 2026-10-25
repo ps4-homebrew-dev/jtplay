@@ -13,7 +13,10 @@ plugins, in the spirit of Kodi.
   storage and `/data` are listed as their own sources; on a PC, the home
   folder. The whole filesystem is always available as well.
 - **UPnP/DLNA servers** on the local network (MiniDLNA, Jellyfin, Plex, ...).
-- **JavaScript plugins** (see below).
+- **JavaScript plugins** (see below). Bundled: internet radio from
+  radio-browser.info (by popularity, country and genre), podcasts (the
+  Apple Podcasts chart plus your own feeds, listed at the top of
+  `plugins/podcasts.js`), Sveriges Radio and SVT Play.
 
 ## Home
 
@@ -42,11 +45,27 @@ servers). The right-hand column of the list shows whatever it is sorted by.
 View and sort are remembered between sessions.
 
 Moving past the last row of a list (or the last row of the grid) wraps
-around to the first, and the other way round.
+around to the first, and the other way round. In a list sorted by name,
+left and right jump to the previous / next letter (shown large for a
+moment) instead of paging.
 
 The options button opens a side menu: what can be done with the selected
 item (play, resume, play from the beginning, add to favorites, mark as
-watched) followed by the view and sort settings, refresh, and Home.
+watched), playing the whole folder in order or shuffled, a slideshow of
+its pictures, followed by the view and sort settings, refresh, and Home.
+
+## Photos
+
+Pictures open full screen. Left / right step through the folder's
+pictures; select starts and pauses a slideshow that cross-fades from one
+picture to the next while slowly panning and zooming across each (Ken
+Burns); up / down show the caption (name, position, date, size); triangle
+turns a picture a quarter. The options menu has the seconds per picture,
+the transition (pan & zoom, cross-fade, none), shuffle and rotation.
+
+Pictures are shown from screen-sized copies the artwork cache makes in
+the background, so a camera original is never uploaded as a 100 MiB
+texture, and photos are turned upright from their EXIF orientation.
 
 ## Favorites and Continue watching
 
@@ -80,12 +99,35 @@ flashes on beats. mpv has no PCM tap, so the player has it render a small
 `showfreqs` spectrum into an offscreen framebuffer and reads the bars back;
 mpv keeps those frames in step with what is audible.
 
-The options button opens the playback menu: audio track, subtitles, video
-track, speed (0.5× to 2×), favorites, play next and stop. An item that
-fails to open while going through a folder is skipped.
+Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s
+steps, then 30 s, a minute, two and five. Files with chapters show them
+as notches on the timeline and by name in the bar, and L1 / R1 skip by
+chapter (going on to the previous / next item past either end).
 
-After three minutes without input (and no video running) the screen dims to
-a slowly drifting clock; the first key press only wakes it.
+Over the last 15 seconds of an episode an **Up next** card counts down
+to the next item in the folder; select plays it at once, back waves it
+away and the player then stops at the end.
+
+The options button opens the playback menu: audio track, subtitles,
+chapter, video track, speed (0.5× to 2×), shuffle, repeat (all / one),
+night mode (dynamic range compression: dialogue up, explosions down),
+picture (fit / fill / stretch), subtitle delay and size, audio delay, a
+sleep timer (15 min to 2 h, or the end of the item), favorites, play next
+and stop. An item that fails to open while going through a folder is
+skipped.
+
+## Settings
+
+Settings, on the home rail, has whether the next episode plays by itself,
+the preferred audio and subtitle language (a matching track is picked when
+a file opens), the screensaver delay, night mode, forgetting Continue
+watching, and rescanning for sources. These and the playback choices
+above (repeat, shuffle, night mode, picture, audio delay, subtitle size)
+are kept in `settings.ini` in the cache directory.
+
+After three minutes (see Settings) without input, and no video or
+slideshow running, the screen dims to a slowly drifting clock; the first
+key press only wakes it.
 
 ## JavaScript plugins
 
@@ -188,18 +230,18 @@ Keyboard, game controller (any pad SDL knows, and the DualShock 4 on a PS4)
 and media remote do the same things. The UI shows no button hints; the
 options button is the way into everything that is not on the d-pad.
 
-| Controller            | Key             | Home                         | Browsing                          | Playing                |
-|-----------------------|-----------------|------------------------------|-----------------------------------|------------------------|
-| d-pad up / down       | arrows          | rail / shelf (rail wraps)    | move (wraps around)               | seek +5 / -5 min       |
-| d-pad left / right    | arrows          | rail ↔ cards                 | list: page; grid: previous / next | seek -10 / +10 s       |
-| cross (A)             | Return          | open / play                  | open / play                       | pause                  |
-| circle (B)            | Backspace       | back to the rail             | back (Home from a source root)    | stop                   |
-| options (start)       | F1              | options for the card         | options menu                      | playback menu          |
-| square (X)            | Space           | rescan                       | next sort key                     | next video track       |
-| triangle (Y)          | T               |                              | reverse sort order                | next audio track       |
-| L1 / R1               | PageUp/PageDown |                              | page up / down                    | previous / next item   |
-| L2 / R2               | Home / End      | first / last                 | first / last                      |                        |
-| back (select)         | Escape          | back to the rail             | back                              | stop                   |
+| Controller            | Key             | Home                         | Browsing                             | Playing                  | Photos               |
+|-----------------------|-----------------|------------------------------|--------------------------------------|--------------------------|----------------------|
+| d-pad up / down       | arrows          | rail / shelf (rail wraps)    | move (wraps around)                  | seek +5 / -5 min         | caption              |
+| d-pad left / right    | arrows          | rail ↔ cards                 | list: page or letter; grid: move     | seek (speeds up)         | previous / next      |
+| cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now | slideshow on / off   |
+| circle (B)            | Backspace       | back to the rail             | back (Home from a source root)       | stop; up next: dismiss   | close                |
+| options (start)       | F1              | options for the card         | options menu                         | playback menu            | photo menu           |
+| square (X)            | Space           | rescan                       | next sort key                        | next video track         |                      |
+| triangle (Y)          | T               |                              | reverse sort order                   | next audio track         | rotate               |
+| L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item | previous / next |
+| L2 / R2               | Home / End      | first / last                 | first / last                         |                          | first / last         |
+| back (select)         | Escape          | back to the rail             | back                                 | stop                     | close                |
 
 Held directions repeat. Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
 

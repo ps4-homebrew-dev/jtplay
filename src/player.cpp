@@ -53,6 +53,8 @@ enum : uint64_t {
   kPropSid,
   kPropCacheTime,
   kPropSpeed,
+  kPropChapterList,
+  kPropChapter,
 };
 
 const mpv_node* MapGet(const mpv_node* map, const char* key) {
@@ -239,6 +241,8 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
   mpv_observe_property(mpv_, kPropSid, "sid", MPV_FORMAT_INT64);
   mpv_observe_property(mpv_, kPropCacheTime, "demuxer-cache-time", MPV_FORMAT_DOUBLE);
   mpv_observe_property(mpv_, kPropSpeed, "speed", MPV_FORMAT_DOUBLE);
+  mpv_observe_property(mpv_, kPropChapterList, "chapter-list", MPV_FORMAT_NODE);
+  mpv_observe_property(mpv_, kPropChapter, "chapter", MPV_FORMAT_INT64);
 
   quitting_ = false;
   event_thread_ = std::thread(&Player::EventThread, this);
@@ -277,8 +281,10 @@ void Player::ResetFileState() {
   audio_id_ = -1;
   sub_id_ = -1;
   buffered_us_ = -1;
+  chapter_ = -1;
   {
     std::lock_guard<std::mutex> lock(tracks_mutex_);
+    chapters_.clear();
     video_tracks_.clear();
     audio_tracks_.clear();
     sub_tracks_.clear();
@@ -304,6 +310,8 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   mpv_set_property_string(mpv_, "pause", "no");
   mpv_set_property_string(mpv_, "speed", "1");
   speed_ = 1.0;
+  mpv_set_property_string(mpv_, "sub-delay", "0");
+  sub_delay_ = 0.0;
   // "start" applies to every file loaded after it is set, so it is set
   // (or reset) for each one.
   const std::string start = start_seconds > 0 ? std::to_string(start_seconds) : "none";
@@ -374,6 +382,11 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   int seekable = 0;
   if (mpv_get_property(mpv_, "seekable", MPV_FORMAT_FLAG, &seekable) >= 0)
     seekable_ = seekable != 0;
+  mpv_node chapters = {};
+  if (mpv_get_property(mpv_, "chapter-list", MPV_FORMAT_NODE, &chapters) >= 0) {
+    UpdateChapters(&chapters);
+    mpv_free_node_contents(&chapters);
+  }
 
   // Nothing to look at: draw the sound instead.
   if (vtrack_count_ == 0 && atrack_count_ > 0)
@@ -514,6 +527,13 @@ void Player::EventThread() {
         if (prop->format == MPV_FORMAT_NODE && prop->data)
           UpdateTracks(static_cast<const mpv_node*>(prop->data));
         break;
+      case kPropChapterList:
+        if (prop->format == MPV_FORMAT_NODE && prop->data)
+          UpdateChapters(static_cast<const mpv_node*>(prop->data));
+        break;
+      case kPropChapter:
+        chapter_ = (int)PropertyInt(prop, -1);
+        break;
       }
       break;
     }
@@ -607,6 +627,25 @@ void Player::UpdateTracks(const mpv_node* list) {
   track_status_ = status;
   vtrack_count_ = (int)video_tracks_.size();
   atrack_count_ = (int)audio_tracks_.size();
+}
+
+void Player::UpdateChapters(const mpv_node* list) {
+  std::vector<ChapterInfo> chapters;
+  if (list && list->format == MPV_FORMAT_NODE_ARRAY && list->u.list) {
+    for (int i = 0; i < list->u.list->num; i++) {
+      const mpv_node* item = &list->u.list->values[i];
+      const mpv_node* time = MapGet(item, "time");
+      ChapterInfo c;
+      if (time && time->format == MPV_FORMAT_DOUBLE)
+        c.start_us = (int64_t)(time->u.double_ * 1e6);
+      else
+        c.start_us = NodeInt(time, 0) * 1000000;
+      c.title = NodeString(MapGet(item, "title"));
+      chapters.push_back(std::move(c));
+    }
+  }
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  chapters_ = std::move(chapters);
 }
 
 // ---------------------------------------------------------------------------
@@ -797,4 +836,76 @@ bool Player::Snapshot(const std::string& path) {
     return false;
   const char* cmd[] = {"screenshot-to-file", path.c_str(), "video", nullptr};
   return mpv_command(mpv_, cmd) >= 0;
+}
+
+// ---------------------------------------------------------------------------
+// Chapters and adjustments
+// ---------------------------------------------------------------------------
+
+std::vector<ChapterInfo> Player::Chapters() const {
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  return chapters_;
+}
+
+bool Player::SeekChapter(int index) {
+  if (!mpv_ || !active_)
+    return false;
+  {
+    std::lock_guard<std::mutex> lock(tracks_mutex_);
+    if (index < 0 || index >= (int)chapters_.size())
+      return false;
+  }
+  int64_t value = index;
+  mpv_set_property_async(mpv_, 0, "chapter", MPV_FORMAT_INT64, &value);
+  chapter_ = index; // at once, for the UI
+  return true;
+}
+
+void Player::SetDouble(const char* name, double value) {
+  if (mpv_)
+    mpv_set_property_async(mpv_, 0, name, MPV_FORMAT_DOUBLE, &value);
+}
+
+void Player::SetFit(Fit fit) {
+  fit_ = fit;
+  if (!mpv_)
+    return;
+  // Fill crops to the screen (panscan), Stretch ignores the aspect ratio.
+  mpv_set_property_string(mpv_, "keepaspect", fit == Fit::Stretch ? "no" : "yes");
+  SetDouble("panscan", fit == Fit::Fill ? 1.0 : 0.0);
+}
+
+void Player::SetAudioDelay(double seconds) {
+  audio_delay_ = seconds;
+  SetDouble("audio-delay", seconds);
+}
+
+void Player::SetSubtitleDelay(double seconds) {
+  sub_delay_ = seconds;
+  SetDouble("sub-delay", seconds);
+}
+
+void Player::SetSubtitleScale(double scale) {
+  sub_scale_ = scale;
+  SetDouble("sub-scale", scale);
+}
+
+void Player::SetNightMode(bool on) {
+  night_mode_ = on;
+  if (!mpv_)
+    return;
+  // dynaudnorm lifts what is quiet and holds back what is loud, over a
+  // short window, which is what a film's dialogue against its effects
+  // needs; it works on any channel layout.
+  const int rc = mpv_set_property_string(mpv_, "af",
+                                         on ? "lavfi=[dynaudnorm=f=150:g=15:p=0.9:m=20]" : "");
+  if (rc < 0)
+    std::fprintf(stderr, "mpv: night mode: %s\n", mpv_error_string(rc));
+}
+
+void Player::SetPreferredLanguages(const std::string& audio, const std::string& subs) {
+  if (!mpv_)
+    return;
+  mpv_set_property_string(mpv_, "alang", audio.c_str());
+  mpv_set_property_string(mpv_, "slang", subs.c_str());
 }

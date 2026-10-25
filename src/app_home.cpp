@@ -90,6 +90,7 @@ void App::RebuildHome() {
   auto key_of = [](const RailItem& item) -> std::string {
     switch (item.kind) {
     case RailKind::Home:   return "home";
+    case RailKind::Settings: return "settings";
     case RailKind::Rescan: return "rescan";
     default:               return item.source->Key();
     }
@@ -114,6 +115,8 @@ void App::RebuildHome() {
     rail_.push_back({RailKind::Source, s});
     rail_rows_.push_back({s->Icon(), s->Name(), s->Detail()});
   }
+  rail_.push_back({RailKind::Settings, nullptr});
+  rail_rows_.push_back({"⚙", "Settings", ""});
   rail_.push_back({RailKind::Rescan, nullptr});
   rail_rows_.push_back({"🔄", "Rescan", ""});
 
@@ -155,6 +158,9 @@ void App::ActivateRail() {
   case RailKind::Source:
     OpenSource(item.source);
     break;
+  case RailKind::Settings:
+    OpenSettings();
+    break;
   case RailKind::Rescan:
     StartDiscovery();
     break;
@@ -176,7 +182,7 @@ void App::RebuildShelves() {
   }
 
   shelves_.clear();
-  if (kind != RailKind::Rescan) {
+  if (kind != RailKind::Rescan && kind != RailKind::Settings) {
     Shelf resume{"Continue watching", continue_source_, {}};
     for (const auto& item : library_.InProgress()) {
       if (!only.empty() && item.first.source_key != only)
@@ -222,6 +228,13 @@ void App::RebuildShelves() {
       ? "Nothing from here in your library yet." : ""));
     break;
   }
+  case RailKind::Settings:
+    Set("hero_icon", bind_hero_icon_, Rml::String("⚙"));
+    Set("hero_title", bind_hero_title_, Rml::String("Settings"));
+    Set("hero_detail", bind_hero_detail_,
+        Rml::String("Playback, languages and the screensaver."));
+    Set("hero_note", bind_hero_note_, Rml::String("Press select to change them."));
+    break;
   case RailKind::Rescan:
     Set("hero_icon", bind_hero_icon_, Rml::String("🔄"));
     Set("hero_title", bind_hero_title_, Rml::String("Rescan"));
@@ -395,4 +408,107 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     return;
   }
   event.StopPropagation();
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Languages offered for audio and subtitles: a code we store, the name we
+// show, and mpv's alang/slang list matching both tag styles files use.
+struct Language {
+  const char* code;
+  const char* name;
+  const char* mpv;
+};
+constexpr Language kLanguages[] = {
+  {"",   "Default",    ""},
+  {"en", "English",    "eng,en"},
+  {"sv", "Swedish",    "swe,sv,sve"},
+  {"no", "Norwegian",  "nor,no,nob,nb,nno,nn"},
+  {"da", "Danish",     "dan,da"},
+  {"fi", "Finnish",    "fin,fi"},
+  {"de", "German",     "deu,ger,de"},
+  {"fr", "French",     "fra,fre,fr"},
+  {"es", "Spanish",    "spa,es"},
+  {"it", "Italian",    "ita,it"},
+  {"nl", "Dutch",      "nld,dut,nl"},
+  {"pl", "Polish",     "pol,pl"},
+  {"pt", "Portuguese", "por,pt"},
+  {"ja", "Japanese",   "jpn,ja"},
+};
+constexpr int kLanguageCount = (int)(sizeof(kLanguages) / sizeof(kLanguages[0]));
+
+int LanguageIndex(const std::string& code) {
+  for (int i = 0; i < kLanguageCount; i++)
+    if (code == kLanguages[i].code)
+      return i;
+  return 0;
+}
+
+constexpr int kSaverMinutes[] = {1, 3, 5, 10, 30, 0}; // 0 = never
+constexpr int kSaverCount = (int)(sizeof(kSaverMinutes) / sizeof(kSaverMinutes[0]));
+
+} // namespace
+
+void App::ApplyLanguages() {
+  player_->SetPreferredLanguages(kLanguages[LanguageIndex(audio_lang_)].mpv,
+                                 kLanguages[LanguageIndex(sub_lang_)].mpv);
+}
+
+void App::OpenSettings() {
+  menu_items_.clear();
+  Set("menu_title", bind_menu_title_, Rml::String("Settings"));
+  Set("menu_dialog", bind_menu_dialog_, false);
+
+  auto step = [](int index, int d, int count) {
+    return (index + (d < 0 ? count - 1 : 1)) % count;
+  };
+
+  menu_items_.push_back({"Next episode",
+    [this] { return std::string(autoplay_ ? "Plays by itself" : "Stop at the end"); },
+    [this](int) { autoplay_ = !autoplay_; SaveSettings(); }});
+  menu_items_.push_back({"Audio language",
+    [this] { return std::string(kLanguages[LanguageIndex(audio_lang_)].name); },
+    [this, step](int d) {
+      audio_lang_ = kLanguages[step(LanguageIndex(audio_lang_), d, kLanguageCount)].code;
+      ApplyLanguages();
+      SaveSettings();
+    }});
+  menu_items_.push_back({"Subtitle language",
+    [this] { return std::string(kLanguages[LanguageIndex(sub_lang_)].name); },
+    [this, step](int d) {
+      sub_lang_ = kLanguages[step(LanguageIndex(sub_lang_), d, kLanguageCount)].code;
+      ApplyLanguages();
+      SaveSettings();
+    }});
+  menu_items_.push_back({"Screensaver",
+    [this] {
+      return screensaver_sec_ <= 0 ? std::string("Never")
+        : "After " + std::to_string((int)(screensaver_sec_ / 60)) + " min";
+    },
+    [this, step](int d) {
+      int i = 0;
+      while (i < kSaverCount - 1 && kSaverMinutes[i] * 60.0 != screensaver_sec_)
+        i++;
+      screensaver_sec_ = kSaverMinutes[step(i, d, kSaverCount)] * 60.0;
+      SaveSettings();
+    }});
+  menu_items_.push_back({"Night mode",
+    [this] { return std::string(player_->NightMode() ? "On" : "Off"); },
+    [this](int) { player_->SetNightMode(!player_->NightMode()); SaveSettings(); }});
+  menu_items_.push_back({"Forget Continue watching", nullptr, [this](int) {
+    const auto items = library_.InProgress();
+    for (const auto& item : items)
+      library_.SetWatched(item.first, false);
+    library_.Save();
+    ShowToast("Cleared " + std::to_string(items.size()) + " in progress", "🧹");
+  }});
+  menu_items_.push_back({"Rescan sources", nullptr, [this](int) { StartDiscovery(); }});
+
+  sel_menu_ = 0;
+  RebuildMenuRows();
+  Set("menu_open", bind_menu_open_, true);
 }

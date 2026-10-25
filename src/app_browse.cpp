@@ -4,6 +4,7 @@
 // panel or as a wall of artwork tiles. Everything here is protocol-
 // agnostic; the per-protocol work lives behind browse::Source.
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 
 #include "app.h"
@@ -33,6 +34,26 @@ const char* KindName(const browse::Entry& e) {
   case browse::Entry::Type::Image:  return "image";
   default:                          return "other";
   }
+}
+
+// The letter a name files under: its first letter or digit, upper-cased
+// (ASCII; anything else is kept as its whole UTF-8 character), with
+// leading "The " and punctuation skipped. Digits all file under "#".
+std::string Initial(const std::string& name) {
+  size_t i = 0;
+  if (name.size() > 4 && (name.compare(0, 4, "The ") == 0 || name.compare(0, 4, "the ") == 0))
+    i = 4;
+  while (i < name.size() && (unsigned char)name[i] < 0x80 && !std::isalnum((unsigned char)name[i]))
+    i++;
+  if (i >= name.size())
+    return "#";
+  const unsigned char c = (unsigned char)name[i];
+  if (c < 0x80)
+    return std::isdigit(c) ? std::string("#") : std::string(1, (char)std::toupper(c));
+  size_t n = 1;
+  while (i + n < name.size() && ((unsigned char)name[i + n] & 0xc0) == 0x80)
+    n++;
+  return name.substr(i, n);
 }
 
 const char* SortModeName(int mode) {
@@ -272,6 +293,43 @@ void App::MoveSelection(int delta) {
   scroll_entries_pending_ = true;
 }
 
+// Folders come first, so the letters run twice (folders A-Z, then items
+// A-Z); a jump simply goes to where the initial changes, so it walks
+// through both runs and wraps around at the ends.
+void App::JumpLetter(int direction) {
+  const BrowseLevel* level = CurrentLevel();
+  const int n = level ? (int)level->entries.size() : 0;
+  if (n == 0)
+    return;
+  const browse::Listing& entries = level->entries;
+  auto group_start = [&](int i) {
+    const std::string letter = Initial(entries[i].name);
+    while (i > 0 && Initial(entries[i - 1].name) == letter &&
+           entries[i - 1].IsFolder() == entries[i].IsFolder())
+      i--;
+    return i;
+  };
+  int target;
+  if (direction > 0) {
+    const std::string letter = Initial(entries[sel_entry_].name);
+    const bool folder = entries[sel_entry_].IsFolder();
+    target = sel_entry_;
+    while (target < n && Initial(entries[target].name) == letter &&
+           entries[target].IsFolder() == folder)
+      target++;
+    if (target >= n)
+      target = 0;
+  } else {
+    const int start = group_start(sel_entry_);
+    // In the middle of a group: back to its start; at the start: the
+    // start of the group before (the last one, from the top).
+    target = start < sel_entry_ ? start : group_start(start > 0 ? start - 1 : n - 1);
+  }
+  MoveSelection(target - sel_entry_);
+  Set("jump_letter", bind_jump_letter_, Rml::String(Initial(entries[target].name)));
+  jump_letter_until_ = Now() + 0.8;
+}
+
 void App::ActivateSelection() {
   const browse::Entry* e = SelectedEntry();
   if (!e)
@@ -310,10 +368,14 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     if (grid) grid_row(+1); else MoveSelection(+1);
     break;
   case Rml::Input::KI_LEFT:  // remotes rarely have page keys
-    MoveSelection(grid ? -1 : -kPageRows);
+    if (grid) MoveSelection(-1);
+    else if (sort_mode_ == SortMode::Name) JumpLetter(-1);
+    else MoveSelection(-kPageRows);
     break;
   case Rml::Input::KI_RIGHT:
-    MoveSelection(grid ? +1 : +kPageRows);
+    if (grid) MoveSelection(+1);
+    else if (sort_mode_ == SortMode::Name) JumpLetter(+1);
+    else MoveSelection(+kPageRows);
     break;
   case Rml::Input::KI_PRIOR:
     MoveSelection(grid ? -3 * kGridColumns : -kPageRows);
@@ -472,7 +534,14 @@ void App::AddEntryActions(const browse::Entry& entry) {
   library::Ref ref;
   if (!Identify(entry, ref))
     return;
-  if (!entry.IsFolder()) {
+  if (entry.IsImage()) {
+    menu_items_.push_back({"Open", nullptr, [this, entry](int) { PlayEntry(entry); }});
+    menu_items_.push_back({"Slideshow from here", nullptr, [this, entry](int) {
+      int index = 0;
+      const browse::Listing photos = FolderPhotos(entry, index);
+      OpenPhotos(photos, index, true);
+    }});
+  } else if (!entry.IsFolder()) {
     library::Progress p;
     const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
     if (known && !p.watched && p.position > 0) {
@@ -507,6 +576,23 @@ void App::OpenMenu() {
     Set("menu_title", bind_menu_title_, e ? e->name : Rml::String("Options"));
     if (e)
       AddEntryActions(*e);
+    // A folder of music or episodes plays as a whole, in order or shuffled.
+    if (PlayOrder().size() > 1) {
+      menu_items_.push_back({"Play all", nullptr, [this](int) { PlayFolder(false); }});
+      menu_items_.push_back({"Shuffle all", nullptr, [this](int) { PlayFolder(true); }});
+    }
+    // A folder with pictures in it can be shown as a slideshow from the
+    // start, whatever is selected.
+    if (const BrowseLevel* level = CurrentLevel()) {
+      browse::Listing photos;
+      for (const browse::Entry& item : level->entries)
+        if (item.IsImage())
+          photos.push_back(item);
+      if (photos.size() > 1 && !(e && e->IsImage())) {
+        menu_items_.push_back({"Slideshow (" + std::to_string(photos.size()) + " pictures)",
+          nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
+      }
+    }
     menu_items_.push_back({"View",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
@@ -549,6 +635,7 @@ void App::CloseMenu() {
 }
 
 void App::RebuildMenuRows() {
+  scroll_menu_pending_ = true;
   menu_rows_.clear();
   for (const MenuItem& item : menu_items_)
     menu_rows_.push_back({item.label, item.value ? item.value() : ""});
@@ -569,6 +656,7 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
   case Rml::Input::KI_DOWN:
     sel_menu_ = StepIndex(sel_menu_, key == Rml::Input::KI_UP ? -1 : +1, count);
     model_.DirtyVariable("sel_menu");
+    scroll_menu_pending_ = true;
     break;
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:

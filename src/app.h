@@ -173,7 +173,7 @@ private:
   // A rail of places on the left (Home, every source, Rescan) and, on the
   // right, shelves of cards from the library (Continue watching,
   // Favorites) for the place the rail is on. Kodi's home, more or less.
-  enum class RailKind { Home, Source, Rescan };
+  enum class RailKind { Home, Source, Settings, Rescan };
   struct RailItem {
     RailKind kind;
     browse::SourcePtr source;
@@ -191,6 +191,8 @@ private:
   void ActivateRail();
   void ActivateCard();
   void HandleKeyHome(Rml::Event& event, int key);
+  void OpenSettings();                // the settings menu, from the rail
+  void ApplyLanguages();              // preferred languages -> player
   const browse::Entry* SelectedCard() const;
   void GoHome();
 
@@ -207,6 +209,9 @@ private:
   // Moves the selection; single steps wrap around the ends of the list,
   // larger jumps stop at them.
   void MoveSelection(int delta);
+  // List sorted by name: the first entry whose name starts with the
+  // next (+1) or previous (-1) letter, flashed large on screen.
+  void JumpLetter(int direction);
   void ActivateSelection();
   void HandleKeyBrowse(Rml::Event& event, int key);
   void SetViewMode(ViewMode mode);
@@ -250,11 +255,71 @@ private:
   void HandlePlaybackEnd();
   // Index of the next (+1) / previous (-1) playable item after the one
   // playing (or being launched), or -1.
+  // Follows the play order: shuffled or not, wrapping around with
+  // repeat-all. 'manual': a skip asked for with a key, which ignores
+  // repeat-one.
   int NeighborIndex(int direction) const;
   bool PlayNeighbor(int direction);      // next/previous playable item
+  // Indices of the playable items of the current folder, in the order
+  // they play (shuffled when shuffle is on); cached per folder.
+  const std::vector<int>& PlayOrder() const;
+  void SetShuffle(bool on);
+  // Plays the folder from its first playable item (or, shuffled, from a
+  // random one).
+  void PlayFolder(bool shuffled);
+  // Previous/next chapter, or item at either end of the chapters.
+  void SkipChapter(int direction);
+  // Up next: the card that counts down to the next episode over the end
+  // of a video. Dismissing it means the player stops at the end instead.
+  void UpdateUpNext(int64_t pos, int64_t dur);
+  void UpdateSleepTimer(double now);
+  std::string SleepLabel() const;
   void CycleAudioTrack(int direction = +1);
   void CycleVideoTrack(int direction = +1);
   void HandleKeyWatch(Rml::Event& event, int key);
+
+  // --- Photo viewer --------------------------------------------------------
+  // Pictures open full screen rather than in the player: one at a time with
+  // left/right, or as a slideshow that cross-fades from one to the next and
+  // slowly pans and zooms across each (Ken Burns). Pictures come from the
+  // artwork cache's screen-sized copies, turned upright from their EXIF.
+  enum class PhotoEffect { KenBurns, Fade, None, Count };
+  // 'photos' are the pictures to step through (the folder's, in display
+  // order), 'index' the one to start at.
+  void OpenPhotos(const browse::Listing& photos, int index, bool slideshow);
+  void ClosePhotos();
+  void ShowPhoto(int index);
+  void StepPhoto(int direction);
+  void SetSlideshow(bool playing);
+  void UpdatePhotos(double now);
+  void ShowPhotoInfo(double seconds);
+  void OpenPhotoMenu();
+  void HandleKeyPhoto(Rml::Event& event, int key);
+  // The pictures of the folder on screen, and where 'entry' is among them.
+  browse::Listing FolderPhotos(const browse::Entry& entry, int& index) const;
+  static std::string PhotoUri(const browse::Entry& entry);
+
+  // --- Playback preferences ----------------------------------------------
+  enum class Repeat { Off, All, One, Count };
+  Repeat repeat_ = Repeat::Off;
+  bool shuffle_ = false;
+  uint32_t shuffle_seed_ = 1;
+  bool autoplay_ = true;              // video: go on to the next episode
+  // Cached PlayOrder(), and what it was computed for.
+  mutable std::vector<int> play_order_;
+  mutable std::string play_order_key_;
+  int launch_failures_ = 0;           // skipped in a row; bounds the skipping
+  // Sleep timer: stop at 'sleep_at_' (Now() based), or at the end of what
+  // is playing.
+  double sleep_at_ = 0.0;
+  bool sleep_end_of_item_ = false;
+  bool upnext_dismissed_ = false;
+  // Language codes ("en", "sv", ...; "" = the file's own default).
+  std::string audio_lang_;
+  std::string sub_lang_;
+  double screensaver_sec_ = 180.0;    // 0 = never
+  Rml::String bind_jump_letter_;      // letter flashed by JumpLetter()
+  double jump_letter_until_ = 0.0;
 
   // --- Screensaver -------------------------------------------------------
   // Dims the screen with a drifting clock after a while without input,
@@ -318,6 +383,7 @@ private:
   Rml::String bind_watch_seek_;    // seek bubble over the knob, "" = none
   double seek_bubble_until_ = 0.0;
   int64_t seek_accum_us_ = 0;      // jump of the current run of presses
+  int seek_run_ = 0;               // presses in the current run
   // Where the seek bubble sits: the knob, kept far enough from the screen
   // edges that the whole bubble shows.
   Rml::String bind_watch_seek_at_ = "50%";
@@ -325,6 +391,18 @@ private:
   // Codec lines shown in the watch bar: the label of the video and audio
   // track being decoded ("h264 1920x1080", "eng · ac3 5.1(side)"), or ""
   // when the file has no stream of that kind.
+  Rml::String bind_watch_chapter_; // "2/5 · The Middle", "" = none
+  struct MarkRow {      // a chapter tick on the timeline
+    Rml::String at;     // "37.50%"
+    bool operator==(const MarkRow& o) const { return at == o.at; }
+    bool operator!=(const MarkRow& o) const { return at != o.at; }
+  };
+  std::vector<MarkRow> chapter_marks_;
+  Rml::String bind_watch_modes_;   // "🔀 🔁" badges: shuffle, repeat
+  bool bind_upnext_ = false;       // the up-next card is up
+  Rml::String bind_upnext_name_;
+  Rml::String bind_upnext_art_ = "none";
+  Rml::String bind_upnext_count_;  // "Playing in 8"
   Rml::String bind_watch_vtrack_;
   Rml::String bind_watch_atrack_;
   Rml::String bind_detail_image_;  // local image path, "" = none
@@ -337,6 +415,31 @@ private:
   double last_input_ = 0.0;
   double saver_moved_at_ = 0.0;
   Rml::String bind_watch_image_;   // now-playing artwork path, "" = none
+
+  // Photo viewer (see OpenPhotos). Two layers take turns: the new picture
+  // fades in on one while the old one stays on the other.
+  bool bind_photo_ = false;
+  bool bind_photo_info_ = false;       // caption along the bottom
+  bool bind_photo_playing_ = false;    // slideshow running
+  bool bind_photo_loading_ = false;
+  bool bind_photo_fade_ = true;        // cross-fade between pictures
+  int bind_photo_front_ = 0;           // layer showing the current picture
+  Rml::String bind_photo_art_[2] = {"none", "none"};  // decorators
+  Rml::String bind_photo_anim_[2] = {"none", "none"}; // Ken Burns moves
+  Rml::String bind_photo_rotate_ = "none"; // manual turn, a transform
+  bool bind_photo_sideways_ = false;   // turned 90 or 270 degrees
+  Rml::String bind_photo_name_;
+  Rml::String bind_photo_meta_;        // "3 / 24  ·  2024-03-01 14:22"
+  browse::Listing photo_list_;
+  int photo_index_ = 0;
+  bool photo_pending_ = false;         // waiting for the current picture
+  double photo_next_at_ = 0.0;         // slideshow: when to move on
+  double photo_info_until_ = 0.0;
+  int photo_interval_ = 6;             // seconds per picture
+  PhotoEffect photo_effect_ = PhotoEffect::KenBurns;
+  bool photo_shuffle_ = false;
+  int photo_moves_ = 0;                // picks the next Ken Burns move
+  std::vector<int> photo_rotation_;    // manual quarter turns, per picture
 
   bool bind_menu_open_ = false;
   bool bind_menu_dialog_ = false;  // centered dialog rather than side blade
@@ -442,5 +545,6 @@ private:
   double toast_deadline_ = 0.0;
   double info_deadline_ = 0.0;      // watch info bar auto-hide
   bool scroll_entries_pending_ = false;
+  bool scroll_menu_pending_ = false;
   bool scroll_sources_pending_ = false;
 };

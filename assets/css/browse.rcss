@@ -292,3 +292,27 @@
 	max-height: 230px;
 	overflow: hidden;
 }
+
+/* Left / right in a list sorted by name jump a letter; the letter shows
+ * large over the list for a moment. */
+#entries {
+	position: relative;
+}
+#jump-letter {
+	z-index: 3;
+	position: absolute;
+	left: 50%;
+	top: 40%;
+	width: 180px;
+	height: 180px;
+	margin-left: -90px;
+	margin-top: -90px;
+	line-height: 180px;
+	font-size: 110px;
+	font-weight: bold;
+	text-align: center;
+	color: #06231d;
+	background-color: #4dd6b8e8;
+	border-radius: 28px;
+	box-shadow: #000000a0 0px 20px 60px 0px;
+}

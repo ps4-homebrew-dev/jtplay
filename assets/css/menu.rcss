@@ -26,6 +26,8 @@
 	box-sizing: border-box;
 	width: 640px;
 	padding: 72px 40px;
+	display: flex;
+	flex-direction: column;
 	decorator: linear-gradient(90deg, #141c2e 0%, #10172a 100%);
 	border-right: 2px #ffffff14;
 	box-shadow: #000000a0 20px 0px 60px 0px;
@@ -44,6 +46,16 @@
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+}
+
+/* Long menus (the playback menu) scroll; the app keeps the selection in
+ * view. */
+#menu-rows {
+	flex: 1;
+	overflow-y: hidden;
+}
+#menu.dialog #menu-rows {
+	flex: none;
 }
 
 .menu-row {
@@ -114,4 +126,10 @@
 
 #menu.dialog .menu-label {
 	flex: none;
+}
+
+/* The value is what changes with left / right: keep it visible. */
+.menu-value {
+	max-width: 300px;
+	overflow: hidden;
 }
