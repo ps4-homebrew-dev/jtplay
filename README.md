@@ -125,8 +125,8 @@ watching, and rescanning for sources. These and the playback choices
 above (repeat, shuffle, night mode, picture, audio delay, subtitle size)
 are kept in `settings.ini` in the cache directory.
 
-After three minutes (see Settings) without input, and no video or
-slideshow running (a podcast or audiobook counts as video here, music does not), the screen dims to a slowly drifting clock; the first
+After three minutes (see Settings) without input, and no media playing
+(video, audio or a slideshow), the screen dims to a slowly drifting clock; the first
 key press only wakes it.
 
 ## JavaScript plugins
