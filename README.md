@@ -20,13 +20,23 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-The home screen is a rail of places down the left (Home, every source,
-Rescan) and, on the right, shelves of cards from your library:
-**Continue watching** and **Favorites**. On Home the shelves hold
-everything; on a source, only what came from that source, under a header
-for it. Right moves from the rail onto the shelves, select on a card plays
-it (or opens a favorite folder), and select on a source browses it. The
-focused card's artwork fills the background.
+The home screen is a rail of places down the left and, on the right,
+shelves of cards from your library: **Continue watching** and
+**Favorites**. The rail stays short however many sources there are:
+
+- **Home**: the shelves hold everything.
+- **Local filesystem**: USB drives and internal storage on the console,
+  the home folder on a PC, and the entire filesystem.
+- **Network sources**: UPnP/DLNA media servers found on the network.
+- **Plugins**: one source per JavaScript plugin source.
+- **Settings**: playback, languages, the screensaver and rescanning.
+
+Select on a group lists its sources in the rail, under a row that leads
+back up (circle does the same). On a group or one of its sources the
+shelves hold only what came from there. Right moves from the rail onto the
+shelves, select on a card plays it (or opens a favorite folder), and
+select on a source browses it. The focused card's artwork fills the
+background.
 
 ## Browsing
 
@@ -238,13 +248,13 @@ options button is the way into everything that is not on the d-pad.
 | d-pad up / down       | arrows          | rail / shelf (rail wraps)    | move (wraps around)                  | seek +5 / -5 min         | caption              |
 | d-pad left / right    | arrows          | rail ↔ cards                 | list: page or letter; grid: move     | seek (speeds up)         | previous / next      |
 | cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now | slideshow on / off   |
-| circle (B)            | Backspace       | back to the rail             | back (Home from a source root)       | stop; up next: dismiss   | close                |
+| circle (B)            | Backspace       | to the rail; up a group      | back (Home from a source root)       | stop; up next: dismiss   | close                |
 | options (start)       | F1              | options for the card         | options menu                         | playback menu            | photo menu           |
 | square (X)            | Space           | rescan                       | next sort key                        | next video track         |                      |
 | triangle (Y)          | T               |                              | reverse sort order                   | next audio track         | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item | previous / next |
 | L2 / R2               | Home / End      | first / last                 | first / last                         |                          | first / last         |
-| back (select)         | Escape          | back to the rail             | back                                 | stop                     | close                |
+| back (select)         | Escape          | to the rail; up a group      | back                                 | stop                     | close                |
 
 Held directions repeat. Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
 

@@ -73,6 +73,11 @@ public:
   // find it again. Entry ids are only meaningful together with this.
   virtual std::string Key() const { return Name(); }
 
+  // Where the home rail lists the source: under Local filesystem, Network
+  // sources or Plugins.
+  enum class Group { Local, Network, Plugin };
+  virtual Group RailGroup() const { return Group::Plugin; }
+
   // Id of the root folder; passed back to Browse() to start.
   virtual std::string RootId() const = 0;
 

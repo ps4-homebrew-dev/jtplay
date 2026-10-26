@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The home screen: a rail of places down the left (Home, every source,
-// Rescan) and shelves of cards on the right, drawn from the library --
-// Continue watching and Favorites, for everything when the rail is on Home
-// and for one source when it is on that source. Selecting a source opens
-// it in the browse view; selecting a card plays it, or opens a favorite
-// folder, without going through the source's own tree.
+// The home screen: a rail of places down the left (Home, the groups of
+// sources -- local, network, plugins -- and Settings) and shelves of cards
+// on the right, drawn from the library -- Continue watching and Favorites,
+// for everything when the rail is on Home and for one group or source when
+// it is on that. Selecting a group lists its sources in the rail, selecting
+// a source opens it in the browse view, and selecting a card plays it, or
+// opens a favorite folder, without going through the source's own tree.
 #include <algorithm>
 
 #include "app.h"
@@ -47,6 +48,7 @@ void App::GoHome() {
 
 void App::StartDiscovery() {
   Set("status", bind_status_, Rml::String("Searching for media sources..."));
+  discovering_ = true;
   if (view_ == View::Home)
     RebuildHome();
 
@@ -65,6 +67,7 @@ void App::StartDiscovery() {
 
     Reply([this, sources = std::move(sources), errors]() mutable {
       discovered_ = std::move(sources);
+      discovering_ = false;
       registry_.Set(discovered_);
 
       Rml::String status;
@@ -86,43 +89,104 @@ void App::StartDiscovery() {
 // Rail
 // ---------------------------------------------------------------------------
 
-void App::RebuildHome() {
-  auto key_of = [](const RailItem& item) -> std::string {
-    switch (item.kind) {
-    case RailKind::Home:   return "home";
-    case RailKind::Settings: return "settings";
-    case RailKind::Rescan: return "rescan";
-    default:               return item.source->Key();
-    }
-  };
-  const std::string selected =
-    sel_rail_ < (int)rail_.size() ? key_of(rail_[sel_rail_]) : std::string("home");
+namespace {
 
-  const size_t in_progress = library_.InProgress().size();
-  const size_t favorites = library_.Favorites().size();
+using Group = browse::Source::Group;
+constexpr Group kGroups[] = {Group::Local, Group::Network, Group::Plugin};
+
+struct GroupInfo {
+  const char* icon;
+  const char* name;
+  const char* blurb;
+};
+
+const GroupInfo& InfoFor(Group group) {
+  static const GroupInfo kLocal{"💾", "Local filesystem",
+                                "Drives and folders on this machine."};
+  static const GroupInfo kNetwork{"🖥", "Network sources",
+                                  "Media servers (UPnP/DLNA) on the network."};
+  static const GroupInfo kPlugin{"🧩", "Plugins",
+                                 "Sources added by JavaScript plugins."};
+  switch (group) {
+  case Group::Local:   return kLocal;
+  case Group::Network: return kNetwork;
+  default:             return kPlugin;
+  }
+}
+
+// The group a library item's source belongs to, from its key alone, so a
+// server that is offline right now still has its favorites in its group.
+// Follows the Key() of FsSource ("fs:"), DlnaSource ("dlna:") and
+// JsSource ("js:").
+Group GroupOfKey(const std::string& key) {
+  if (key.compare(0, 3, "fs:") == 0)
+    return Group::Local;
+  if (key.compare(0, 5, "dlna:") == 0)
+    return Group::Network;
+  return Group::Plugin;
+}
+
+} // namespace
+
+std::string App::RailKey(const RailItem& item) {
+  switch (item.kind) {
+  case RailKind::Home:     return "home";
+  case RailKind::Settings: return "settings";
+  case RailKind::Group:    return "group:" + std::to_string((int)item.group);
+  case RailKind::Up:       return "up";
+  default:                 return "source:" + item.source->Key();
+  }
+}
+
+void App::RebuildHome(const std::string& select) {
+  const std::string selected = !select.empty() ? select
+    : sel_rail_ < (int)rail_.size() ? RailKey(rail_[sel_rail_])
+    : std::string("home");
+
+  auto count = [this](Group group) {
+    return std::count_if(discovered_.begin(), discovered_.end(),
+      [group](const browse::SourcePtr& s) { return s->RailGroup() == group; });
+  };
 
   rail_.clear();
   rail_rows_.clear();
-  rail_.push_back({RailKind::Home, nullptr});
-  std::string home_detail;
-  if (in_progress)
-    home_detail = Plural(in_progress, "in progress", "in progress");
-  if (favorites)
-    home_detail += (home_detail.empty() ? "" : "  ·  ") +
-                   Plural(favorites, "favorite", "favorites");
-  rail_rows_.push_back({"🏠", "Home", home_detail});
-  for (const browse::SourcePtr& s : discovered_) {
-    rail_.push_back({RailKind::Source, s});
-    rail_rows_.push_back({s->Icon(), s->Name(), s->Detail()});
+  if (rail_in_group_) {
+    // One group's sources, under a row that leads back to the top.
+    rail_.push_back({RailKind::Up, nullptr, rail_group_});
+    rail_rows_.push_back({"‹", InfoFor(rail_group_).name, "Back"});
+    for (const browse::SourcePtr& s : discovered_) {
+      if (s->RailGroup() != rail_group_)
+        continue;
+      rail_.push_back({RailKind::Source, s});
+      rail_rows_.push_back({s->Icon(), s->Name(), s->Detail()});
+    }
+  } else {
+    const size_t in_progress = library_.InProgress().size();
+    const size_t favorites = library_.Favorites().size();
+    rail_.push_back({RailKind::Home, nullptr});
+    std::string home_detail;
+    if (in_progress)
+      home_detail = Plural(in_progress, "in progress", "in progress");
+    if (favorites)
+      home_detail += (home_detail.empty() ? "" : "  ·  ") +
+                     Plural(favorites, "favorite", "favorites");
+    rail_rows_.push_back({"🏠", "Home", home_detail});
+    for (Group group : kGroups) {
+      const size_t n = count(group);
+      const GroupInfo& info = InfoFor(group);
+      rail_.push_back({RailKind::Group, nullptr, group});
+      rail_rows_.push_back({info.icon, info.name,
+                            n ? Plural(n, "source", "sources")
+                            : discovering_ ? "Searching..." : "None found"});
+    }
+    rail_.push_back({RailKind::Settings, nullptr});
+    rail_rows_.push_back({"⚙", "Settings", ""});
   }
-  rail_.push_back({RailKind::Settings, nullptr});
-  rail_rows_.push_back({"⚙", "Settings", ""});
-  rail_.push_back({RailKind::Rescan, nullptr});
-  rail_rows_.push_back({"🔄", "Rescan", ""});
 
-  sel_rail_ = 0;
+  // Stay where we were; just inside a group, that is its first source.
+  sel_rail_ = rail_in_group_ && rail_.size() > 1 ? 1 : 0;
   for (size_t i = 0; i < rail_.size(); i++) {
-    if (key_of(rail_[i]) == selected) {
+    if (RailKey(rail_[i]) == selected) {
       sel_rail_ = (int)i;
       break;
     }
@@ -131,6 +195,22 @@ void App::RebuildHome() {
   model_.DirtyVariable("sel_rail");
   RebuildShelves();
   scroll_sources_pending_ = true;
+}
+
+void App::EnterRailGroup(browse::Source::Group group) {
+  rail_in_group_ = true;
+  rail_group_ = group;
+  sel_shelf_ = 0;
+  shelf_card_sel_.clear();
+  RebuildHome("-"); // no such key: lands on the group's first source
+}
+
+void App::LeaveRailGroup() {
+  rail_in_group_ = false;
+  sel_shelf_ = 0;
+  shelf_card_sel_.clear();
+  RailItem item{RailKind::Group, nullptr, rail_group_};
+  RebuildHome(RailKey(item));
 }
 
 void App::MoveRail(int delta) {
@@ -148,21 +228,24 @@ void App::MoveRail(int delta) {
 void App::ActivateRail() {
   if (sel_rail_ >= (int)rail_.size())
     return;
-  const RailItem& item = rail_[sel_rail_];
+  const RailItem item = rail_[sel_rail_]; // a copy: the rail is rebuilt below
   switch (item.kind) {
   case RailKind::Home:
     if (!shelves_.empty())
       Set("home_shelves", bind_home_shelves_, true);
     RefreshImageBindings();
     break;
+  case RailKind::Group:
+    EnterRailGroup(item.group);
+    break;
+  case RailKind::Up:
+    LeaveRailGroup();
+    break;
   case RailKind::Source:
     OpenSource(item.source);
     break;
   case RailKind::Settings:
     OpenSettings();
-    break;
-  case RailKind::Rescan:
-    StartDiscovery();
     break;
   }
 }
@@ -173,19 +256,27 @@ void App::ActivateRail() {
 
 void App::RebuildShelves() {
   // Which place the shelves are for: everything, one source, or nothing.
-  std::string only;
   RailKind kind = RailKind::Home;
-  if (sel_rail_ < (int)rail_.size()) {
+  if (sel_rail_ < (int)rail_.size())
     kind = rail_[sel_rail_].kind;
-    if (kind == RailKind::Source)
-      only = rail_[sel_rail_].source->Key();
-  }
+  const RailItem* item = sel_rail_ < (int)rail_.size() ? &rail_[sel_rail_] : nullptr;
+  auto wanted = [&](const std::string& source_key) {
+    switch (kind) {
+    case RailKind::Source:
+      return source_key == item->source->Key();
+    case RailKind::Group:
+    case RailKind::Up:
+      return GroupOfKey(source_key) == item->group;
+    default:
+      return true;
+    }
+  };
 
   shelves_.clear();
-  if (kind != RailKind::Rescan && kind != RailKind::Settings) {
+  if (kind != RailKind::Settings) {
     Shelf resume{"Continue watching", continue_source_, {}};
     for (const auto& item : library_.InProgress()) {
-      if (!only.empty() && item.first.source_key != only)
+      if (!wanted(item.first.source_key))
         continue;
       browse::Entry e = item.first.entry;
       e.id = library::EncodeId(item.first.source_key, item.first.entry.id);
@@ -196,7 +287,7 @@ void App::RebuildShelves() {
 
     Shelf favs{"Favorites", favorites_source_, {}};
     for (const library::Ref& ref : library_.Favorites()) {
-      if (!only.empty() && ref.source_key != only)
+      if (!wanted(ref.source_key))
         continue;
       browse::Entry e = ref.entry;
       e.id = library::EncodeId(ref.source_key, ref.entry.id);
@@ -220,7 +311,7 @@ void App::RebuildShelves() {
       ? "Favorites and anything left unfinished will gather here." : ""));
     break;
   case RailKind::Source: {
-    const browse::SourcePtr& s = rail_[sel_rail_].source;
+    const browse::SourcePtr& s = item->source;
     Set("hero_icon", bind_hero_icon_, Rml::String(s->Icon()));
     Set("hero_title", bind_hero_title_, s->Name());
     Set("hero_detail", bind_hero_detail_, s->Detail());
@@ -235,13 +326,26 @@ void App::RebuildShelves() {
         Rml::String("Playback, languages and the screensaver."));
     Set("hero_note", bind_hero_note_, Rml::String("Press select to change them."));
     break;
-  case RailKind::Rescan:
-    Set("hero_icon", bind_hero_icon_, Rml::String("🔄"));
-    Set("hero_title", bind_hero_title_, Rml::String("Rescan"));
-    Set("hero_detail", bind_hero_detail_,
-        Rml::String("Look for media servers on the network again."));
-    Set("hero_note", bind_hero_note_, bind_status_);
+  case RailKind::Group:
+  case RailKind::Up: {
+    const GroupInfo& info = InfoFor(item->group);
+    const bool any = std::any_of(discovered_.begin(), discovered_.end(),
+      [&](const browse::SourcePtr& s) { return s->RailGroup() == item->group; });
+    Rml::String note;
+    if (!shelves_.empty())
+      note = "";
+    else if (!any)
+      // Network: discovery's own report ("Searching...", errors).
+      note = item->group == Group::Network || discovering_
+        ? bind_status_ : Rml::String("None found.");
+    else if (kind == RailKind::Group)
+      note = "Press select to see them.";
+    Set("hero_icon", bind_hero_icon_, Rml::String(info.icon));
+    Set("hero_title", bind_hero_title_, Rml::String(info.name));
+    Set("hero_detail", bind_hero_detail_, Rml::String(info.blurb));
+    Set("hero_note", bind_hero_note_, note);
     break;
+  }
   }
 
   shelf_card_sel_.resize(shelves_.size(), 0);
@@ -352,6 +456,12 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     case Rml::Input::KI_RETURN:
     case Rml::Input::KI_NUMPADENTER:
       ActivateRail();
+      break;
+    case Rml::Input::KI_BACK:
+    case Rml::Input::KI_ESCAPE:
+      if (!rail_in_group_)
+        return; // nothing above the top level
+      LeaveRailGroup();
       break;
     default:
       return;

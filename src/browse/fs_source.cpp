@@ -234,7 +234,7 @@ bool FsProvider::Discover(std::vector<SourcePtr>& out, std::string&) {
       out.push_back(std::make_shared<FsSource>("Home folder", home));
   }
 #endif
-  out.push_back(std::make_shared<FsSource>("Local filesystem", "/"));
+  out.push_back(std::make_shared<FsSource>("Entire filesystem", "/"));
   return true;
 }
 

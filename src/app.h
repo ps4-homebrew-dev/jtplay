@@ -170,13 +170,16 @@ private:
   void OnLibraryChanged();
 
   // --- Home view -----------------------------------------------------------
-  // A rail of places on the left (Home, every source, Rescan) and, on the
-  // right, shelves of cards from the library (Continue watching,
-  // Favorites) for the place the rail is on. Kodi's home, more or less.
-  enum class RailKind { Home, Source, Settings, Rescan };
+  // A rail of places on the left and, on the right, shelves of cards from
+  // the library (Continue watching, Favorites) for the place the rail is
+  // on. Kodi's home, more or less. The top level is Home, one row per
+  // group of sources (local, network, plugins) and Settings; selecting a
+  // group lists its sources in the rail, under a row leading back up.
+  enum class RailKind { Home, Group, Up, Source, Settings };
   struct RailItem {
     RailKind kind;
-    browse::SourcePtr source;
+    browse::SourcePtr source;                          // Source
+    browse::Source::Group group = browse::Source::Group::Local; // Group, Up
   };
   struct Shelf {
     std::string title;
@@ -184,11 +187,16 @@ private:
     browse::Listing entries;                        // ids encoded
   };
   void StartDiscovery();
-  void RebuildHome();          // rail, then shelves for its selection
+  // Rail, then shelves for its selection. The rail stays on the place it
+  // was on, or moves to the one keyed 'select' (see RailKey) if given.
+  void RebuildHome(const std::string& select = std::string());
   void RebuildShelves();
   void RebuildCards();         // card rows from shelves_ (artwork, progress)
   void MoveRail(int delta);
   void ActivateRail();
+  void EnterRailGroup(browse::Source::Group group);
+  void LeaveRailGroup();
+  static std::string RailKey(const RailItem& item); // what RebuildHome keeps
   void ActivateCard();
   void HandleKeyHome(Rml::Event& event, int key);
   void OpenSettings();                // the settings menu, from the rail
@@ -460,6 +468,9 @@ private:
   Rml::String bind_hero_detail_;
   Rml::String bind_hero_note_;
   std::vector<RailItem> rail_;
+  bool discovering_ = false;           // StartDiscovery() has not replied
+  bool rail_in_group_ = false;         // the rail lists one group's sources
+  browse::Source::Group rail_group_ = browse::Source::Group::Local;
   std::vector<Shelf> shelves_;
   std::vector<int> shelf_card_sel_;    // remembered column per shelf
 

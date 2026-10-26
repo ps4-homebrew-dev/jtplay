@@ -17,6 +17,7 @@ public:
   const std::string& Detail() const override { return root_; }
   const char* Icon() const override { return "💾"; }
   std::string Key() const override { return "fs:" + root_; }
+  Group RailGroup() const override { return Group::Local; }
   std::string RootId() const override { return root_; }
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
 

@@ -20,6 +20,7 @@ public:
     return "dlna:" + (server_.udn.empty() ? server_.location : server_.udn);
   }
 
+  Group RailGroup() const override { return Group::Network; }
   std::string RootId() const override { return "0"; } // ContentDirectory root
 
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
