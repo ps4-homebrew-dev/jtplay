@@ -205,6 +205,8 @@ private:
   int64_t ended_id_ = -1;       // ... of the last end-file
   std::string end_error_;       // why that one ended, if it failed
   std::string last_log_error_;  // mpv's last error message
+  std::string log_repeat_text_; // event thread: last message printed
+  int log_repeats_ = 0;         // and how often it came again since
 
   // --- the open file --------------------------------------------------------
   std::atomic<bool> active_{false};

@@ -4,6 +4,7 @@
 #include "player.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -24,6 +25,24 @@ constexpr auto kOpenTimeout = std::chrono::minutes(5);
 // A reported duration that moves by more than this once playback has started
 // is an estimate, not the length of the file (see Player::DurationReliable).
 constexpr int64_t kDurationDriftUs = 2 * 1000000;
+
+// FFmpeg's http options for plain files: DLNA servers recycle sockets
+// aggressively, and a dropped transfer should pick up where it was.
+constexpr const char* kReconnectOptions =
+  "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5";
+
+// True for an HLS or DASH playlist (".m3u8", ".mpd", in the path or the
+// query). Its segments are fetched with the options of the playlist, and
+// FFmpeg's reconnect on a segment a CDN keeps cutting short is a busy loop
+// ("Will reconnect at N in 0 second(s)", thousands a second) that never
+// gives up; without it the segment is skipped and playback goes on.
+bool IsAdaptivePlaylist(const std::string& url) {
+  std::string lower = url;
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+                 [](unsigned char c) { return (char)std::tolower(c); });
+  return lower.find(".m3u8") != std::string::npos ||
+         lower.find(".mpd") != std::string::npos;
+}
 
 // The spectrum shown for audio-only files, fed from track 'aid'. It is a
 // lavfi graph: the audio goes to the output untouched ([ao]), a copy is
@@ -163,8 +182,8 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
     // Cover art is shown by the UI, from the server's metadata.
     {"audio-display", "no", false},
     {"network-timeout", "30", false},
-    // DLNA servers recycle sockets aggressively.
-    {"stream-lavf-o", "reconnect=1,reconnect_streamed=1,reconnect_delay_max=5", false},
+    // Set again for every file by Open(); see kReconnectOptions.
+    {"stream-lavf-o", kReconnectOptions, false},
 #if defined(__ORBIS__)
     // The demuxer cache comes out of the same pool as the GPU's memory.
     {"demuxer-max-bytes", "64MiB", false},
@@ -320,6 +339,9 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   // (or reset) for each one.
   const std::string start = start_seconds > 0 ? std::to_string(start_seconds) : "none";
   mpv_set_property_string(mpv_, "start", start.c_str());
+  // Also per file: reconnecting suits plain files, not HLS/DASH segments.
+  mpv_set_property_string(mpv_, "stream-lavf-o",
+                          IsAdaptivePlaylist(url) ? "" : kReconnectOptions);
 
   int64_t starts_before;
   {
@@ -454,7 +476,19 @@ void Player::EventThread() {
 
     case MPV_EVENT_LOG_MESSAGE: {
       const auto* msg = static_cast<const mpv_event_log_message*>(event->data);
-      std::fprintf(stderr, "mpv[%s] %s: %s", msg->prefix, msg->level, msg->text);
+      // A message repeated back to back is counted, not printed again: a
+      // flood of them (a network retry loop) would otherwise keep this
+      // thread busy writing to a slow console while events pile up.
+      if (log_repeat_text_ == msg->text) {
+        log_repeats_++;
+      } else {
+        if (log_repeats_ > 0)
+          std::fprintf(stderr, "mpv: last message repeated %d more times\n",
+                       log_repeats_);
+        log_repeats_ = 0;
+        log_repeat_text_ = msg->text;
+        std::fprintf(stderr, "mpv[%s] %s: %s", msg->prefix, msg->level, msg->text);
+      }
       if (msg->log_level <= MPV_LOG_LEVEL_ERROR) {
         std::string text = msg->text;
         while (!text.empty() && (text.back() == '\n' || text.back() == '.'))
