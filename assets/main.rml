@@ -50,7 +50,7 @@
 					</div>
 				</div>
 
-				<div id="home-main" data-class-no-shelves="shelves.size == 0">
+				<div id="home-main">
 					<div id="hero" data-if="hero_title != ''">
 						<div class="hero-icon">{{hero_icon}}</div>
 						<div class="hero-text">

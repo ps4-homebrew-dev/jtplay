@@ -107,19 +107,6 @@
 	margin-bottom: 24px;
 }
 
-/* Nothing on the shelves: the hero is all there is, so it sits in the
- * middle of the space rather than over an empty floor. */
-#home-main.no-shelves {
-	justify-content: center;
-	padding-bottom: 96px;
-}
-#home-main.no-shelves #hero {
-	margin-bottom: 0px;
-}
-#home-main.no-shelves #shelves {
-	display: none;
-}
-
 .hero-icon {
 	width: 150px;
 	height: 150px;
