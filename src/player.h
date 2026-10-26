@@ -91,10 +91,6 @@ public:
   bool HasSpectrum() const { return vis_aid_ >= 0 && (active_ || opening_); }
   bool RenderSpectrum(unsigned fbo);
 
-  // Short human-readable status ("h264 1920x1080 + aac", "Opening...", ...)
-  // for display in the UI. Empty = nothing.
-  std::string StatusText() const;
-
   // --- Transport ----------------------------------------------------------
   bool CanSeek() const { return seekable_; }
   // Position and duration in microseconds; -1 when unknown.
@@ -157,7 +153,6 @@ public:
   // --- Video tracks -------------------------------------------------------
   // The video streams of the open file, in file order (cover art excluded).
   std::vector<VideoTrackInfo> VideoTracks() const;
-  int VideoTrackCount() const { return vtrack_count_.load(); }
   // mpv id of the track being shown, or -1.
   int CurrentVideoStream() const { return video_id_.load(); }
   // Label of the track being shown; "" when there is no video.
@@ -168,7 +163,6 @@ public:
 
   // --- Audio tracks -------------------------------------------------------
   std::vector<AudioTrackInfo> AudioTracks() const;
-  int AudioTrackCount() const { return atrack_count_.load(); }
   int CurrentAudioStream() const;
   std::string CurrentAudioLabel() const;
   bool SelectAudioTrack(int stream_index);
@@ -238,7 +232,6 @@ private:
   std::vector<VideoTrackInfo> video_tracks_;
   std::vector<AudioTrackInfo> audio_tracks_;
   std::vector<SubtitleTrackInfo> sub_tracks_;
-  std::string track_status_;
   std::atomic<int> vtrack_count_{0};
   std::atomic<int> atrack_count_{0};
 };

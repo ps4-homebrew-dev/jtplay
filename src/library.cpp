@@ -22,25 +22,6 @@ constexpr char kIdSep = '\x02';
 constexpr size_t kMaxProgress = 1000;   // remembered items, oldest dropped
 constexpr size_t kMaxInProgress = 50;   // shown under "Continue watching"
 
-const char* TypeToString(browse::Entry::Type type) {
-  switch (type) {
-  case browse::Entry::Type::Folder: return "folder";
-  case browse::Entry::Type::Audio:  return "audio";
-  case browse::Entry::Type::Video:  return "video";
-  case browse::Entry::Type::Image:  return "image";
-  default:                          return "other";
-  }
-}
-
-browse::Entry::Type TypeFromString(const char* s) {
-  const std::string t = s ? s : "";
-  if (t == "folder") return browse::Entry::Type::Folder;
-  if (t == "audio")  return browse::Entry::Type::Audio;
-  if (t == "video")  return browse::Entry::Type::Video;
-  if (t == "image")  return browse::Entry::Type::Image;
-  return browse::Entry::Type::Other;
-}
-
 std::string Attr(const XMLElement* e, const char* name) {
   const char* v = e->Attribute(name);
   return v ? v : "";
@@ -51,7 +32,7 @@ void WriteRef(XMLElement* e, const Ref& ref) {
   e->SetAttribute("source", ref.source_key.c_str());
   e->SetAttribute("source_name", ref.source_name.c_str());
   e->SetAttribute("id", en.id.c_str());
-  e->SetAttribute("type", TypeToString(en.type));
+  e->SetAttribute("type", browse::TypeName(en.type));
   e->SetAttribute("name", en.name.c_str());
   if (!en.description.empty()) e->SetAttribute("description", en.description.c_str());
   if (!en.image.empty())       e->SetAttribute("image", en.image.c_str());
@@ -66,7 +47,7 @@ bool ReadRef(const XMLElement* e, Ref& ref) {
   ref.source_name = Attr(e, "source_name");
   browse::Entry& en = ref.entry;
   en.id = Attr(e, "id");
-  en.type = TypeFromString(e->Attribute("type"));
+  en.type = browse::TypeFromName(Attr(e, "type"));
   en.name = Attr(e, "name");
   en.description = Attr(e, "description");
   en.image = Attr(e, "image");
@@ -178,16 +159,6 @@ bool Library::ToggleFavorite(const Ref& ref) {
   favorites_.push_back(ref);
   Changed();
   return true;
-}
-
-void Library::RemoveFavorite(const std::string& key, const std::string& id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  const size_t before = favorites_.size();
-  favorites_.erase(std::remove_if(favorites_.begin(), favorites_.end(),
-    [&](const Ref& r) { return r.source_key == key && r.entry.id == id; }),
-    favorites_.end());
-  if (favorites_.size() != before)
-    Changed();
 }
 
 std::vector<Ref> Library::Favorites() const {

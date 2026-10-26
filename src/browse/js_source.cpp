@@ -16,8 +16,8 @@
 namespace browse {
   namespace {
 
-    // A plugin has no I/O bindings, so nothing it does should take long;
-    // the deadline only exists to survive a runaway loop.
+    // Script time per call; waiting on the network does not count (see
+    // ExtendDeadline()), so this only has to catch a runaway loop.
     constexpr int kCallTimeoutMs = 10000;
     constexpr size_t kMemoryLimitBytes = 32u << 20;
 
@@ -183,24 +183,6 @@ namespace browse {
       return out >= 0;
     }
 
-    Entry::Type TypeFromString(const std::string& s) {
-      if (s == "folder") return Entry::Type::Folder;
-      if (s == "audio")  return Entry::Type::Audio;
-      if (s == "video")  return Entry::Type::Video;
-      if (s == "image")  return Entry::Type::Image;
-      return Entry::Type::Other;
-    }
-
-    const char* TypeToString(Entry::Type type) {
-      switch (type) {
-      case Entry::Type::Folder: return "folder";
-      case Entry::Type::Audio:  return "audio";
-      case Entry::Type::Video:  return "video";
-      case Entry::Type::Image:  return "image";
-      default:                  return "other";
-      }
-    }
-
     // Converts one entry object into 'out'. The script writes the same six
     // fields the app reads; 'id' defaults to the uri, then to the name, so
     // a plugin listing plain streams need not invent one.
@@ -215,7 +197,7 @@ namespace browse {
 	error = "entry has no name";
 	return false;
       }
-      out.type = TypeFromString(FieldString(ctx, v, "type"));
+      out.type = TypeFromName(FieldString(ctx, v, "type"));
       out.description = FieldString(ctx, v, "description");
       out.image = FieldString(ctx, v, "image");
       out.uri = FieldString(ctx, v, "uri");
@@ -240,7 +222,7 @@ namespace browse {
 			    JS_NewStringLen(ctx, value.data(), value.size()));
       };
       set_str("id", e.id);
-      JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, TypeToString(e.type)));
+      JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, TypeName(e.type)));
       set_str("name", e.name);
       set_str("description", e.description);
       set_str("image", e.image);
@@ -501,6 +483,11 @@ namespace browse {
       return false;
     }
 
+    // Declared before the lock: on an error part-way through, the sources
+    // made so far are destroyed with it, and ~JsSource() takes the plugin's
+    // mutex itself.
+    std::vector<SourcePtr> found;
+
     std::lock_guard<std::mutex> lock(plugin_->mutex);
     JSContext* ctx = plugin_->ctx;
     CallScope scope(*plugin_);
@@ -526,7 +513,6 @@ namespace browse {
       return false;
     }
 
-    std::vector<SourcePtr> found;
     for (int64_t i = 0; i < n; i++) {
       Ref item(ctx, JS_GetPropertyUint32(ctx, result.get(), (uint32_t)i));
       if (JS_IsException(item.get())) {

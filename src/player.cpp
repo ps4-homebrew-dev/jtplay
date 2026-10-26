@@ -311,7 +311,6 @@ void Player::ResetFileState() {
     video_tracks_.clear();
     audio_tracks_.clear();
     sub_tracks_.clear();
-    track_status_.clear();
   }
   vtrack_count_ = 0;
   atrack_count_ = 0;
@@ -602,15 +601,14 @@ void Player::EventThread() {
   }
 }
 
-// The video and audio tracks from mpv's track-list. The label is built
-// from the metadata (language, title) plus the codec and, depending on the
-// kind, the channel layout or the frame size: "eng · ac3 5.1(side)",
-// "Commentary · aac stereo", "h264 1920x1080".
+// The tracks from mpv's track-list. The label is built from the metadata
+// (language, title) plus the codec and, depending on the kind, the channel
+// layout or the frame size: "eng · ac3 5.1(side)", "Commentary · aac
+// stereo", "h264 1920x1080".
 void Player::UpdateTracks(const mpv_node* list) {
   std::vector<VideoTrackInfo> video;
   std::vector<AudioTrackInfo> audio;
   std::vector<SubtitleTrackInfo> subs;
-  std::string video_desc, audio_desc;
 
   if (list && list->format == MPV_FORMAT_NODE_ARRAY && list->u.list) {
     for (int i = 0; i < list->u.list->num; i++) {
@@ -662,21 +660,13 @@ void Player::UpdateTracks(const mpv_node* list) {
       t.stream_index = (int)NodeInt(MapGet(track, "id"), -1);
       t.label = label.empty() ? "Track " + std::to_string(into.size() + 1) : label;
       into.push_back(std::move(t));
-
-      if (!is_sub && NodeFlag(MapGet(track, "selected")))
-        (is_video ? video_desc : audio_desc) = codec;
     }
   }
-
-  std::string status = video_desc;
-  if (!audio_desc.empty())
-    status += (status.empty() ? "" : " + ") + audio_desc;
 
   std::lock_guard<std::mutex> lock(tracks_mutex_);
   video_tracks_ = std::move(video);
   audio_tracks_ = std::move(audio);
   sub_tracks_ = std::move(subs);
-  track_status_ = status;
   vtrack_count_ = (int)video_tracks_.size();
   atrack_count_ = (int)audio_tracks_.size();
 }
@@ -742,15 +732,6 @@ bool Player::RenderTo(unsigned target, int width, int height) {
     {MPV_RENDER_PARAM_INVALID, nullptr},
   };
   return mpv_render_context_render(render_, params) >= 0;
-}
-
-std::string Player::StatusText() const {
-  if (opening_)
-    return "Opening...";
-  if (!active_)
-    return {};
-  std::lock_guard<std::mutex> lock(tracks_mutex_);
-  return track_status_;
 }
 
 void Player::SeekRelative(int64_t delta_us) {

@@ -362,6 +362,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
 
   ctor.Bind("detail_name", &bind_detail_name_);
   ctor.Bind("detail_icon", &bind_detail_icon_);
+  ctor.Bind("detail_kind", &bind_detail_kind_);
   ctor.Bind("detail_description", &bind_detail_description_);
   ctor.Bind("detail_props", &detail_props_);
   ctor.Bind("detail_image", &bind_detail_image_);
@@ -402,6 +403,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_description", &bind_watch_description_);
   ctor.Bind("watch_pos", &bind_watch_pos_);
   ctor.Bind("watch_dur", &bind_watch_dur_);
+  ctor.Bind("watch_ends", &bind_watch_ends_);
   ctor.Bind("watch_buffered", &bind_watch_buffered_);
   ctor.Bind("watch_speed", &bind_watch_speed_);
   ctor.Bind("watch_next", &bind_watch_next_);
@@ -646,8 +648,9 @@ std::string App::CoverDecorator(const std::string& path) {
 std::string App::ImagePathFor(const std::string& uri, bool thumb) {
   // Anything shown large (details, backdrop, now playing, the photo viewer)
   // uses the screen-sized copy, so a camera original never becomes a
-  // texture. artcache answers for an already-made copy without any I/O; everything else goes to the artwork thread, because RmlUi
-  // wants a path now and the download is a blocking request.
+  // texture. artcache answers for an already-made copy without any I/O;
+  // everything else goes to the artwork thread, because RmlUi wants a path
+  // now and the download is a blocking request.
   std::string path;
   const artcache::Status status =
     thumb ? artcache::LookupThumb(uri, path) : artcache::LookupScreen(uri, path);

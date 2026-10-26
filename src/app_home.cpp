@@ -16,16 +16,6 @@ using namespace appdetail;
 
 namespace {
 
-const char* KindName(const browse::Entry& e) {
-  switch (e.type) {
-  case browse::Entry::Type::Folder: return "folder";
-  case browse::Entry::Type::Audio:  return "audio";
-  case browse::Entry::Type::Video:  return "video";
-  case browse::Entry::Type::Image:  return "image";
-  default:                          return "other";
-  }
-}
-
 std::string Plural(size_t n, const char* one, const char* many) {
   return std::to_string(n) + " " + (n == 1 ? one : many);
 }
@@ -384,9 +374,9 @@ void App::RebuildCards() {
     row.title = shelf.title;
     for (const browse::Entry& e : shelf.entries) {
       CardRow card;
-      card.title = e.name.empty() ? "(untitled)" : e.name;
+      card.title = DisplayName(e);
       card.glyph = IconFor(e);
-      card.kind = KindName(e);
+      card.kind = browse::TypeName(e.type);
       library::Ref ref;
       std::string where;
       if (Identify(e, ref)) {
@@ -394,15 +384,14 @@ void App::RebuildCards() {
         library::Progress p;
         if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
           card.watched = p.watched;
-          if (!p.watched && p.position > 0 && p.duration > 0)
-            card.progress = std::to_string(
-              std::clamp((int)(p.position * 100 / p.duration), 2, 100)) + "%";
+          if (!p.watched)
+            card.progress = ProgressWidth(p.position, p.duration);
           if (!p.watched && p.position > 0 && p.duration > p.position)
             card.subtitle = FormatTime((p.duration - p.position) * 1000000) + " left";
         }
       }
       if (card.subtitle.empty())
-        card.subtitle = TypeName(e);
+        card.subtitle = TypeLabel(e);
       if (!where.empty())
         card.subtitle += "  ·  " + where;
       row.cards.push_back(std::move(card));
@@ -654,9 +643,14 @@ void App::OpenSettings() {
         : "After " + std::to_string((int)(screensaver_sec_ / 60)) + " min";
     },
     [this, step](int d) {
-      int i = 0;
-      while (i < kSaverCount - 1 && kSaverMinutes[i] * 60.0 != screensaver_sec_)
-        i++;
+      // Where the setting is among the choices: "Never" is the last; a
+      // delay from an edited settings file counts as the next one up.
+      int i = kSaverCount - 1;
+      if (screensaver_sec_ > 0) {
+        i = 0;
+        while (i < kSaverCount - 2 && kSaverMinutes[i] * 60.0 < screensaver_sec_)
+          i++;
+      }
       screensaver_sec_ = kSaverMinutes[step(i, d, kSaverCount)] * 60.0;
       SaveSettings();
     }});
@@ -665,8 +659,10 @@ void App::OpenSettings() {
     [this](int) { player_->SetNightMode(!player_->NightMode()); SaveSettings(); }});
   menu_items_.push_back({"Forget Continue watching", nullptr, [this](int) {
     const auto items = library_.InProgress();
-    for (const auto& item : items)
+    for (const auto& item : items) {
+      DropSnapshot(item.first.entry.image);
       library_.SetWatched(item.first, false);
+    }
     library_.Save();
     ShowToast("Cleared " + std::to_string(items.size()) + " in progress", "🧹");
   }});

@@ -11,7 +11,7 @@
 //   triangle / Y          T            cycle audio track
 //   L1 / R1               PageUp/Down  page, previous/next item (repeats)
 //   L2 / R2               Home / End   first / last row
-//   options / start       F1           info bar
+//   options / start       F1           options menu
 //   back / select         Escape       back, stop (not on a PS4: the
 //                                      system keeps SHARE)
 //

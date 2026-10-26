@@ -43,7 +43,8 @@ background.
 
 ## Browsing
 
-Folders are always listed first. A folder is shown as a **list** (with a
+Folders are always listed first, and files are named without their
+extension ("Episode 1", not "Episode 1.mkv"). A folder is shown as a **list** (with a
 thumbnail per row and an info panel with artwork, type, size, duration,
 date and resume point) or as a **grid** of artwork tiles with the focused
 item's details along the bottom; switch with View in the options menu.
@@ -96,8 +97,9 @@ All of this is stored in `library.xml` in the cache directory.
 
 ## Playing
 
-The bar along the bottom shows title, tracks, elapsed and total time; its
-top edge is the timeline, with the played part in the accent colour,
+The bar along the bottom shows title, tracks, elapsed and total time and,
+for anything longer than five minutes, the time it will end; its top edge
+is the timeline, with the played part in the accent colour,
 what a network stream has buffered ahead in a lighter shade, and a knob at
 the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a
 paused video shows a large pause badge, and streams that cannot seek are

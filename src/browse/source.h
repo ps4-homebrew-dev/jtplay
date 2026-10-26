@@ -59,6 +59,27 @@ struct Entry {
 
 using Listing = std::vector<Entry>;
 
+// The type as a word ("folder", "audio", "video", "image", "other"): what
+// plugins write, what the library file stores, and the class the UI tints
+// artwork tiles by.
+inline const char* TypeName(Entry::Type type) {
+  switch (type) {
+  case Entry::Type::Folder: return "folder";
+  case Entry::Type::Audio:  return "audio";
+  case Entry::Type::Video:  return "video";
+  case Entry::Type::Image:  return "image";
+  default:                  return "other";
+  }
+}
+
+inline Entry::Type TypeFromName(const std::string& name) {
+  if (name == "folder") return Entry::Type::Folder;
+  if (name == "audio")  return Entry::Type::Audio;
+  if (name == "video")  return Entry::Type::Video;
+  if (name == "image")  return Entry::Type::Image;
+  return Entry::Type::Other;
+}
+
 // One browsable tree of media.
 class Source {
 public:

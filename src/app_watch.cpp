@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <random>
 
 #include "app.h"
@@ -19,6 +20,7 @@ using namespace appdetail;
 namespace {
 
 constexpr double kSpeeds[] = {0.5, 0.75, 1.0, 1.25, 1.5, 2.0};
+constexpr int kSpeedCount = (int)(sizeof(kSpeeds) / sizeof(kSpeeds[0]));
 
 // Up next: the card shows over the last this many seconds of a video long
 // enough to be an episode.
@@ -55,11 +57,24 @@ std::string DelayLabel(double seconds) {
   std::snprintf(buf, sizeof(buf), "%+.2f s", seconds);
   return buf;
 }
-constexpr int kSpeedCount = (int)(sizeof(kSpeeds) / sizeof(kSpeeds[0]));
 
 std::string SpeedLabel(double speed) {
   char buf[16];
   std::snprintf(buf, sizeof(buf), "%g×", speed);
+  return buf;
+}
+
+// When what is playing will be over, at this speed, by the wall clock:
+// "Ends at 21:40". Only for something long enough to plan an evening by.
+std::string EndsAt(int64_t pos, int64_t dur, double speed) {
+  if (pos < 0 || dur < 5 * 60 * 1000000LL || pos >= dur || speed <= 0.0)
+    return {};
+  const std::time_t end =
+    std::time(nullptr) + (std::time_t)((double)(dur - pos) / 1e6 / speed);
+  std::tm tm = {};
+  localtime_r(&end, &tm);
+  char buf[32];
+  std::strftime(buf, sizeof(buf), "Ends at %H:%M", &tm);
   return buf;
 }
 
@@ -108,7 +123,7 @@ void App::PlayEntry(const browse::Entry& entry) {
       [this, entry, at](int) { Launch(entry, at); }});
     menu_items_.push_back({"Play from beginning", nullptr,
       [this, entry](int) { Launch(entry, 0); }});
-    Set("menu_title", bind_menu_title_, Rml::String(entry.name));
+    Set("menu_title", bind_menu_title_, DisplayName(entry));
     Set("menu_dialog", bind_menu_dialog_, true);
     sel_menu_ = 0;
     RebuildMenuRows();
@@ -222,8 +237,7 @@ void App::EnterWatch(const browse::Entry& entry) {
   visualizer_.Reset();
   Set("watching", bind_watching_, true);
   Set("watch_audio", bind_watch_audio_, entry.IsAudio());
-  Set("watch_name", bind_watch_name_,
-      entry.name.empty() ? std::string("(untitled)") : entry.name);
+  Set("watch_name", bind_watch_name_, DisplayName(entry));
   Set("watch_description", bind_watch_description_, entry.description);
   Set("watch_paused", bind_watch_paused_, false);
   Set("watch_pos", bind_watch_pos_, Rml::String());
@@ -236,6 +250,11 @@ void App::EnterWatch(const browse::Entry& entry) {
   Set("watch_chapter", bind_watch_chapter_, Rml::String());
   Set("upnext", bind_upnext_, false);
   upnext_dismissed_ = false;
+  // A seek run belongs to the item it was made in, not the next one.
+  Set("watch_seek", bind_watch_seek_, Rml::String());
+  seek_accum_us_ = 0;
+  seek_run_ = 0;
+  seek_bubble_until_ = 0.0;
   if (!chapter_marks_.empty()) {
     chapter_marks_.clear();
     model_.DirtyVariable("chapter_marks");
@@ -286,6 +305,9 @@ void App::UpdateWatchOverlay() {
 
   Set("watch_pos", bind_watch_pos_, pos >= 0 ? FormatTime(pos) : Rml::String());
   Set("watch_dur", bind_watch_dur_, dur > 0 ? FormatTime(dur) : Rml::String());
+  Set("watch_ends", bind_watch_ends_,
+      player_->CanSeek() && player_->DurationReliable() ? EndsAt(pos, dur, speed)
+                                                         : Rml::String());
   Set("watch_progress", bind_watch_progress_, Percent(pos, dur));
   if (!bind_watch_seek_.empty() && dur > 0) {
     // Half the bubble's width (100px) as a share of the 1920px bar.
@@ -312,7 +334,7 @@ void App::UpdateWatchOverlay() {
   if (!path_.empty() && (bind_watch_audio_ || autoplay_) && repeat_ != Repeat::One) {
     const int i = NeighborIndex(+1);
     if (i >= 0)
-      next = path_.back().entries[i].name;
+      next = DisplayName(path_.back().entries[i]);
   }
   Set("watch_next", bind_watch_next_, next);
 
@@ -363,7 +385,7 @@ void App::UpdateUpNext(int64_t pos, int64_t dur) {
     if (i >= 0) {
       const browse::Entry& next = path_.back().entries[i];
       show = true;
-      Set("upnext_name", bind_upnext_name_, next.name);
+      Set("upnext_name", bind_upnext_name_, DisplayName(next));
       const double speed = std::max(0.1, player_->Speed());
       const int left = (int)std::ceil((double)(dur - pos) / 1e6 / speed);
       Set("upnext_count", bind_upnext_count_,

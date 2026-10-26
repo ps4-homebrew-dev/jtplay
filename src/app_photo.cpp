@@ -114,7 +114,7 @@ void App::ShowPhoto(int index) {
   photo_index_ = (index % n + n) % n;
   const browse::Entry& e = photo_list_[photo_index_];
 
-  Set("photo_name", bind_photo_name_, e.name);
+  Set("photo_name", bind_photo_name_, DisplayName(e));
   std::string meta = std::to_string(photo_index_ + 1) + " / " + std::to_string(n);
   const std::string date = FormatDate(e.date, true);
   if (!date.empty())
@@ -153,6 +153,14 @@ void App::StepPhoto(int direction) {
   ShowPhoto(next);
 }
 
+// A quarter turn clockwise, remembered for as long as the viewer is open.
+void App::RotatePhoto() {
+  if (photo_index_ >= (int)photo_rotation_.size())
+    return;
+  photo_rotation_[photo_index_] = (photo_rotation_[photo_index_] + 1) % 4;
+  ShowPhoto(photo_index_);
+}
+
 void App::SetSlideshow(bool playing) {
   Set("photo_playing", bind_photo_playing_, playing);
   photo_next_at_ = Now() + photo_interval_;
@@ -187,7 +195,7 @@ void App::UpdatePhotos(double now) {
       photo_pending_ = false;
       Set("photo_loading", bind_photo_loading_, false);
       if (status == artcache::Status::Failed) {
-        ShowToast("Cannot show " + photo_list_[photo_index_].name, "⚠");
+        ShowToast("Cannot show " + DisplayName(photo_list_[photo_index_]), "⚠");
       } else {
         const int back = 1 - bind_photo_front_;
         const char* art = back ? "photo_art1" : "photo_art0";
@@ -221,7 +229,7 @@ void App::UpdatePhotos(double now) {
 void App::OpenPhotoMenu() {
   menu_items_.clear();
   Set("menu_title", bind_menu_title_,
-      photo_index_ < (int)photo_list_.size() ? photo_list_[photo_index_].name
+      photo_index_ < (int)photo_list_.size() ? DisplayName(photo_list_[photo_index_])
                                              : Rml::String("Photos"));
   Set("menu_dialog", bind_menu_dialog_, false);
 
@@ -253,12 +261,7 @@ void App::OpenPhotoMenu() {
       [this] { return std::string(photo_shuffle_ ? "On" : "Off"); },
       [this](int) { photo_shuffle_ = !photo_shuffle_; SaveSettings(); }});
   }
-  menu_items_.push_back({"Rotate", nullptr, [this](int) {
-    if (photo_index_ < (int)photo_rotation_.size()) {
-      photo_rotation_[photo_index_] = (photo_rotation_[photo_index_] + 1) % 4;
-      ShowPhoto(photo_index_);
-    }
-  }});
+  menu_items_.push_back({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
   if (photo_index_ < (int)photo_list_.size()) {
     const browse::Entry entry = photo_list_[photo_index_];
     library::Ref ref;
@@ -307,10 +310,7 @@ void App::HandleKeyPhoto(Rml::Event& event, int key) {
     }
     break;
   case Rml::Input::KI_T: // triangle: turn the picture
-    if (photo_index_ < (int)photo_rotation_.size()) {
-      photo_rotation_[photo_index_] = (photo_rotation_[photo_index_] + 1) % 4;
-      ShowPhoto(photo_index_);
-    }
+    RotatePhoto();
     break;
   case Rml::Input::KI_F1:
     OpenPhotoMenu();

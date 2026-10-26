@@ -11,6 +11,7 @@
 
 #include <RmlUi/Core.h>
 
+#include "browse/fs_source.h"
 #include "browse/source.h"
 
 namespace appdetail {
@@ -113,7 +114,8 @@ inline const char* IconFor(const browse::Entry& e) {
   }
 }
 
-inline const char* TypeName(const browse::Entry& e) {
+// "Video", for the info panel and cards.
+inline const char* TypeLabel(const browse::Entry& e) {
   switch (e.type) {
   case browse::Entry::Type::Folder: return "Folder";
   case browse::Entry::Type::Audio:  return "Audio";
@@ -121,6 +123,29 @@ inline const char* TypeName(const browse::Entry& e) {
   case browse::Entry::Type::Image:  return "Image";
   default:                          return "File";
   }
+}
+
+// The name to show for an entry: a file's media extension ("Episode
+// 1.mkv") says nothing anyone on the couch needs to know.
+inline std::string DisplayName(const browse::Entry& e) {
+  if (e.name.empty())
+    return "(untitled)";
+  const size_t dot = e.name.rfind('.');
+  browse::Entry::Type type;
+  if (!e.IsFolder() && dot != std::string::npos && dot > 0 &&
+      browse::ClassifyFileName(e.name, type))
+    return e.name.substr(0, dot);
+  return e.name;
+}
+
+// Width of a resume bar ("37%") for 'position' of 'duration' seconds, or
+// "0%" when there is nothing to show. Never less than a sliver, so a bar
+// that is there can be seen.
+inline std::string ProgressWidth(int64_t position, int64_t duration) {
+  if (position <= 0 || duration <= 0)
+    return "0%";
+  const int64_t pct = position * 100 / duration;
+  return std::to_string(pct < 2 ? 2 : pct > 100 ? 100 : pct) + "%";
 }
 
 } // namespace appdetail

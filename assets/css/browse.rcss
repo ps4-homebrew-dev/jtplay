@@ -40,7 +40,7 @@
 }
 
 .entry-row .art-glyph {
-	font-size: 28px;
+	font-size: 30px;
 }
 
 /* The corner badges belong to tiles; a row says the same in line. */
@@ -60,6 +60,7 @@
 	color: #c5cee0;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .etitle.folder {
@@ -151,9 +152,11 @@
 }
 
 #browse.grid .etitle {
-	flex: 0;
+	flex: none;
 	margin-top: 12px;
+	padding: 0px 6px;
 	font-size: 22px;
+	color: #aab6cc;
 	text-align: center;
 }
 
@@ -195,6 +198,7 @@
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .gi-props {
@@ -242,9 +246,19 @@
 
 .detail-glyph {
 	font-size: 150px;
+	font-weight: bold;
 	color: #4dd6b8;
 	opacity: 0.6;
 }
+
+.detail-artbox.k-folder { background-color: #252e40; }
+.detail-artbox.k-video  { background-color: #163633; }
+.detail-artbox.k-audio  { background-color: #2d2147; }
+.detail-artbox.k-image  { background-color: #1a2c47; }
+.k-folder .detail-glyph { color: #9fb0cc; opacity: 0.85; }
+.k-video .detail-glyph  { color: #4dd6b8; opacity: 0.85; }
+.k-audio .detail-glyph  { color: #a68bf0; opacity: 0.85; }
+.k-image .detail-glyph  { color: #6fa8ff; opacity: 0.85; }
 
 .detail-title {
 	font-size: 34px;
@@ -252,6 +266,7 @@
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .detail-fav {
@@ -281,6 +296,7 @@
 	color: #c5cee0;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .detail-desc {

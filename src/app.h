@@ -161,6 +161,10 @@ private:
   // listed under Favorites / Continue watching. False when unknown.
   bool Identify(const browse::Entry& entry, library::Ref& out) const;
   void ToggleFavorite(const browse::Entry& entry);
+  // Snapshots of where a video was stopped (see RecordProgress) live in the
+  // cache directory and go when their resume point does.
+  bool IsSnapshot(const std::string& image) const;
+  void DropSnapshot(const std::string& image) const;
   void SetWatched(const browse::Entry& entry, bool watched);
   // Saves the playing item's position as a resume point, or marks it
   // watched once it is (nearly) over. 'final': playback is ending;
@@ -268,10 +272,8 @@ private:
   // AtEnd(): audio advances to the next track in the folder, video exits.
   void HandlePlaybackEnd();
   // Index of the next (+1) / previous (-1) playable item after the one
-  // playing (or being launched), or -1.
-  // Follows the play order: shuffled or not, wrapping around with
-  // repeat-all. 'manual': a skip asked for with a key, which ignores
-  // repeat-one.
+  // playing (or being launched), or -1. Follows the play order: shuffled
+  // or not, wrapping around with repeat-all.
   int NeighborIndex(int direction) const;
   bool PlayNeighbor(int direction);      // next/previous playable item
   // Indices of the playable items of the current folder, in the order
@@ -304,6 +306,7 @@ private:
   void ClosePhotos();
   void ShowPhoto(int index);
   void StepPhoto(int direction);
+  void RotatePhoto();
   void SetSlideshow(bool playing);
   void UpdatePhotos(double now);
   void ShowPhotoInfo(double seconds);
@@ -374,6 +377,7 @@ private:
   Rml::String bind_sort_label_;   // "Name ▲" in the list header
   Rml::String bind_detail_name_;
   Rml::String bind_detail_icon_;  // type glyph when there is no artwork
+  Rml::String bind_detail_kind_;  // "video", ...: tints the art box
   Rml::String bind_detail_description_;
   std::vector<PropRow> detail_props_;
   bool bind_busy_ = false;         // a browse/discovery is in flight
@@ -390,6 +394,7 @@ private:
   Rml::String bind_watch_description_;
   Rml::String bind_watch_pos_;     // "12:34"
   Rml::String bind_watch_dur_;     // "45:00", "" for live streams
+  Rml::String bind_watch_ends_;    // "Ends at 21:40", "" when unknown
   Rml::String bind_watch_buffered_ = "0%"; // buffered-ahead bar width
   Rml::String bind_watch_speed_;   // "1.5×", "" at normal speed
   Rml::String bind_watch_next_;    // name of the item that plays next
@@ -401,10 +406,7 @@ private:
   // edges that the whole bubble shows.
   Rml::String bind_watch_seek_at_ = "50%";
   Rml::String bind_watch_progress_ = "0%"; // data-style-width; never empty
-  // Codec lines shown in the watch bar: the label of the video and audio
-  // track being decoded ("h264 1920x1080", "eng · ac3 5.1(side)"), or ""
-  // when the file has no stream of that kind.
-  Rml::String bind_watch_chapter_; // "2/5 · The Middle", "" = none
+  Rml::String bind_watch_chapter_; // "Chapter 2/5 · The Middle", "" = none
   struct MarkRow {      // a chapter tick on the timeline
     Rml::String at;     // "37.50%"
     bool operator==(const MarkRow& o) const { return at == o.at; }
@@ -416,6 +418,8 @@ private:
   Rml::String bind_upnext_name_;
   Rml::String bind_upnext_art_ = "none";
   Rml::String bind_upnext_count_;  // "Playing in 8"
+  // The tracks being decoded, as the watch bar shows them ("h264
+  // 1920x1080", "eng · ac3 5.1(side)"); "" when there is none of the kind.
   Rml::String bind_watch_vtrack_;
   Rml::String bind_watch_atrack_;
   Rml::String bind_detail_image_;  // local image path, "" = none

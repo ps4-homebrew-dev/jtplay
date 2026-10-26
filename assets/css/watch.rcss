@@ -118,6 +118,7 @@ body.watching #shell {
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .osd-state {
@@ -132,6 +133,7 @@ body.watching #shell {
 	color: #aab6cc;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .osd-tracks {
@@ -158,6 +160,7 @@ body.watching #shell {
 	color: #aab6cc;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .osd-next-label {
@@ -175,10 +178,24 @@ body.watching #shell {
 	margin-left: 48px;
 }
 
-/* "12:34 / 45:00", one style throughout. */
+/* "12:34 / 45:00": where we are, large; the length quieter. */
 .osd-time {
-	font-size: 30px;
-	color: #e8edf7;
+	font-size: 38px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+}
+
+.osd-dur {
+	font-weight: normal;
+	color: #8593ab;
+}
+
+/* "Ends at 21:40", under the time. */
+.osd-ends {
+	margin-top: 6px;
+	font-size: 22px;
+	color: #aab6cc;
 	white-space: nowrap;
 }
 
@@ -254,6 +271,7 @@ body.watching #shell {
 	width: 220px;
 	height: 220px;
 	font-size: 110px;
+	font-weight: bold;
 	line-height: 220px;
 	text-align: center;
 	color: #4dd6b8;
@@ -269,6 +287,7 @@ body.watching #shell {
 	text-align: center;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .np-meta {
@@ -279,6 +298,7 @@ body.watching #shell {
 	text-align: center;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .np-track {
@@ -365,6 +385,7 @@ body.watching #shell {
 	text-align: center;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .np-next-label {
@@ -493,6 +514,7 @@ body.watching #shell {
 	color: #4dd6b8;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .np-chapter {
@@ -502,6 +524,7 @@ body.watching #shell {
 	text-align: center;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .osd-modes,
@@ -556,6 +579,7 @@ body.watching #shell {
 .upnext-glyph {
 	padding-top: 40px;
 	font-size: 64px;
+	font-weight: bold;
 	text-align: center;
 	color: #4dd6b8;
 }
@@ -579,6 +603,7 @@ body.watching #shell {
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .upnext-count {

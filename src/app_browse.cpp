@@ -26,16 +26,6 @@ int StepIndex(int index, int delta, int count) {
   return std::clamp(index + delta, 0, count - 1);
 }
 
-const char* KindName(const browse::Entry& e) {
-  switch (e.type) {
-  case browse::Entry::Type::Folder: return "folder";
-  case browse::Entry::Type::Audio:  return "audio";
-  case browse::Entry::Type::Video:  return "video";
-  case browse::Entry::Type::Image:  return "image";
-  default:                          return "other";
-  }
-}
-
 // The letter a name files under: its first letter or digit, upper-cased
 // (ASCII; anything else is kept as its whole UTF-8 character), with
 // leading "The " and punctuation skipped. Digits all file under "#".
@@ -194,8 +184,8 @@ void App::RebuildEntryRows() {
     for (const browse::Entry& e : level->entries) {
       EntryRow row;
       row.icon = IconFor(e);
-      row.kind = KindName(e);
-      row.name = e.name.empty() ? "(untitled)" : e.name;
+      row.kind = browse::TypeName(e.type);
+      row.name = DisplayName(e);
       row.meta = EntryMeta(e);
       row.folder = e.IsFolder();
       library::Ref ref;
@@ -204,9 +194,8 @@ void App::RebuildEntryRows() {
         library::Progress p;
         if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
           row.watched = p.watched;
-          if (!p.watched && p.position > 0 && p.duration > 0) // never "0%"
-            row.progress = std::to_string(
-              std::clamp((int)(p.position * 100 / p.duration), 2, 100)) + "%";
+          if (!p.watched)
+            row.progress = ProgressWidth(p.position, p.duration);
         }
       }
       entry_rows_.push_back(std::move(row));
@@ -238,18 +227,20 @@ void App::RebuildCrumb() {
 void App::RebuildDetail() {
   const browse::Entry* e = SelectedEntry();
 
-  Set("detail_name", bind_detail_name_, e ? e->name : std::string());
+  Set("detail_name", bind_detail_name_, e ? DisplayName(*e) : std::string());
   Set("detail_icon", bind_detail_icon_, Rml::String(e ? IconFor(*e) : ""));
+  Set("detail_kind", bind_detail_kind_, Rml::String(e ? browse::TypeName(e->type) : ""));
   Set("detail_description", bind_detail_description_,
       e ? e->description : std::string());
 
   std::vector<PropRow> props;
+  bool favorite = false;
   if (e) {
     auto add = [&props](const char* label, const std::string& value) {
       if (!value.empty())
         props.push_back({label, value});
     };
-    add("Type", TypeName(*e));
+    add("Type", TypeLabel(*e));
     add("Duration", e->duration > 0 ? FormatTime(e->duration * 1000000) : "");
     add("Size", FormatSize(e->size));
     add("Date", FormatDate(e->date, true));
@@ -266,10 +257,10 @@ void App::RebuildDetail() {
       // Under Favorites / Continue watching, where it actually lives.
       if (ref.source_key != (current_source_ ? current_source_->Key() : ""))
         add("Source", ref.source_name.empty() ? "Not available" : ref.source_name);
-      Set("detail_favorite", bind_detail_favorite_,
-          library_.IsFavorite(ref.source_key, ref.entry.id));
+      favorite = library_.IsFavorite(ref.source_key, ref.entry.id);
     }
   }
+  Set("detail_favorite", bind_detail_favorite_, favorite);
   bool same = props.size() == detail_props_.size();
   for (size_t i = 0; same && i < props.size(); i++)
     same = props[i].label == detail_props_[i].label &&
@@ -501,10 +492,15 @@ void App::CycleSortMode(int direction) {
   SetSort(next, next == SortMode::Date || next == SortMode::Size);
 }
 
+// The order in words, for the list header: neither font has arrows, and
+// "Date ▼" leaves the reader to work out which end is new.
 std::string App::SortLabel() const {
-  // The emoji font has the triangles; the text font does not.
-  return std::string(SortModeName((int)sort_mode_)) +
-         (sort_desc_ ? "  🔽" : "  🔼");
+  switch (sort_mode_) {
+  case SortMode::Name: return sort_desc_ ? "Name, Z–A" : "Name, A–Z";
+  case SortMode::Date: return sort_desc_ ? "Newest first" : "Oldest first";
+  case SortMode::Size: return sort_desc_ ? "Largest first" : "Smallest first";
+  default:             return sort_desc_ ? "Reversed" : "Default order";
+  }
 }
 
 // The right-hand column of a row, Kodi style: whatever the list is sorted
@@ -573,7 +569,7 @@ void App::OpenMenu() {
 
   if (view_ == View::Browse) {
     const browse::Entry* e = SelectedEntry();
-    Set("menu_title", bind_menu_title_, e ? e->name : Rml::String("Options"));
+    Set("menu_title", bind_menu_title_, e ? DisplayName(*e) : Rml::String("Options"));
     if (e)
       AddEntryActions(*e);
     // A folder of music or episodes plays as a whole, in order or shuffled.
@@ -611,7 +607,7 @@ void App::OpenMenu() {
     menu_items_.push_back({"Home", nullptr, [this](int) { GoHome(); }});
   } else if (bind_home_shelves_ && SelectedCard()) {
     const browse::Entry card = *SelectedCard();
-    Set("menu_title", bind_menu_title_, card.name);
+    Set("menu_title", bind_menu_title_, DisplayName(card));
     if (card.IsFolder())
       menu_items_.push_back({"Open", nullptr, [this](int) { ActivateCard(); }});
     AddEntryActions(card);

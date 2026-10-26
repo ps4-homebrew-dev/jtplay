@@ -98,6 +98,7 @@
 	color: #8593ab;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 #topbar .busy {
@@ -242,6 +243,7 @@
 }
 
 .art-glyph {
+	font-weight: bold;
 	color: #ffffff;
 	opacity: 0.55;
 }

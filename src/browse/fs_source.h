@@ -26,6 +26,10 @@ private:
   std::string root_;
 };
 
+// The type of a file going by its extension ("clip.MKV" is a video); false
+// for anything the browser does not list.
+bool ClassifyFileName(const std::string& name, Entry::Type& type);
+
 // Offers the places media usually lives as their own sources, so they are
 // one press away: USB drives and /data on the console, the home directory
 // on a PC; plus the whole filesystem as a last resort.

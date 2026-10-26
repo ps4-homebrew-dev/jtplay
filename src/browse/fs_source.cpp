@@ -77,6 +77,14 @@ bool ClassifyExt(const std::string& ext, Entry::Type& type) {
   return false;
 }
 
+} // namespace
+
+bool ClassifyFileName(const std::string& name, Entry::Type& type) {
+  return ClassifyExt(LowerExt(name), type);
+}
+
+namespace {
+
 // Case-insensitive match against the usual cover art file names.
 bool IsCoverName(const std::string& name) {
   std::string lower = name;
@@ -156,7 +164,7 @@ bool FsSource::Browse(const std::string& id, Listing& out, std::string& error) {
     }
     if (!S_ISREG(st.st_mode))
       continue;
-    if (!ClassifyExt(LowerExt(name), e.type))
+    if (!ClassifyFileName(name, e.type))
       continue;
     if (cover.empty() && IsCoverName(name))
       cover = path;

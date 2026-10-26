@@ -49,7 +49,6 @@ public:
   bool IsFavorite(const std::string& source_key, const std::string& id) const;
   // Adds or removes; returns whether it is a favorite now.
   bool ToggleFavorite(const Ref& ref);
-  void RemoveFavorite(const std::string& source_key, const std::string& id);
   std::vector<Ref> Favorites() const;
 
   bool GetProgress(const std::string& source_key, const std::string& id,
@@ -122,7 +121,6 @@ public:
   void UpdateDetail();
   // How many entries the root lists right now.
   size_t Count() const;
-  Kind kind() const { return kind_; }
 
 private:
   Kind kind_;

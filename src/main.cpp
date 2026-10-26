@@ -115,44 +115,36 @@ static int Run(int argc, char* argv[]) {
     options.plugins_dir = options.assets_dir + "/../plugins";
   options.fonts_dir = fonts_dir;
 
-  Rml::Context* ctx;
-  std::string err;
-  App app;
-
-  if (!Backend::Initialize("jtplay", SCREEN_WIDTH, SCREEN_HEIGHT, false)) {
+  if (!Backend::Initialize("jtplay", SCREEN_WIDTH, SCREEN_HEIGHT, false))
     return -1;
-  }
 
   Rml::SetSystemInterface(Backend::GetSystemInterface());
   Rml::SetRenderInterface(Backend::GetRenderInterface());
   Rml::Initialise();
 
-  if (!(ctx = Rml::CreateContext("main", Rml::Vector2i(SCREEN_WIDTH, SCREEN_HEIGHT)))) {
-    Rml::Log::Message(Rml::Log::LT_ERROR, "Failed to create main context");
+  auto fail = [](const std::string& message) {
+    Rml::Log::Message(Rml::Log::LT_ERROR, "%s", message.c_str());
     Rml::Shutdown();
     Backend::Shutdown();
     return -1;
-  }
+  };
+
+  Rml::Context* ctx = Rml::CreateContext("main", Rml::Vector2i(SCREEN_WIDTH, SCREEN_HEIGHT));
+  if (!ctx)
+    return fail("Failed to create main context");
 
   bool fonts_ok = true;
   for (const char* face : {"LatoLatin-Bold.ttf", "LatoLatin-BoldItalic.ttf",
                            "LatoLatin-Italic.ttf", "LatoLatin-Regular.ttf"})
     fonts_ok &= Rml::LoadFontFace(fonts_dir + "/" + face, false);
   fonts_ok &= Rml::LoadFontFace(fonts_dir + "/NotoEmoji-VariableFont_wght.ttf", true);
-  if (!fonts_ok) {
-    Rml::Log::Message(Rml::Log::LT_ERROR,
-      "Failed to load fonts from '%s' (see --fonts)", fonts_dir.c_str());
-    Rml::Shutdown();
-    Backend::Shutdown();
-    return -1;
-  }
+  if (!fonts_ok)
+    return fail("Failed to load fonts from '" + fonts_dir + "' (see --fonts)");
 
-  if (!app.Initialize(ctx, options, err)) {
-    Rml::Log::Message(Rml::Log::LT_ERROR, "Failed to initialize app: %s", err.c_str());
-    Rml::Shutdown();
-    Backend::Shutdown();
-    return -1;
-  }
+  App app;
+  std::string err;
+  if (!app.Initialize(ctx, options, err))
+    return fail("Failed to initialize app: " + err);
 
   while (Backend::ProcessEvents(ctx)) {
     app.Update();

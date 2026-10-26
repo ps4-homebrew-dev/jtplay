@@ -57,7 +57,7 @@ void App::ToggleFavorite(const browse::Entry& entry) {
   library::Ref ref;
   if (!Identify(entry, ref))
     return;
-  // Keep the saved copy free of what only made sense in the listing.
+  // Under a source that is offline, the name is whatever the library knew.
   if (ref.source_name.empty())
     ref.source_name = current_source_ ? current_source_->Name() : std::string();
   const bool now = library_.ToggleFavorite(ref);
@@ -65,10 +65,22 @@ void App::ToggleFavorite(const browse::Entry& entry) {
   ShowToast(now ? "Added to favorites" : "Removed from favorites", "⭐");
 }
 
+bool App::IsSnapshot(const std::string& image) const {
+  const std::string prefix = "file://" + cache_dir_ + "/snap-";
+  return !cache_dir_.empty() && image.compare(0, prefix.size(), prefix) == 0;
+}
+
+void App::DropSnapshot(const std::string& image) const {
+  if (IsSnapshot(image))
+    ::remove(image.substr(7).c_str());
+}
+
 void App::SetWatched(const browse::Entry& entry, bool watched) {
   library::Ref ref;
   if (!Identify(entry, ref))
     return;
+  // Either way the resume point goes, and with it the frame it showed.
+  DropSnapshot(library_.ImageFor(ref.source_key, ref.entry.id));
   library_.SetWatched(ref, watched);
   library_.Save();
   ShowToast(watched ? "Marked as watched" : "Marked as unwatched", "✔");
@@ -89,12 +101,11 @@ void App::RecordProgress(bool final, bool ended) {
   // A video without artwork of its own gets the frame it was stopped on,
   // so its Continue watching card shows where it left off. One file per
   // item and position: the thumbnail cache keys on the name.
-  const std::string snap_prefix = "file://" + cache_dir_ + "/snap-";
-  const std::string& image = playing_ref_.entry.image;
-  const bool own_art = !image.empty() && image.compare(0, snap_prefix.size(), snap_prefix) != 0;
+  const bool own_art = !playing_ref_.entry.image.empty() &&
+                       !IsSnapshot(playing_ref_.entry.image);
   auto drop_snapshot = [&] {
-    if (!own_art && !image.empty()) {
-      ::remove(image.substr(7).c_str());
+    if (!own_art) {
+      DropSnapshot(playing_ref_.entry.image);
       playing_ref_.entry.image.clear();
     }
   };

@@ -50,7 +50,7 @@
 					</div>
 				</div>
 
-				<div id="home-main">
+				<div id="home-main" data-class-no-shelves="shelves.size == 0">
 					<div id="hero" data-if="hero_title != ''">
 						<div class="hero-icon">{{hero_icon}}</div>
 						<div class="hero-text">
@@ -96,7 +96,7 @@
 			     data-class-grid="view_mode == 'grid'">
 				<div id="entries" class="pane">
 					<div class="pane-head">
-						<span class="eyebrow">{{entry_count}} items</span>
+						<span class="eyebrow">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
 						<span class="spacer"/>
 						<span class="sort">{{sort_label}}</span>
 						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
@@ -142,7 +142,11 @@
 
 				<div id="details" class="pane">
 					<div class="detail-body" data-if="detail_name != ''">
-						<div class="detail-artbox">
+						<div class="detail-artbox"
+						     data-class-k-folder="detail_kind == 'folder'"
+						     data-class-k-audio="detail_kind == 'audio'"
+						     data-class-k-video="detail_kind == 'video'"
+						     data-class-k-image="detail_kind == 'image'">
 							<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
 							<div class="detail-glyph" data-if="detail_image == ''">{{detail_icon}}</div>
 						</div>
@@ -197,9 +201,10 @@
 				<div class="osd-side">
 					<div class="osd-time">
 						<span>{{watch_pos}}</span>
-						<span data-if="watch_dur != ''"> / {{watch_dur}}</span>
+						<span class="osd-dur" data-if="watch_dur != ''"> / {{watch_dur}}</span>
 						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 					</div>
+					<div class="osd-ends" data-if="watch_ends != ''">{{watch_ends}}</div>
 					<div class="osd-speed" data-if="watch_speed != ''">
 						<span class="badge">{{watch_speed}}</span>
 					</div>
@@ -252,7 +257,7 @@
 				<div class="upnext-keys">Select to play now, back to stay</div>
 			</div>
 		</div>
-		
+
 		<!-- The clock in the corner while the OSD is up. -->
 		<div id="osd-clock" data-if="watching && (watch_audio || info_visible)">{{clock}}</div>
 

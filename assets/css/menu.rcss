@@ -46,6 +46,7 @@
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Long menus (the playback menu) scroll; the app keeps the selection in
@@ -74,6 +75,8 @@
 	font-size: 28px;
 	color: #c5cee0;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .menu-value {
@@ -132,4 +135,5 @@
 .menu-value {
 	max-width: 300px;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }

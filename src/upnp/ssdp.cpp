@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstring>
 #include <set>
 
@@ -152,12 +153,17 @@ std::vector<SsdpResult> SsdpSearch(int wait_ms, std::string& error)
 	for (int fd : fds)
 		pfds.push_back({fd, POLLIN, 0});
 
-	int remaining = wait_ms;
-	while (remaining > 0)
+	// Listen until the deadline, however early poll() comes back: every
+	// answer wakes it up, and counting a whole slice per wake-up would
+	// end the search long before slower servers have answered.
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(wait_ms);
+	for (;;)
 	{
-		const int slice = std::min(remaining, 250);
-		const int pr = poll(pfds.data(), (nfds_t)pfds.size(), slice);
-		remaining -= slice;
+		const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+			deadline - std::chrono::steady_clock::now()).count();
+		if (left <= 0)
+			break;
+		const int pr = poll(pfds.data(), (nfds_t)pfds.size(), (int)left);
 		if (pr <= 0)
 			continue;
 

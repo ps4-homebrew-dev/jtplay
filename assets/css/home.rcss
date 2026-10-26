@@ -37,6 +37,7 @@
 .rail-icon {
 	width: 52px;
 	font-size: 32px;
+	font-weight: bold;
 	text-align: center;
 	margin-right: 20px;
 	color: #aab6cc;
@@ -55,6 +56,7 @@
 	color: #aab6cc;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .rail-detail {
@@ -63,6 +65,7 @@
 	color: #6f7b92;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Focused: the solid accent bar. */
@@ -104,11 +107,25 @@
 	margin-bottom: 24px;
 }
 
+/* Nothing on the shelves: the hero is all there is, so it sits in the
+ * middle of the space rather than over an empty floor. */
+#home-main.no-shelves {
+	justify-content: center;
+	padding-bottom: 96px;
+}
+#home-main.no-shelves #hero {
+	margin-bottom: 0px;
+}
+#home-main.no-shelves #shelves {
+	display: none;
+}
+
 .hero-icon {
 	width: 150px;
 	height: 150px;
 	margin-right: 40px;
 	font-size: 96px;
+	font-weight: bold;
 	line-height: 150px;
 	text-align: center;
 	color: #4dd6b8;
@@ -129,6 +146,7 @@
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .hero-detail {
@@ -137,6 +155,7 @@
 	color: #aab6cc;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .hero-note {
@@ -225,6 +244,7 @@
 	color: #c5cee0;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .card-sub {
@@ -233,6 +253,7 @@
 	color: #6f7b92;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Focused card: lifted, outlined in the accent. */

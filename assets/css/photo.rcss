@@ -126,6 +126,7 @@ body.photo #backdrop-shade {
 	color: #ffffff;
 	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .photo-meta {
