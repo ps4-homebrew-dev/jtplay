@@ -178,8 +178,13 @@ body.watching #shell {
 	margin-left: 48px;
 }
 
-/* "12:34 / 45:00": where we are, large; the length quieter. */
+/* "12:34 / 45:00": where we are, large; the length quieter. A row of its
+ * own, centred, so the much smaller LIVE badge sits level with the
+ * digits rather than hanging off their baseline. */
 .osd-time {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
 	font-size: 38px;
 	font-weight: bold;
 	color: #ffffff;
@@ -187,6 +192,7 @@ body.watching #shell {
 }
 
 .osd-dur {
+	margin-left: 12px;
 	font-weight: normal;
 	color: #8593ab;
 }
@@ -201,7 +207,7 @@ body.watching #shell {
 
 .osd-live {
 	margin-left: 18px;
-	padding: 3px 12px;
+	padding: 3px 9px 3px 12px; /* the letter spacing pads the right already */
 	font-size: 20px;
 	font-weight: bold;
 	letter-spacing: 3px;

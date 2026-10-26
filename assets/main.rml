@@ -201,7 +201,7 @@
 				<div class="osd-side">
 					<div class="osd-time">
 						<span>{{watch_pos}}</span>
-						<span class="osd-dur" data-if="watch_dur != ''"> / {{watch_dur}}</span>
+						<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
 						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 					</div>
 					<div class="osd-ends" data-if="watch_ends != ''">{{watch_ends}}</div>
