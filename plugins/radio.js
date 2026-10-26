@@ -125,7 +125,7 @@ return {
     name: "Radio",
     discover() {
 	return [{
-	    name: "Internet radio",
+	    name: "Internet Radio",
 	    detail: "50 000 stations from radio-browser.info",
 	    icon: "📻",
 	    root: "/",
