@@ -357,7 +357,7 @@ void App::UpdateUpNext(int64_t pos, int64_t dur) {
   bool show = false;
   if (!bind_watch_audio_ && autoplay_ && !upnext_dismissed_ && repeat_ != Repeat::One &&
       !sleep_end_of_item_ && !launch_request_ && player_->CanSeek() &&
-      pos >= 0 && dur >= kUpNextMinDurationSec * 1000000 &&
+      player_->DurationReliable() && pos >= 0 && dur >= kUpNextMinDurationSec * 1000000 &&
       dur - pos <= kUpNextSec * 1000000 && !path_.empty()) {
     const int i = NeighborIndex(+1);
     if (i >= 0) {

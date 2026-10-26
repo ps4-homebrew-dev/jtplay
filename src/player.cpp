@@ -21,6 +21,10 @@ namespace {
 // back out with AbortOpen(). This only bounds an mpv that never answers.
 constexpr auto kOpenTimeout = std::chrono::minutes(5);
 
+// A reported duration that moves by more than this once playback has started
+// is an estimate, not the length of the file (see Player::DurationReliable).
+constexpr int64_t kDurationDriftUs = 2 * 1000000;
+
 // The spectrum shown for audio-only files, fed from track 'aid'. It is a
 // lavfi graph: the audio goes to the output untouched ([ao]), a copy is
 // drawn as a tiny white-on-black bar spectrum ([vo]). That picture is not
@@ -458,6 +462,10 @@ void Player::EventThread() {
         std::lock_guard<std::mutex> lock(mutex_);
         last_log_error_ = text;
       }
+      // mpv's EDL demuxer warns "EDL: source file <url> has unknown duration"
+      // and then makes the timeline as long as what it has seen so far.
+      if (std::strstr(msg->text, "has unknown duration"))
+        duration_unreliable_ = true;
       break;
     }
 
@@ -466,6 +474,7 @@ void Player::EventThread() {
       std::lock_guard<std::mutex> lock(mutex_);
       started_count_++;
       started_id_ = start ? start->playlist_entry_id : -1;
+      duration_unreliable_ = false; // per file; the log may set it again
       cv_.notify_all();
       break;
     }
@@ -498,9 +507,18 @@ void Player::EventThread() {
       case kPropTimePos:
         position_us_ = PropertyUs(prop);
         break;
-      case kPropDuration:
-        duration_us_ = PropertyUs(prop);
+      case kPropDuration: {
+        // A real duration is fixed once playback has started. One that keeps
+        // moving (a live playlist that grows, a bitrate estimate) is not
+        // something to compare the position against.
+        const int64_t now = PropertyUs(prop);
+        const int64_t before = duration_us_.load();
+        if (now >= 0 && before >= 0 && position_us_.load() >= 0 &&
+            std::llabs(now - before) > kDurationDriftUs)
+          duration_unreliable_ = true;
+        duration_us_ = now;
         break;
+      }
       case kPropPause:
         paused_ = PropertyFlag(prop);
         break;

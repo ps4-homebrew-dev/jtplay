@@ -100,6 +100,10 @@ public:
   // Position and duration in microseconds; -1 when unknown.
   int64_t PositionUs() const { return position_us_.load(); }
   int64_t DurationUs() const { return duration_us_.load(); }
+  // False when the duration is only mpv's estimate, e.g. an EDL timeline over
+  // a live stream ("source file ... has unknown duration"), where it trails
+  // the position by a few seconds all the time. Not a basis for "near the end".
+  bool DurationReliable() const { return !duration_unreliable_.load(); }
   // How far ahead of the position the stream is buffered, as a position
   // in microseconds; -1 when unknown (local files report nothing useful).
   int64_t BufferedUs() const { return buffered_us_.load(); }
@@ -211,6 +215,7 @@ private:
   std::atomic<bool> paused_{false};
   std::atomic<int64_t> position_us_{-1};
   std::atomic<int64_t> duration_us_{-1};
+  std::atomic<bool> duration_unreliable_{false};
   std::atomic<int> video_id_{-1};
   std::atomic<int> audio_id_{-1};
   std::atomic<int> sub_id_{-1};
