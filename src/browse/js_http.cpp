@@ -100,12 +100,42 @@ namespace browse {
 	req.follow_redirects = JS_ToBool(ctx, redirect) != 0;
       JS_FreeValue(ctx, redirect);
 
+      // maxBytes: read at most this much and hand back what came, with
+      // 'truncated' set, instead of failing on a larger response.
+      JSValue max_bytes = JS_GetPropertyStr(ctx, options, "maxBytes");
+      if (JS_IsNumber(max_bytes)) {
+	double n = 0.0;
+	JS_ToFloat64(ctx, &n, max_bytes);
+	if (n >= 1.0) {
+	  req.max_bytes = n < (double)kMaxResponseBytes
+	    ? (size_t)n : kMaxResponseBytes;
+	  req.truncate = true;
+	}
+      }
+      JS_FreeValue(ctx, max_bytes);
+
       JSValue want_binary = JS_GetPropertyStr(ctx, options, "binary");
       if (JS_IsBool(want_binary))
 	binary = JS_ToBool(ctx, want_binary) != 0;
       JS_FreeValue(ctx, want_binary);
 
       return true;
+    }
+
+    // Length of 's' without a UTF-8 sequence cut off at the end, which a
+    // truncated body may have.
+    size_t Utf8Prefix(const std::string& s) {
+      size_t n = s.size();
+      size_t back = 0;
+      while (back < 4 && back < n &&
+	     ((unsigned char)s[n - 1 - back] & 0xC0) == 0x80)
+	back++;
+      if (back == n || back == 4)
+	return n; // not UTF-8 we can reason about; leave it alone
+      const unsigned char lead = (unsigned char)s[n - 1 - back];
+      const size_t want = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 :
+	lead >= 0xC0 ? 2 : 1;
+      return want > back + 1 ? n - 1 - back : n;
     }
 
     JSValue BuildResponse(JSContext* ctx, const net::HttpClient::Response& res,
@@ -123,6 +153,7 @@ namespace browse {
 			  JS_NewStringLen(ctx, header.second.data(),
 					  header.second.size()));
       JS_SetPropertyStr(ctx, out, "headers", headers);
+      JS_SetPropertyStr(ctx, out, "truncated", JS_NewBool(ctx, res.truncated));
 
       // A text body goes through JS_NewStringLen, which expects UTF-8;
       // 'binary: true' hands back an ArrayBuffer instead.
@@ -134,7 +165,9 @@ namespace browse {
       else
 	JS_SetPropertyStr(ctx, out, "body",
 			  JS_NewStringLen(ctx, res.body.data(),
-					  res.body.size()));
+					  res.truncated
+					  ? Utf8Prefix(res.body)
+					  : res.body.size()));
       return out;
     }
 
@@ -144,7 +177,7 @@ namespace browse {
       if (!client)
 	return ThrowError(ctx, "http: client unavailable");
 
-      req.max_bytes = kMaxResponseBytes;
+      req.max_bytes = std::min(req.max_bytes, kMaxResponseBytes);
 
       net::HttpClient::Response res;
       std::string error;

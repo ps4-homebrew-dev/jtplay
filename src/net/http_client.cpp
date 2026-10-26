@@ -15,6 +15,7 @@ namespace net {
     struct Sink {
       std::string data;
       size_t limit = 0;
+      bool truncate = false; // keep what fits rather than fail
       bool overflow = false;
     };
 
@@ -57,6 +58,8 @@ namespace net {
       const size_t n = size * nmemb;
       if (sink->data.size() + n > sink->limit) {
 	sink->overflow = true;
+	if (sink->truncate)
+	  sink->data.append(ptr, sink->limit - sink->data.size());
 	return 0; // aborts the transfer with CURLE_WRITE_ERROR
       }
       sink->data.append(ptr, n);
@@ -120,6 +123,7 @@ namespace net {
 
     Sink sink;
     sink.limit = req.max_bytes;
+    sink.truncate = req.truncate;
     Progress progress;
     progress.stall_ms = req.stall_timeout_ms;
     char message[CURL_ERROR_SIZE] = {0};
@@ -193,7 +197,9 @@ namespace net {
     if (headers)
       ::curl_slist_free_all(headers);
 
-    if (code != CURLE_OK) {
+    // A body cut short on purpose is a result, not a failure.
+    const bool cut = code == CURLE_WRITE_ERROR && sink.overflow && req.truncate;
+    if (code != CURLE_OK && !cut) {
       if (sink.overflow)
 	error = "http: response larger than " +
 	  std::to_string(req.max_bytes / (1024 * 1024)) + " MiB";
@@ -211,6 +217,7 @@ namespace net {
     ::curl_easy_getinfo(curl_, CURLINFO_EFFECTIVE_URL, &final_url);
     res.url = final_url ? final_url : req.url;
     res.body = std::move(sink.data);
+    res.truncated = cut;
     return true;
   }
 

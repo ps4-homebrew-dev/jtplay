@@ -126,7 +126,7 @@ above (repeat, shuffle, night mode, picture, audio delay, subtitle size)
 are kept in `settings.ini` in the cache directory.
 
 After three minutes (see Settings) without input, and no video or
-slideshow running, the screen dims to a slowly drifting clock; the first
+slideshow running (a podcast or audiobook counts as video here, music does not), the screen dims to a slowly drifting clock; the first
 key press only wakes it.
 
 ## JavaScript plugins
@@ -213,6 +213,9 @@ A response is `{ ok, status, url, headers, body }`, where `url` is the final
 URL after redirects and `headers` keys are lower-cased. Following redirects
 can be turned off with `redirect: false`, and `binary: true` returns the body
 as an `ArrayBuffer` instead of a string (a string body is decoded as UTF-8).
+A response over 8 MiB is normally an error; with `maxBytes: n` (at most
+8 MiB) the first `n` bytes are returned instead and the response has
+`truncated: true`, which suits reading the newest end of a large RSS feed.
 
 An HTTP error status is *not* an exception: check `res.ok`. Transport
 failures (DNS, TLS, a server that stops sending) throw an `Error`, so wrap calls in `try`/`catch`

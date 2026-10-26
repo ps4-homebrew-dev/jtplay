@@ -42,8 +42,11 @@ public:
     long deadline_ms = 0;
 
     // The body is held outside any managed heap, so every caller states how
-    // much it is willing to hold. Exceeding it aborts the transfer.
+    // much it is willing to hold. Exceeding it aborts the transfer, as an
+    // error unless 'truncate' is set: then the first max_bytes are the body
+    // and Response::truncated says so.
     size_t max_bytes = 8u << 20;
+    bool truncate = false;
   };
 
   struct Response {
@@ -51,6 +54,7 @@ public:
     std::string url;                            // after redirects
     std::map<std::string, std::string> headers; // keys lower-cased
     std::string body;
+    bool truncated = false;                     // cut at Request::max_bytes
   };
 
   HttpClient();

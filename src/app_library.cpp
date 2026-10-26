@@ -152,11 +152,17 @@ void App::OnLibraryChanged() {
 // ---------------------------------------------------------------------------
 
 void App::UpdateScreensaver(double now) {
+  // Music is left to the screensaver (its clock names the song), but a
+  // podcast or audiobook is watched like a film: its card has the
+  // progress worth seeing.
+  const bool long_audio = bind_watch_audio_ &&
+    player_->DurationUs() >= kMinResumableAudioSec * 1000000;
   const bool video_running =
-    (bind_watching_ && !bind_watch_audio_ && !player_->IsPaused()) ||
+    (bind_watching_ && (!bind_watch_audio_ || long_audio) &&
+     !player_->IsPaused()) ||
     (bind_photo_ && bind_photo_playing_);
   if (video_running) {
-    last_input_ = now; // a film is not idleness
+    last_input_ = now; // a film (or a podcast) is not idleness
     Set("saver", bind_saver_, false);
     return;
   }
