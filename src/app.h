@@ -174,19 +174,24 @@ private:
   // the library (Continue watching, Favorites) for the place the rail is
   // on. Kodi's home, more or less. The top level is Home, one row per
   // group of sources (local, network, plugins) and Settings; selecting a
-  // group lists its sources in the rail, under a row leading back up.
-  enum class RailKind { Home, Group, Up, Source, Settings };
+  // group searches it and lists its sources in the rail (back leaves).
+  enum class RailKind { Home, Group, Source, Settings };
   struct RailItem {
     RailKind kind;
-    browse::SourcePtr source;                          // Source
-    browse::Source::Group group = browse::Source::Group::Local; // Group, Up
+    browse::SourcePtr source;                                   // Source
+    browse::Source::Group group = browse::Source::Group::Local; // Group
   };
   struct Shelf {
     std::string title;
     std::shared_ptr<library::LibrarySource> source; // what its cards open in
     browse::Listing entries;                        // ids encoded
   };
-  void StartDiscovery();
+  // Runs the providers of one rail group on the worker and replaces that
+  // group's sources with what they find; 'done' runs on the main thread
+  // afterwards. A search already under way for the group is joined.
+  void StartDiscovery(browse::Source::Group group,
+                      std::function<void()> done = nullptr);
+  bool SourceKnown(const std::string& key) const;
   // Rail, then shelves for its selection. The rail stays on the place it
   // was on, or moves to the one keyed 'select' (see RailKey) if given.
   void RebuildHome(const std::string& select = std::string());
@@ -198,6 +203,7 @@ private:
   void LeaveRailGroup();
   static std::string RailKey(const RailItem& item); // what RebuildHome keeps
   void ActivateCard();
+  void OpenCard(const browse::Entry& entry, const browse::SourcePtr& shelf_source);
   void HandleKeyHome(Rml::Event& event, int key);
   void OpenSettings();                // the settings menu, from the rail
   void ApplyLanguages();              // preferred languages -> player
@@ -358,7 +364,6 @@ private:
   Rml::DataModelHandle model_;
   Rml::String bind_view_ = "home";
   Rml::String bind_view_mode_ = "list"; // browse: "list" / "grid"
-  Rml::String bind_status_;       // discovery status line
   Rml::String bind_toast_;
   Rml::String bind_toast_icon_;
   Rml::String bind_backdrop_ = "none"; // fanart decorator
@@ -468,7 +473,16 @@ private:
   Rml::String bind_hero_detail_;
   Rml::String bind_hero_note_;
   std::vector<RailItem> rail_;
-  bool discovering_ = false;           // StartDiscovery() has not replied
+  // Per rail group (indexed by browse::Source::Group): searched at least
+  // once, a search under way and what to do when it ends, and how the
+  // last one went ("3 sources found", errors).
+  struct GroupScan {
+    bool scanned = false;
+    bool running = false;
+    std::vector<std::function<void()>> waiting;
+    Rml::String status;
+  };
+  GroupScan scans_[3];
   bool rail_in_group_ = false;         // the rail lists one group's sources
   browse::Source::Group rail_group_ = browse::Source::Group::Local;
   std::vector<Shelf> shelves_;

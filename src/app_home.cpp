@@ -46,49 +46,6 @@ void App::GoHome() {
 // Discovery
 // ---------------------------------------------------------------------------
 
-void App::StartDiscovery() {
-  Set("status", bind_status_, Rml::String("Searching for media sources..."));
-  discovering_ = true;
-  if (view_ == View::Home)
-    RebuildHome();
-
-  busy_ops_++;
-  PostTask([this] {
-    std::vector<browse::SourcePtr> sources;
-    std::string errors;
-    for (const std::unique_ptr<browse::Provider>& p : providers_) {
-      std::string error;
-      if (!p->Discover(sources, error) && !error.empty()) {
-        if (!errors.empty())
-          errors += "; ";
-        errors += std::string(p->Name()) + ": " + error;
-      }
-    }
-
-    Reply([this, sources = std::move(sources), errors]() mutable {
-      discovered_ = std::move(sources);
-      discovering_ = false;
-      registry_.Set(discovered_);
-
-      Rml::String status;
-      if (discovered_.empty()) {
-        status = errors.empty() ? "No media sources found." : errors;
-      } else {
-        status = Plural(discovered_.size(), "source", "sources") + " found";
-        if (!errors.empty())
-          status += "  ·  " + errors;
-      }
-      Set("status", bind_status_, status);
-      RebuildHome(); // keeps the rail on the same place
-    });
-    busy_ops_--;
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Rail
-// ---------------------------------------------------------------------------
-
 namespace {
 
 using Group = browse::Source::Group;
@@ -128,12 +85,82 @@ Group GroupOfKey(const std::string& key) {
 
 } // namespace
 
+void App::StartDiscovery(browse::Source::Group group,
+                         std::function<void()> done) {
+  GroupScan& scan = scans_[(int)group];
+  if (done)
+    scan.waiting.push_back(std::move(done));
+  if (scan.running)
+    return;
+  scan.running = true;
+  scan.status = "Searching...";
+  if (view_ == View::Home)
+    RebuildHome();
+
+  // The providers stay put for the app's lifetime, so the worker can take
+  // plain pointers to the ones it needs.
+  std::vector<browse::Provider*> providers;
+  for (const std::unique_ptr<browse::Provider>& p : providers_)
+    if (p->RailGroup() == group)
+      providers.push_back(p.get());
+
+  busy_ops_++;
+  PostTask([this, group, providers] {
+    std::vector<browse::SourcePtr> sources;
+    std::string errors;
+    for (browse::Provider* p : providers) {
+      std::string error;
+      if (!p->Discover(sources, error) && !error.empty()) {
+        if (!errors.empty())
+          errors += "; ";
+        errors += std::string(p->Name()) + ": " + error;
+      }
+    }
+
+    Reply([this, group, sources = std::move(sources), errors]() mutable {
+      // This group's sources make way for what was found now.
+      discovered_.erase(std::remove_if(discovered_.begin(), discovered_.end(),
+        [group](const browse::SourcePtr& s) { return s->RailGroup() == group; }),
+        discovered_.end());
+      for (browse::SourcePtr& s : sources)
+        if (s->RailGroup() == group)
+          discovered_.push_back(std::move(s));
+      registry_.Set(discovered_);
+
+      GroupScan& scan = scans_[(int)group];
+      const size_t n = std::count_if(discovered_.begin(), discovered_.end(),
+        [group](const browse::SourcePtr& s) { return s->RailGroup() == group; });
+      scan.status = n ? Plural(n, "source", "sources") + " found"
+                      : std::string("None found.");
+      if (!errors.empty())
+        scan.status += "  ·  " + errors;
+      scan.scanned = true;
+      scan.running = false;
+      std::vector<std::function<void()>> waiting;
+      waiting.swap(scan.waiting);
+
+      if (view_ == View::Home)
+        RebuildHome(); // keeps the rail on the same place
+      for (const std::function<void()>& then : waiting)
+        then();
+    });
+    busy_ops_--;
+  });
+}
+
+bool App::SourceKnown(const std::string& key) const {
+  return registry_.Find(key) != nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Rail
+// ---------------------------------------------------------------------------
+
 std::string App::RailKey(const RailItem& item) {
   switch (item.kind) {
   case RailKind::Home:     return "home";
   case RailKind::Settings: return "settings";
   case RailKind::Group:    return "group:" + std::to_string((int)item.group);
-  case RailKind::Up:       return "up";
   default:                 return "source:" + item.source->Key();
   }
 }
@@ -143,17 +170,10 @@ void App::RebuildHome(const std::string& select) {
     : sel_rail_ < (int)rail_.size() ? RailKey(rail_[sel_rail_])
     : std::string("home");
 
-  auto count = [this](Group group) {
-    return std::count_if(discovered_.begin(), discovered_.end(),
-      [group](const browse::SourcePtr& s) { return s->RailGroup() == group; });
-  };
-
   rail_.clear();
   rail_rows_.clear();
   if (rail_in_group_) {
-    // One group's sources, under a row that leads back to the top.
-    rail_.push_back({RailKind::Up, nullptr, rail_group_});
-    rail_rows_.push_back({"‹", InfoFor(rail_group_).name, "Back"});
+    // One group's sources; back leads up to the top again.
     for (const browse::SourcePtr& s : discovered_) {
       if (s->RailGroup() != rail_group_)
         continue;
@@ -172,19 +192,24 @@ void App::RebuildHome(const std::string& select) {
                      Plural(favorites, "favorite", "favorites");
     rail_rows_.push_back({"🏠", "Home", home_detail});
     for (Group group : kGroups) {
-      const size_t n = count(group);
+      const GroupScan& scan = scans_[(int)group];
+      const size_t n = std::count_if(discovered_.begin(), discovered_.end(),
+        [group](const browse::SourcePtr& s) { return s->RailGroup() == group; });
+      std::string detail; // nothing to say before the first search
+      if (scan.running)
+        detail = "Searching...";
+      else if (scan.scanned)
+        detail = n ? Plural(n, "source", "sources") : "None found";
       const GroupInfo& info = InfoFor(group);
       rail_.push_back({RailKind::Group, nullptr, group});
-      rail_rows_.push_back({info.icon, info.name,
-                            n ? Plural(n, "source", "sources")
-                            : discovering_ ? "Searching..." : "None found"});
+      rail_rows_.push_back({info.icon, info.name, detail});
     }
     rail_.push_back({RailKind::Settings, nullptr});
     rail_rows_.push_back({"⚙", "Settings", ""});
   }
 
   // Stay where we were; just inside a group, that is its first source.
-  sel_rail_ = rail_in_group_ && rail_.size() > 1 ? 1 : 0;
+  sel_rail_ = 0;
   for (size_t i = 0; i < rail_.size(); i++) {
     if (RailKey(rail_[i]) == selected) {
       sel_rail_ = (int)i;
@@ -203,6 +228,7 @@ void App::EnterRailGroup(browse::Source::Group group) {
   sel_shelf_ = 0;
   shelf_card_sel_.clear();
   RebuildHome("-"); // no such key: lands on the group's first source
+  StartDiscovery(group);
 }
 
 void App::LeaveRailGroup() {
@@ -238,9 +264,6 @@ void App::ActivateRail() {
   case RailKind::Group:
     EnterRailGroup(item.group);
     break;
-  case RailKind::Up:
-    LeaveRailGroup();
-    break;
   case RailKind::Source:
     OpenSource(item.source);
     break;
@@ -256,16 +279,19 @@ void App::ActivateRail() {
 
 void App::RebuildShelves() {
   // Which place the shelves are for: everything, one source, or nothing.
-  RailKind kind = RailKind::Home;
+  // An empty group has no rows at all; the place is still the group.
+  RailItem place{RailKind::Home, nullptr};
   if (sel_rail_ < (int)rail_.size())
-    kind = rail_[sel_rail_].kind;
-  const RailItem* item = sel_rail_ < (int)rail_.size() ? &rail_[sel_rail_] : nullptr;
+    place = rail_[sel_rail_];
+  else if (rail_in_group_)
+    place = {RailKind::Group, nullptr, rail_group_};
+  const RailKind kind = place.kind;
+  const RailItem* item = &place;
   auto wanted = [&](const std::string& source_key) {
     switch (kind) {
     case RailKind::Source:
       return source_key == item->source->Key();
     case RailKind::Group:
-    case RailKind::Up:
       return GroupOfKey(source_key) == item->group;
     default:
       return true;
@@ -326,20 +352,16 @@ void App::RebuildShelves() {
         Rml::String("Playback, languages and the screensaver."));
     Set("hero_note", bind_hero_note_, Rml::String("Press select to change them."));
     break;
-  case RailKind::Group:
-  case RailKind::Up: {
+  case RailKind::Group: {
     const GroupInfo& info = InfoFor(item->group);
-    const bool any = std::any_of(discovered_.begin(), discovered_.end(),
-      [&](const browse::SourcePtr& s) { return s->RailGroup() == item->group; });
+    const GroupScan& scan = scans_[(int)item->group];
     Rml::String note;
     if (!shelves_.empty())
       note = "";
-    else if (!any)
-      // Network: discovery's own report ("Searching...", errors).
-      note = item->group == Group::Network || discovering_
-        ? bind_status_ : Rml::String("None found.");
-    else if (kind == RailKind::Group)
-      note = "Press select to see them.";
+    else if (rail_in_group_ || scan.running)
+      note = scan.status; // "Searching...", "3 sources found", errors
+    else
+      note = "Press select to look for them.";
     Set("hero_icon", bind_hero_icon_, Rml::String(info.icon));
     Set("hero_title", bind_hero_title_, Rml::String(info.name));
     Set("hero_detail", bind_hero_detail_, Rml::String(info.blurb));
@@ -414,9 +436,32 @@ void App::ActivateCard() {
   if (!card)
     return;
   const browse::Entry entry = *card;
+  const browse::SourcePtr shelf_source = shelves_[sel_shelf_].source;
+
+  // Groups are only searched when entered, so the source a card came from
+  // may not be known yet; look for it first. A plugin's source may well be
+  // needed to play at all (resolve() hands out fresh URIs).
+  std::string key, id;
+  if (library::DecodeId(entry.id, key, id) && !SourceKnown(key)) {
+    const Group group = GroupOfKey(key);
+    if (!scans_[(int)group].scanned) {
+      ShowToast(std::string("Looking for ") + InfoFor(group).name + "...",
+                InfoFor(group).icon);
+      StartDiscovery(group, [this, entry, shelf_source] {
+        if (view_ == View::Home && !bind_watching_)
+          OpenCard(entry, shelf_source);
+      });
+      return;
+    }
+  }
+  OpenCard(entry, shelf_source);
+}
+
+void App::OpenCard(const browse::Entry& entry,
+                   const browse::SourcePtr& shelf_source) {
   // The card's own library source resolves and browses through the source
   // the entry came from.
-  current_source_ = shelves_[sel_shelf_].source;
+  current_source_ = shelf_source;
   if (entry.IsFolder()) {
     path_.clear();
     sel_entry_ = 0;
@@ -451,7 +496,16 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
         RefreshImageBindings();
       }
       break;
-    case Rml::Input::KI_SPACE: StartDiscovery(); break;
+    case Rml::Input::KI_SPACE:
+      if (!rail_in_group_)
+        return;
+      StartDiscovery(rail_group_); // search the group again
+      break;
+    case Rml::Input::KI_LEFT:
+      if (!rail_in_group_)
+        return;
+      LeaveRailGroup();
+      break;
     case Rml::Input::KI_F1:    OpenMenu(); break;
     case Rml::Input::KI_RETURN:
     case Rml::Input::KI_NUMPADENTER:
@@ -616,7 +670,6 @@ void App::OpenSettings() {
     library_.Save();
     ShowToast("Cleared " + std::to_string(items.size()) + " in progress", "🧹");
   }});
-  menu_items_.push_back({"Rescan sources", nullptr, [this](int) { StartDiscovery(); }});
 
   sel_menu_ = 0;
   RebuildMenuRows();

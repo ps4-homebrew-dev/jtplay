@@ -112,6 +112,10 @@ public:
 
   virtual const char* Name() const = 0; // for error messages
 
+  // The rail group of the sources it finds; each group is searched on its
+  // own, when the rail enters it.
+  virtual Source::Group RailGroup() const { return Source::Group::Plugin; }
+
   // Appends whatever it finds to 'out'. Returning false (with a reason in
   // 'error') means the scan itself failed; an empty result is not an error.
   // Blocking; worker thread only.

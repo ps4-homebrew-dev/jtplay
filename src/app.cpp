@@ -89,7 +89,9 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
   Set("view_mode", bind_view_mode_,
       Rml::String(view_mode_ == ViewMode::Grid ? "grid" : "list"));
   RebuildHome();
-  StartDiscovery();
+  // Only the local drives up front: they are found at once. Network
+  // servers and plugins are searched for when the rail enters their group.
+  StartDiscovery(browse::Source::Group::Local);
   return true;
 }
 
@@ -331,7 +333,6 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
 
   ctor.Bind("view", &bind_view_);
   ctor.Bind("view_mode", &bind_view_mode_);
-  ctor.Bind("status", &bind_status_);
   ctor.Bind("toast", &bind_toast_);
   ctor.Bind("toast_icon", &bind_toast_icon_);
   ctor.Bind("backdrop", &bind_backdrop_);

@@ -7,7 +7,7 @@
 //   d-pad, left stick     arrows (held: repeats)
 //   cross / A             Return       open, play, pause
 //   circle / B            Backspace    back, stop
-//   square / X            Space        rescan, cycle video track
+//   square / X            Space        search a source group again, cycle video track
 //   triangle / Y          T            cycle audio track
 //   L1 / R1               PageUp/Down  page, previous/next item (repeats)
 //   L2 / R2               Home / End   first / last row

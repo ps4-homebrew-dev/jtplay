@@ -36,6 +36,7 @@ public:
   explicit DlnaProvider(int discovery_wait_ms);
 
   const char* Name() const override { return "DLNA"; }
+  Source::Group RailGroup() const override { return Source::Group::Network; }
   bool Discover(std::vector<SourcePtr>& out, std::string& error) override;
 
 private:

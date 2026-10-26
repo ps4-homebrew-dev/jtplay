@@ -29,11 +29,14 @@ shelves of cards from your library: **Continue watching** and
   the home folder on a PC, and the entire filesystem.
 - **Network sources**: UPnP/DLNA media servers found on the network.
 - **Plugins**: one source per JavaScript plugin source.
-- **Settings**: playback, languages, the screensaver and rescanning.
+- **Settings**: playback, languages and the screensaver.
 
-Select on a group lists its sources in the rail, under a row that leads
-back up (circle does the same). On a group or one of its sources the
-shelves hold only what came from there. Right moves from the rail onto the
+Select on a group searches it and lists its sources in the rail; circle
+(or left) goes back up. Only the local drives are looked for at start-up:
+network servers and plugins are searched for each time their group is
+entered, and square searches the group again. A card from a group not
+searched yet searches it first, then opens. On a group or one of its
+sources the shelves hold only what came from there. Right moves from the rail onto the
 shelves, select on a card plays it (or opens a favorite folder), and
 select on a source browses it. The focused card's artwork fills the
 background.
@@ -130,8 +133,8 @@ skipped.
 
 Settings, on the home rail, has whether the next episode plays by itself,
 the preferred audio and subtitle language (a matching track is picked when
-a file opens), the screensaver delay, night mode, forgetting Continue
-watching, and rescanning for sources. These and the playback choices
+a file opens), the screensaver delay, night mode and forgetting Continue
+watching. These and the playback choices
 above (repeat, shuffle, night mode, picture, audio delay, subtitle size)
 are kept in `settings.ini` in the cache directory.
 
@@ -246,11 +249,11 @@ options button is the way into everything that is not on the d-pad.
 | Controller            | Key             | Home                         | Browsing                             | Playing                  | Photos               |
 |-----------------------|-----------------|------------------------------|--------------------------------------|--------------------------|----------------------|
 | d-pad up / down       | arrows          | rail / shelf (rail wraps)    | move (wraps around)                  | seek +5 / -5 min         | caption              |
-| d-pad left / right    | arrows          | rail ↔ cards                 | list: page or letter; grid: move     | seek (speeds up)         | previous / next      |
+| d-pad left / right    | arrows          | rail ↔ cards; left: up       | list: page or letter; grid: move     | seek (speeds up)         | previous / next      |
 | cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now | slideshow on / off   |
 | circle (B)            | Backspace       | to the rail; up a group      | back (Home from a source root)       | stop; up next: dismiss   | close                |
 | options (start)       | F1              | options for the card         | options menu                         | playback menu            | photo menu           |
-| square (X)            | Space           | rescan                       | next sort key                        | next video track         |                      |
+| square (X)            | Space           | search the group again       | next sort key                        | next video track         |                      |
 | triangle (Y)          | T               |                              | reverse sort order                   | next audio track         | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item | previous / next |
 | L2 / R2               | Home / End      | first / last                 | first / last                         |                          | first / last         |

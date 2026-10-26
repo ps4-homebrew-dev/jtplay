@@ -618,10 +618,13 @@ void App::OpenMenu() {
     if (shelves_[sel_shelf_].source == continue_source_)
       menu_items_.push_back({"Remove from Continue watching", nullptr,
         [this, card](int) { SetWatched(card, false); }});
-  } else {
+  } else if (rail_in_group_) {
     Set("menu_title", bind_menu_title_, Rml::String("Options"));
-    menu_items_.push_back({"Rescan sources", nullptr,
-      [this](int) { StartDiscovery(); }});
+    const browse::Source::Group group = rail_group_;
+    menu_items_.push_back({"Search again", nullptr,
+      [this, group](int) { StartDiscovery(group); }});
+  } else {
+    return; // nothing to offer on the top level of the rail
   }
 
   sel_menu_ = 0;

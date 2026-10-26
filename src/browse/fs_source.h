@@ -32,6 +32,7 @@ private:
 class FsProvider : public Provider {
 public:
   const char* Name() const override { return "fs"; }
+  Source::Group RailGroup() const override { return Source::Group::Local; }
   bool Discover(std::vector<SourcePtr>& out, std::string& error) override;
 };
 
