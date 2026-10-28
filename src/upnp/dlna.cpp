@@ -167,10 +167,12 @@ DidlObject ParseObject(const XMLElement* e, bool container, const std::string& b
 }
 
 // One Browse SOAP round trip; appends the page to 'out' and reports how
-// many objects the page carried plus the server's TotalMatches.
+// many objects the page carried plus the server's TotalMatches. 'flag' is
+// BrowseDirectChildren (a folder's listing) or BrowseMetadata (the object
+// itself, which the spec wants asked for with start = count = 0).
 bool BrowsePage(const MediaServer& server, const std::string& object_id,
-                uint32_t start, uint32_t count, BrowseResult& out,
-                uint32_t* returned, std::string& error)
+                const char* flag, uint32_t start, uint32_t count,
+                BrowseResult& out, uint32_t* returned, std::string& error)
 {
 	const std::string body =
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -179,7 +181,7 @@ bool BrowsePage(const MediaServer& server, const std::string& object_id,
 		"<s:Body>"
 		"<u:Browse xmlns:u=\"urn:schemas-upnp-org:service:ContentDirectory:1\">"
 		"<ObjectID>" + XmlEscape(object_id) + "</ObjectID>"
-		"<BrowseFlag>BrowseDirectChildren</BrowseFlag>"
+		"<BrowseFlag>" + std::string(flag) + "</BrowseFlag>"
 		"<Filter>*</Filter>"
 		"<StartingIndex>" + std::to_string(start) + "</StartingIndex>"
 		"<RequestedCount>" + std::to_string(count) + "</RequestedCount>"
@@ -339,7 +341,8 @@ bool Browse(const MediaServer& server, const std::string& object_id,
 	for (;;)
 	{
 		uint32_t returned = 0;
-		if (!BrowsePage(server, object_id, start, 200, out, &returned, error))
+		if (!BrowsePage(server, object_id, "BrowseDirectChildren", start, 200,
+		                out, &returned, error))
 			return start > 0; // keep what we already have on a late failure
 		if (returned == 0)
 			break;
@@ -349,6 +352,23 @@ bool Browse(const MediaServer& server, const std::string& object_id,
 		if (out.objects.size() >= max_objects)
 			break;
 	}
+	return true;
+}
+
+bool BrowseMetadata(const MediaServer& server, const std::string& object_id,
+                    DidlObject& out, std::string& error)
+{
+	BrowseResult result;
+	uint32_t returned = 0;
+	if (!BrowsePage(server, object_id, "BrowseMetadata", 0, 0, result,
+	                &returned, error))
+		return false;
+	if (result.objects.empty())
+	{
+		error = "the server no longer has that item";
+		return false;
+	}
+	out = std::move(result.objects.front());
 	return true;
 }
 

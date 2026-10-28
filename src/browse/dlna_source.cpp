@@ -110,6 +110,26 @@ bool DlnaSource::Browse(const std::string& id, Listing& out,
   return true;
 }
 
+// The URL in an entry is whatever the server announced when it was listed.
+// For an item picked from a fresh listing that is as good as any, but one
+// that comes back from the library (Continue watching, Favorites) was listed
+// in an earlier session, and servers readily change host, port or path
+// between runs (DHCP, a random listening port, a rescanned database). Ask
+// the server again for the object's current URL; the saved one is only the
+// fallback for a server that cannot answer.
+bool DlnaSource::Resolve(const Entry& entry, std::string& uri,
+                         std::string& error) {
+  upnp::DidlObject object;
+  std::string lookup_error;
+  if (!entry.id.empty() &&
+      upnp::BrowseMetadata(server_, entry.id, object, lookup_error) &&
+      !object.res_url.empty()) {
+    uri = object.res_url;
+    return true;
+  }
+  return Source::Resolve(entry, uri, error);
+}
+
 // ---------------------------------------------------------------------------
 // DlnaProvider
 // ---------------------------------------------------------------------------

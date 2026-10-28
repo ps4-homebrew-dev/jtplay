@@ -70,6 +70,13 @@ bool DescribeServer(const std::string& location, MediaServer& out, std::string& 
 bool Browse(const MediaServer& server, const std::string& object_id,
             BrowseResult& out, std::string& error, size_t max_objects = 5000);
 
+// ContentDirectory Browse with BrowseFlag=BrowseMetadata: the object itself
+// rather than its children. Used to get a playable URL that is current,
+// since the one seen while browsing (host, port, session) can be stale by
+// the time a saved item is played again.
+bool BrowseMetadata(const MediaServer& server, const std::string& object_id,
+                    DidlObject& out, std::string& error);
+
 } // namespace upnp
 
 #endif
