@@ -13,6 +13,12 @@
 // here. "feed:" folders are still understood, so favorites made with an
 // earlier version of this plugin keep working.
 //
+// Search (options menu) asks Apple for shows in the whole Podcasts
+// catalogue, not just the chart, and lists them like the chart does, so any
+// show can be opened and added to the favorites. It is the same from
+// anywhere in the tree. Narrowing what is listed, like the episodes of a
+// show, is the app's own Filter.
+//
 // Episodes are long enough to count as audiobooks for the app, so they
 // remember where they were stopped, show up under Continue watching and
 // get a tick when finished, like videos do.
@@ -23,6 +29,8 @@ const COUNTRY = "us";
 // does not serve; the next smaller one is then tried.
 const CHART_SIZES = [200, 100, 50];
 const MAX_EPISODES = 200;
+// Shows a search lists, at most (Apple's search serves up to 200).
+const SEARCH_LIMIT = 200;
 
 // Long-running shows have feeds of 10 MB and more, every episode since the
 // first. Only the head of a feed is read (newest episodes come first), which
@@ -256,6 +264,22 @@ function browseTop() {
     });
 }
 
+// Shows matching 'query' in all of Apple Podcasts, as the chart lists them.
+// Not cached: the app keeps the results it is showing, and a refresh should
+// ask again.
+function searchShows(query) {
+    const data = getJson("https://itunes.apple.com/search?media=podcast&entity=podcast" +
+			 "&country=" + COUNTRY + "&limit=" + SEARCH_LIMIT +
+			 "&term=" + encodeURIComponent(query));
+    return (data.results || [])
+	.filter(r => r.collectionId)
+	.map(r => showFolder(
+	    "apple:" + r.collectionId,
+	    r.collectionName || r.trackName || "(untitled show)",
+	    [r.artistName, r.primaryGenreName].filter(s => s).join("  ·  "),
+	    String(r.artworkUrl600 || r.artworkUrl100 || "")));
+}
+
 function feedOfApple(id) {
     return cached("apple:" + id, 24 * 60, () => {
 	const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id));
@@ -309,6 +333,11 @@ return {
 	    detail: "The Apple Podcasts chart",
 	    icon: "🎙",
 	    root: "/",
+	    // The folder on screen does not matter: shows are searched for in
+	    // all of Apple Podcasts.
+	    search(query) {
+		return searchShows(query);
+	    },
 	    browse(id) {
 		if (id === "/" || id === "top")
 		    return browseTop();

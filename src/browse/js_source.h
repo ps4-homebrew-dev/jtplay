@@ -68,7 +68,8 @@ namespace browse {
   public:
     // Takes ownership of 'source' (a reference to the source object).
     JsSource(JsPluginPtr plugin, JSValue source, std::string name,
-	     std::string detail, std::string icon, std::string root);
+	     std::string detail, std::string icon, std::string root,
+	     bool can_search);
     ~JsSource() override;
 
     const std::string& Name() const override { return name_; }
@@ -79,6 +80,14 @@ namespace browse {
 
     bool Browse(const std::string& id, Listing& out,
 		std::string& error) override;
+
+    // A source can search when its script has a search(query, folderId)
+    // function, which returns entries like browse() does. Whether there is
+    // one is looked up once, when the source is made, so this never has to
+    // enter the script.
+    bool CanSearch(const std::string&) const override { return can_search_; }
+    bool Search(const std::string& folder_id, const std::string& query,
+		Listing& out, std::string& error) override;
 
     // Calls the script's resolve(id, entry) when it has one, so a plugin
     // serving signed URIs can hand out a fresh one per playback. Without
@@ -93,6 +102,7 @@ namespace browse {
     std::string detail_;
     std::string icon_;
     std::string root_;
+    bool can_search_;
   };
 
   // One plugin script. A script that failed to load still yields a provider

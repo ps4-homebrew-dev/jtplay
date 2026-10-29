@@ -237,14 +237,15 @@ namespace browse {
       return obj;
     }
 
-    // Converts the array of entry objects returned by browse().
+    // Converts the array of entry objects returned by browse() or search()
+    // ('function' names the caller in error messages).
     bool ToListing(JSContext* ctx, JSValue v, Listing& out,
-		   std::string& error) {
+		   std::string& error, const char* function = "browse") {
       int64_t n = 0;
       if (!ArrayLength(ctx, v, n)) {
 	error = IsThenable(ctx, v)
-	  ? "browse() returned a promise; plugin functions must be synchronous"
-	  : "browse() did not return an array";
+	  ? std::string(function) + "() returned a promise; plugin functions must be synchronous"
+	  : std::string(function) + "() did not return an array";
 	return false;
       }
 
@@ -395,10 +396,12 @@ namespace browse {
   }
 
   JsSource::JsSource(JsPluginPtr plugin, JSValue source, std::string name,
-		     std::string detail, std::string icon, std::string root)
+		     std::string detail, std::string icon, std::string root,
+		     bool can_search)
     : plugin_(std::move(plugin)), source_(source),
       name_(std::move(name)), detail_(std::move(detail)),
-      icon_(std::move(icon)), root_(std::move(root)) {}
+      icon_(std::move(icon)), root_(std::move(root)),
+      can_search_(can_search) {}
 
   JsSource::~JsSource() {
     std::lock_guard<std::mutex> lock(plugin_->mutex);
@@ -427,6 +430,30 @@ namespace browse {
     }
 
     return ToListing(ctx, result.get(), out, error);
+  }
+
+  bool JsSource::Search(const std::string& folder_id, const std::string& query,
+			Listing& out, std::string& error) {
+    std::lock_guard<std::mutex> lock(plugin_->mutex);
+    JSContext* ctx = plugin_->ctx;
+    CallScope scope(*plugin_);
+
+    Ref search(ctx, JS_GetPropertyStr(ctx, source_, "search"));
+    if (!JS_IsFunction(ctx, search.get())) {
+      error = "source has no search function";
+      return false;
+    }
+
+    Ref q(ctx, JS_NewStringLen(ctx, query.data(), query.size()));
+    Ref id(ctx, JS_NewStringLen(ctx, folder_id.data(), folder_id.size()));
+    JSValue argv[] = {q.get(), id.get()};
+    // 'this' is the source object, as for browse().
+    Ref result(ctx, JS_Call(ctx, search.get(), source_, 2, argv));
+    if (JS_IsException(result.get())) {
+      error = TakeException(ctx);
+      return false;
+    }
+    return ToListing(ctx, result.get(), out, error, "search");
   }
 
   bool JsSource::Resolve(const Entry& entry, std::string& uri,
@@ -534,9 +561,13 @@ namespace browse {
       const std::string icon =
 	FieldString(ctx, item.get(), "icon", "\U0001F9E9");
       const std::string root = FieldString(ctx, item.get(), "root", "/");
+      // Looked up here, with the plugin's mutex held, so that asking
+      // whether it can search later (on the main thread) never enters it.
+      Ref search(ctx, JS_GetPropertyStr(ctx, item.get(), "search"));
+      const bool can_search = JS_IsFunction(ctx, search.get());
 
       found.push_back(std::make_shared<JsSource>(plugin_, item.release(), name,
-						 detail, icon, root));
+						 detail, icon, root, can_search));
     }
 
     out.insert(out.end(), std::make_move_iterator(found.begin()),

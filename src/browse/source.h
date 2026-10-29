@@ -106,6 +106,26 @@ public:
   virtual bool Browse(const std::string& id, Listing& out,
                       std::string& error) = 0;
 
+  // Whether Search() can be asked from the folder 'folder_id' that is on
+  // screen; the app offers Search only then. Cheap, and must not call into
+  // anything slow: it runs on the main thread.
+  virtual bool CanSearch(const std::string& /*folder_id*/) const {
+    return false;
+  }
+
+  // Asks the source's backend for content matching 'query' (as opposed to
+  // the app's own filter, which only narrows what is listed) and lists the
+  // hits like Browse() lists a folder. 'folder_id' is the folder on screen,
+  // for sources whose searches have a scope; most ignore it. An empty result
+  // is a result; a failure is false with the reason in 'error'. Only called
+  // when CanSearch() said yes. Blocking; worker thread only.
+  virtual bool Search(const std::string& /*folder_id*/,
+                      const std::string& /*query*/, Listing& /*out*/,
+                      std::string& error) {
+    error = "this source cannot search";
+    return false;
+  }
+
   // Turns 'entry' into something ffmpeg can open, immediately before
   // playback starts. The default hands back the uri captured while
   // browsing, which is all a DLNA server or a local file needs; sources

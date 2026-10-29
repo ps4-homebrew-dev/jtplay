@@ -345,6 +345,33 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
   return true;
 }
 
+bool LibrarySource::CanSearch(const std::string& folder_id) const {
+  std::string key, inner;
+  if (!DecodeId(folder_id, key, inner))
+    return false; // the root of the library
+  const browse::SourcePtr source = registry_.Find(key);
+  return source && source->CanSearch(inner);
+}
+
+bool LibrarySource::Search(const std::string& folder_id, const std::string& query,
+                           browse::Listing& out, std::string& error) {
+  std::string key, inner;
+  if (!DecodeId(folder_id, key, inner)) {
+    error = "this source cannot search";
+    return false;
+  }
+  const browse::SourcePtr source = registry_.Find(key);
+  if (!source) {
+    error = "that source is not available right now";
+    return false;
+  }
+  if (!source->Search(inner, query, out, error))
+    return false;
+  for (browse::Entry& e : out)
+    e.id = EncodeId(key, e.id);
+  return true;
+}
+
 bool LibrarySource::Resolve(const browse::Entry& entry, std::string& uri,
                             std::string& error) {
   std::string key, inner;

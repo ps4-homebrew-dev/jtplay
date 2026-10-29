@@ -115,6 +115,11 @@ public:
   std::string RootId() const override { return std::string(); }
 
   bool Browse(const std::string& id, browse::Listing& out, std::string& error) override;
+  // Below a favorite folder the original source searches, if it can; the
+  // library's own root has nothing to ask.
+  bool CanSearch(const std::string& folder_id) const override;
+  bool Search(const std::string& folder_id, const std::string& query,
+              browse::Listing& out, std::string& error) override;
   bool Resolve(const browse::Entry& entry, std::string& uri, std::string& error) override;
 
   // Main thread: recomputes the subtitle ("12 items").

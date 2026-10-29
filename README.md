@@ -67,7 +67,29 @@ moment) instead of paging.
 The options button opens a side menu: what can be done with the selected
 item (play, resume, play from the beginning, add to favorites, mark as
 watched), playing the whole folder in order or shuffled, a slideshow of
-its pictures, followed by the view and sort settings, refresh, and Home.
+its pictures, followed by filter (and search, where the source has it), the
+view and sort settings, refresh, and Home.
+
+## Filter and search
+
+**Filter**, in the options menu of a folder (or Ctrl+F on a keyboard), narrows
+the list on screen to the entries whose name or description hold every word
+you type. A bar opens above the list and the list follows the typing; on the
+console, focusing the field brings up the system keyboard. Up and down still
+move in the list meanwhile. Return keeps the filter and goes back to the
+list, Escape drops it (so does back, on an empty field). While a filter is
+on, the head of the list says how many of the entries are shown, the options
+menu has Clear filter and back clears it before it leaves the folder. A
+filter belongs to its folder, survives a refresh and works in every source,
+since it only looks at what is listed. Names match in any case for plain
+letters; other characters have to match as typed.
+
+**Search**, in the options menu (or Ctrl+S), is for sources that can ask a
+backend for content that is not listed, and is only there for those. The
+podcast plugin searches all of Apple Podcasts, not just its chart. What the
+backend finds is a folder of its own that sorts, filters, plays and takes
+favorites like any other, and back returns to the folder, with the selection
+where it was. Searching from the hits searches again; Refresh asks again.
 
 ## Photos
 
@@ -203,6 +225,14 @@ or otherwise short-lived URIs can leave `uri` out and add a
 `resolve(id, entry)` function returning a fresh one (as a string, or as an
 entry object with a `uri`) at the moment playback starts.
 
+A source that can ask a backend for content that is not listed adds
+`search(query, folderId)` and gets Search in the options menu (there is
+nothing to declare: having the function is enough). It is called with what
+was typed and the id of the folder on screen, which most searches have no use
+for, and returns entries like `browse()` does; an empty array is an answer:
+nothing found. Narrowing what is listed is the app's own filter and needs
+nothing from the plugin. See `plugins/podcasts.js`.
+
 See `plugins/sr.js` (Sveriges Radio live channels) for a working example.
 
 ### Fetching over the network
@@ -262,7 +292,9 @@ options button is the way into everything that is not on the d-pad.
 | L2 / R2               | Home / End      | first / last                 | first / last                         |                          | first / last         |
 | back (select)         | Escape          | to the rail; up a group      | back                                 | stop                     | close                |
 
-Held directions repeat. Ctrl+Q quits. The mapping lives in `src/gamepad.cpp`.
+Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
+Ctrl+S searches the source.
+The mapping lives in `src/gamepad.cpp`.
 
 ## Playback
 

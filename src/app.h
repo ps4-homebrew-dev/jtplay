@@ -76,6 +76,12 @@ private:
     browse::Listing raw;       // as the source returned it
     browse::Listing entries;   // 'raw', sorted for display
     int selection = 0;
+    // Not empty: this level lists the results of a search for it, not a
+    // folder (see RequestSearch).
+    std::string query;
+    // What the list is narrowed to (see OpenFilter); 'entries' holds only
+    // the entries of 'raw' that match it. "" = all of them.
+    std::string filter;
   };
 
   // Rows exposed to the RmlUi data model.
@@ -240,6 +246,38 @@ private:
   static std::string CoverDecorator(const std::string& path);
   const browse::Entry* SelectedEntry() const;
   BrowseLevel* CurrentLevel();
+
+  // --- Filter ------------------------------------------------------------
+  // Options menu > Filter (or Ctrl+F) narrows the list on screen to the
+  // entries whose name or description hold every word typed. A bar above
+  // the list takes the typing and the list follows it as it goes; on a
+  // console, focusing the field brings up the system keyboard. Return keeps
+  // the filter and goes back to the list, Escape drops it. The filter
+  // belongs to the folder (the level), and works in every source, since it
+  // only looks at what is listed.
+  void OpenFilter();
+  void CloseFilter();                         // keeps the filter
+  void ClearFilter();
+  void ApplyFilter(const std::string& text);  // the current level's filter
+  // What is in the field, as typed; "" if nothing.
+  std::string FilterFieldText() const;
+  void HandleKeyFilter(Rml::Event& event, int key);
+
+  // --- Search ------------------------------------------------------------
+  // Options menu > Search (or Ctrl+S), for sources that can ask their
+  // backend (Source::CanSearch): a dialog with a text field, and what the
+  // backend finds is listed as a level of its own on the browse stack, so
+  // back returns to the folder, selection and all. Unlike the filter it
+  // reaches content that is not listed.
+  void OpenSearch();
+  void CloseSearch();
+  // What has been typed, trimmed; "" if nothing.
+  std::string SearchText() const;
+  void HandleKeySearch(Rml::Event& event, int key);
+  void RequestSearch(const std::string& query);
+  // Index in path_ of the folder a search starts from: the current level, or
+  // the one below it when the current level is itself a list of results.
+  size_t SearchScope() const;
 
   // --- Sorting -----------------------------------------------------------
   void SortLevel(BrowseLevel& level) const;   // raw -> entries
@@ -458,6 +496,13 @@ private:
   int photo_moves_ = 0;                // picks the next Ken Burns move
   std::vector<int> photo_rotation_;    // manual quarter turns, per picture
 
+  bool bind_filter_open_ = false;  // the filter bar is up
+  Rml::String bind_filter_text_;   // the current level's filter, for the head
+  bool filter_focus_pending_ = false; // focus the field once the bar shows
+  bool bind_search_open_ = false;  // the search dialog is up
+  Rml::String bind_search_title_;  // "Search in Podcasts"
+  bool search_focus_pending_ = false; // focus the field once the dialog shows
+
   bool bind_menu_open_ = false;
   bool bind_menu_dialog_ = false;  // centered dialog rather than side blade
   Rml::String bind_menu_title_;
@@ -494,7 +539,8 @@ private:
 
   std::vector<EntryRow> entry_rows_;
   int sel_entry_ = 0;
-  int entry_count_ = 0;
+  int entry_count_ = 0;                // rows shown
+  int entry_total_ = 0;                // entries of the folder, filtered or not
 
   // Backing data (main thread).
   std::vector<std::unique_ptr<browse::Provider>> providers_;

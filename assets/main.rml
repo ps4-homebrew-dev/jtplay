@@ -96,10 +96,17 @@
 			     data-class-grid="view_mode == 'grid'">
 				<div id="entries" class="pane">
 					<div class="pane-head">
-						<span class="eyebrow">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
+						<span class="eyebrow" data-if="filter_text == ''">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
+						<span class="eyebrow" data-if="filter_text != ''">🔍 {{filter_text}}  ·  {{entry_count}} of {{entry_total}}</span>
 						<span class="spacer"/>
 						<span class="sort">{{sort_label}}</span>
 						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
+					</div>
+					<!-- The filter (src/app_browse.cpp): the list below follows what is
+					     typed. Focusing the field brings up the system keyboard on a console. -->
+					<div id="filter-bar" data-if="filter_open">
+						<span class="filter-icon">🔍</span>
+						<input id="filter-input" type="text" maxlength="100"/>
 					</div>
 					<!-- The letter a left / right jump landed on, briefly and large. -->
 					<div id="jump-letter" data-if="jump_letter != ''">{{jump_letter}}</div>
@@ -124,8 +131,11 @@
 							<span class="emark watched" data-if="e.watched">✔</span>
 							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
 						</div>
-						<div class="empty" data-if="entry_count == 0 && !busy">
+						<div class="empty" data-if="entry_count == 0 && !busy && filter_text == ''">
 							This folder is empty.
+						</div>
+						<div class="empty" data-if="entry_count == 0 && !busy && filter_text != ''">
+							Nothing matches the filter.
 						</div>
 						<div class="empty" data-if="entry_count == 0 && busy">
 							Loading...
@@ -306,6 +316,14 @@
 					<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
 				</div>
 			</div>
+		</div>
+
+		<!-- Search: a query field in a dialog (src/app_browse.cpp). Focusing the
+		     field is what brings up the system keyboard on a console. -->
+		<div id="search-scrim" data-if="search_open"/>
+		<div id="search" data-if="search_open">
+			<div class="menu-title">{{search_title}}</div>
+			<input id="search-input" type="text" maxlength="100"/>
 		</div>
 
 		<!-- Notification in the corner. -->

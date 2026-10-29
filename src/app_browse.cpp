@@ -7,6 +7,8 @@
 #include <cctype>
 #include <cstdlib>
 
+#include <RmlUi/Core/Elements/ElementFormControl.h>
+
 #include "app.h"
 #include "app_internal.h"
 #include "browse/natural_sort.h"
@@ -49,6 +51,45 @@ std::string Initial(const std::string& name) {
 const char* SortModeName(int mode) {
   static const char* const kNames[] = {"Default", "Name", "Date", "Size"};
   return kNames[mode];
+}
+
+// ASCII lower-casing; the bytes of other characters are left alone, so those
+// match in the case they were typed in.
+std::string Lower(std::string s) {
+  for (char& c : s) {
+    if (c >= 'A' && c <= 'Z')
+      c = (char)(c - 'A' + 'a');
+  }
+  return s;
+}
+
+// The words of a filter, lower-cased.
+std::vector<std::string> FilterWords(const std::string& filter) {
+  std::vector<std::string> words;
+  const std::string q = Lower(filter);
+  for (size_t i = 0; i < q.size();) {
+    while (i < q.size() && std::isspace((unsigned char)q[i]))
+      i++;
+    const size_t start = i;
+    while (i < q.size() && !std::isspace((unsigned char)q[i]))
+      i++;
+    if (i > start)
+      words.push_back(q.substr(start, i - start));
+  }
+  return words;
+}
+
+// Whether the name or the description of 'e' holds every one of 'words'
+// (no words: everything matches).
+bool MatchesFilter(const browse::Entry& e, const std::vector<std::string>& words) {
+  if (words.empty())
+    return true;
+  const std::string text = Lower(e.name + "\n" + e.description);
+  for (const std::string& word : words) {
+    if (text.find(word) == std::string::npos)
+      return false;
+  }
+  return true;
 }
 
 } // namespace
@@ -117,17 +158,20 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
         return;
       }
 
-      std::string keep;
+      std::string keep, filter;
       if (replace) {
         if (const browse::Entry* e = SelectedEntry())
           keep = e->id;
-        if (!path_.empty())
+        if (!path_.empty()) {
+          filter = path_.back().filter; // a refresh keeps the list narrowed
           path_.pop_back();
+        }
       }
 
       BrowseLevel level;
       level.id = id;
       level.name = name;
+      level.filter = filter;
       level.raw = std::move(result);
       SortLevel(level);
       for (size_t i = 0; i < level.entries.size() && !keep.empty(); i++) {
@@ -160,6 +204,12 @@ void App::RefreshContainer() {
   if (!level)
     return;
   CancelLaunch();
+  if (!level->query.empty()) {
+    // A list of results: search again rather than list a folder.
+    const std::string query = level->query;
+    RequestSearch(query);
+    return;
+  }
   RequestBrowse(level->id, level->name, true);
 }
 
@@ -202,9 +252,13 @@ void App::RebuildEntryRows() {
     }
   }
   entry_count_ = (int)entry_rows_.size();
+  const BrowseLevel* shown = CurrentLevel();
+  entry_total_ = shown ? (int)shown->raw.size() : 0;
+  Set("filter_text", bind_filter_text_, shown ? shown->filter : std::string());
   sel_entry_ = std::clamp(sel_entry_, 0, std::max(0, entry_count_ - 1));
   model_.DirtyVariable("entries");
   model_.DirtyVariable("entry_count");
+  model_.DirtyVariable("entry_total");
   model_.DirtyVariable("sel_entry");
   Set("sort_label", bind_sort_label_, SortLabel());
   art_scan_pending_ = true; // artwork for the new rows, this frame
@@ -389,6 +443,9 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     if (launch_request_) {
       CancelLaunch();
       ShowToast("Cancelled", "⏹");
+    } else if (const BrowseLevel* level = CurrentLevel();
+               level && !level->filter.empty()) {
+      ClearFilter(); // back out of the filter before the folder
     } else {
       LeaveContainer();
     }
@@ -412,10 +469,15 @@ void App::SortLevel(BrowseLevel& level) const {
   if (level.selection >= 0 && level.selection < (int)level.entries.size())
     selected = level.entries[level.selection].id;
 
-  // Sort indices into raw so Default can use the source order as its key.
-  std::vector<size_t> order(level.raw.size());
-  for (size_t i = 0; i < order.size(); i++)
-    order[i] = i;
+  // Sort indices into raw (so Default can use the source order as its key),
+  // of the entries that pass the filter.
+  const std::vector<std::string> words = FilterWords(level.filter);
+  std::vector<size_t> order;
+  order.reserve(level.raw.size());
+  for (size_t i = 0; i < level.raw.size(); i++) {
+    if (MatchesFilter(level.raw[i], words))
+      order.push_back(i);
+  }
 
   const browse::Listing& raw = level.raw;
   const SortMode mode = sort_mode_;
@@ -589,6 +651,14 @@ void App::OpenMenu() {
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
+    // Filter narrows what is listed; Search asks the source for more, and is
+    // only there for sources that can.
+    menu_items_.push_back({"Filter", nullptr, [this](int) { OpenFilter(); }});
+    if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
+      menu_items_.push_back({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
+    if (current_source_ && !path_.empty() &&
+        current_source_->CanSearch(path_[SearchScope()].id))
+      menu_items_.push_back({"Search", nullptr, [this](int) { OpenSearch(); }});
     menu_items_.push_back({"View",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
@@ -757,4 +827,270 @@ void App::UpdateVisibleArt() {
   }
   if (changed)
     model_.DirtyVariable("shelves");
+}
+
+// ---------------------------------------------------------------------------
+// Filter
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// What was typed into a field: without the newline a Return also arrives as
+// (see RmlUi_Platform_SDL.cpp), and without spaces at either end.
+std::string CleanFieldText(const std::string& raw) {
+  std::string text;
+  for (char c : raw) {
+    if (c != '\n' && c != '\r')
+      text += c;
+  }
+  const size_t first = text.find_first_not_of(" \t");
+  if (first == std::string::npos)
+    return {};
+  return text.substr(first, text.find_last_not_of(" \t") - first + 1);
+}
+
+} // namespace
+
+void App::OpenFilter() {
+  if (view_ != View::Browse || path_.empty() || bind_watching_ || bind_photo_)
+    return;
+  CancelLaunch(); // the list is about to change under it
+  // The bar is only hidden between uses (data-if), so the field still holds
+  // whatever it held last: put this folder's filter back in, to be edited.
+  if (Rml::Element* input = document_->GetElementById("filter-input"))
+    static_cast<Rml::ElementFormControl*>(input)->SetValue(path_.back().filter);
+  filter_focus_pending_ = true;
+  Set("filter_open", bind_filter_open_, true);
+}
+
+void App::CloseFilter() {
+  filter_focus_pending_ = false;
+  // Losing the focus is what takes the system keyboard down again.
+  if (Rml::Element* input = document_->GetElementById("filter-input"))
+    input->Blur();
+  Set("filter_open", bind_filter_open_, false);
+}
+
+void App::ClearFilter() {
+  if (Rml::Element* input = document_->GetElementById("filter-input"))
+    static_cast<Rml::ElementFormControl*>(input)->SetValue("");
+  ApplyFilter(std::string());
+}
+
+// Narrows (or widens) the list on screen to 'text', keeping the selection on
+// the same entry when it is still there.
+void App::ApplyFilter(const std::string& text) {
+  BrowseLevel* level = CurrentLevel();
+  if (!level || level->filter == text)
+    return;
+  CancelLaunch(); // the entry it was started from may be about to go
+  level->selection = sel_entry_;
+  level->filter = text;
+  SortLevel(*level);
+  sel_entry_ = level->selection;
+  RebuildEntryRows();
+  RebuildDetail();
+  scroll_entries_pending_ = true;
+}
+
+std::string App::FilterFieldText() const {
+  Rml::Element* element = document_ ? document_->GetElementById("filter-input") : nullptr;
+  if (!element)
+    return {};
+  // The field is an <input>, which is a form control.
+  return CleanFieldText(static_cast<Rml::ElementFormControl*>(element)->GetValue());
+}
+
+void App::HandleKeyFilter(Rml::Event& event, int key) {
+  switch (key) {
+  case Rml::Input::KI_RETURN:
+  case Rml::Input::KI_NUMPADENTER:
+    event.StopPropagation();
+    if (FilterFieldText().empty()) {
+      // Nothing typed, or the system keyboard was dismissed: ask for it again.
+      if (Rml::Element* input = document_->GetElementById("filter-input")) {
+        input->Blur();
+        input->Focus();
+      }
+    } else {
+      CloseFilter(); // the list stays narrowed
+    }
+    return;
+  case Rml::Input::KI_ESCAPE:
+    event.StopPropagation();
+    ClearFilter();
+    CloseFilter();
+    return;
+  case Rml::Input::KI_BACK:
+    // Backspace belongs to the field. With nothing in it, back (a
+    // controller's circle button too) closes the bar.
+    if (FilterFieldText().empty()) {
+      event.StopPropagation();
+      CloseFilter();
+    }
+    return;
+  // The list stays in reach while typing; left, right, home and end are
+  // the field's.
+  case Rml::Input::KI_UP:
+    event.StopPropagation();
+    MoveSelection(view_mode_ == ViewMode::Grid ? -kGridColumns : -1);
+    return;
+  case Rml::Input::KI_DOWN:
+    event.StopPropagation();
+    MoveSelection(view_mode_ == ViewMode::Grid ? +kGridColumns : +1);
+    return;
+  case Rml::Input::KI_PRIOR:
+    event.StopPropagation();
+    MoveSelection(-kPageRows);
+    return;
+  case Rml::Input::KI_NEXT:
+    event.StopPropagation();
+    MoveSelection(+kPageRows);
+    return;
+  default:
+    return; // typing and moving the caret: the field's business
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+size_t App::SearchScope() const {
+  if (path_.empty())
+    return 0;
+  const size_t top = path_.size() - 1;
+  return (top > 0 && !path_[top].query.empty()) ? top - 1 : top;
+}
+
+void App::OpenSearch() {
+  if (view_ != View::Browse || !current_source_ || path_.empty() ||
+      bind_watching_ || bind_photo_)
+    return;
+  if (!current_source_->CanSearch(path_[SearchScope()].id)) {
+    ShowToast("This source cannot search", "🔍");
+    return;
+  }
+  // "Search Podcasts"; under Favorites it is the favorite's own source that
+  // is asked, whose name is not at hand.
+  const bool library = current_source_ == favorites_source_ ||
+                       current_source_ == continue_source_;
+  Set("search_title", bind_search_title_,
+      library ? std::string("Search") : "Search " + current_source_->Name());
+  // The field is only hidden between searches (data-if), so it still holds
+  // the last query.
+  if (Rml::Element* input = document_->GetElementById("search-input"))
+    static_cast<Rml::ElementFormControl*>(input)->SetValue("");
+  search_focus_pending_ = true;
+  Set("search_open", bind_search_open_, true);
+}
+
+void App::CloseSearch() {
+  search_focus_pending_ = false;
+  // Losing the focus is what takes the system keyboard down again.
+  if (Rml::Element* input = document_->GetElementById("search-input"))
+    input->Blur();
+  Set("search_open", bind_search_open_, false);
+}
+
+std::string App::SearchText() const {
+  Rml::Element* element = document_ ? document_->GetElementById("search-input") : nullptr;
+  if (!element)
+    return {};
+  // The field is an <input>, which is a form control.
+  return CleanFieldText(static_cast<Rml::ElementFormControl*>(element)->GetValue());
+}
+
+void App::HandleKeySearch(Rml::Event& event, int key) {
+  switch (key) {
+  case Rml::Input::KI_RETURN:
+  case Rml::Input::KI_NUMPADENTER: {
+    event.StopPropagation();
+    const std::string text = SearchText();
+    if (text.empty()) {
+      // Nothing typed, or the system keyboard was dismissed: ask for it again.
+      if (Rml::Element* input = document_->GetElementById("search-input")) {
+        input->Blur();
+        input->Focus();
+      }
+      return;
+    }
+    CloseSearch();
+    RequestSearch(text);
+    return;
+  }
+  case Rml::Input::KI_ESCAPE:
+    event.StopPropagation();
+    CloseSearch();
+    return;
+  case Rml::Input::KI_BACK:
+    // Backspace belongs to the field. With nothing in it, back (a
+    // controller's circle button too) closes the dialog.
+    if (SearchText().empty()) {
+      event.StopPropagation();
+      CloseSearch();
+    }
+    return;
+  default:
+    return; // typing and moving the caret: the field's business
+  }
+}
+
+// Asks the source's backend for 'query' (Source::Search, from the folder on
+// screen). The hits become a level of their own above the folder, or replace
+// the one on top when that is a list of hits, so back always returns to the
+// folder.
+void App::RequestSearch(const std::string& query) {
+  if (!current_source_ || path_.empty())
+    return;
+  CancelLaunch();
+
+  const size_t scope = SearchScope();
+  const bool replace = scope + 1 < path_.size();
+  if (!replace)
+    path_[scope].selection = sel_entry_; // where back returns to
+  const std::string folder = path_[scope].id;
+
+  const uint32_t request = ++browse_request_;
+  const browse::SourcePtr source = current_source_;
+
+  busy_ops_++;
+  PostTask([this, request, source, folder, query, scope, replace] {
+    browse::Listing result;
+    std::string error;
+    if (!source->Search(folder, query, result, error) && error.empty())
+      error = "the search failed";
+
+    Reply([this, request, folder, query, scope, replace,
+           result = std::move(result), error]() mutable {
+      if (request != browse_request_ || scope >= path_.size())
+        return; // superseded while it was in flight
+      if (!error.empty()) {
+        ShowToast(error, "⚠");
+        return;
+      }
+      if (result.empty()) {
+        ShowToast("Nothing found for \"" + query + "\"", "🔍");
+        return;
+      }
+
+      if (replace)
+        path_.pop_back();
+      BrowseLevel level;
+      // Never the id of a folder: the play order and the like are keyed on it.
+      level.id = "search:" + folder + "\n" + query;
+      level.name = "Search: " + query;
+      level.query = query;
+      level.raw = std::move(result);
+      SortLevel(level);
+      sel_entry_ = level.selection;
+      path_.push_back(std::move(level));
+
+      RebuildEntryRows();
+      RebuildCrumb();
+      RebuildDetail();
+      scroll_entries_pending_ = true;
+    });
+    busy_ops_--;
+  });
 }

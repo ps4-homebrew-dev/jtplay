@@ -11,6 +11,8 @@
 
 #include <SDL.h>
 
+#include <RmlUi/Core/Elements/ElementFormControlInput.h>
+
 #include "app.h"
 #include "app_internal.h"
 #include "artcache.h"
@@ -356,6 +358,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
 
   ctor.Bind("entries", &entry_rows_);
   ctor.Bind("entry_count", &entry_count_);
+  ctor.Bind("entry_total", &entry_total_);
   ctor.Bind("sel_entry", &sel_entry_);
   ctor.Bind("sort_label", &bind_sort_label_);
   ctor.Bind("jump_letter", &bind_jump_letter_);
@@ -372,6 +375,11 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("saver_x", &bind_saver_x_);
   ctor.Bind("saver_y", &bind_saver_y_);
   ctor.Bind("saver_now", &bind_saver_now_);
+
+  ctor.Bind("filter_open", &bind_filter_open_);
+  ctor.Bind("filter_text", &bind_filter_text_);
+  ctor.Bind("search_open", &bind_search_open_);
+  ctor.Bind("search_title", &bind_search_title_);
 
   ctor.Bind("menu_open", &bind_menu_open_);
   ctor.Bind("menu_dialog", &bind_menu_dialog_);
@@ -514,6 +522,36 @@ void App::Update() {
     EnsureRowVisible("menu-rows", sel_menu_, kMenuRowPitch);
     scroll_menu_pending_ = false;
   }
+  // Focusing a text field is what brings up the system keyboard. It waits
+  // until the field is on screen: a data-if only hides its element
+  // (display: none), and shows it in the context update after the change.
+  if (search_focus_pending_) {
+    Rml::Element* dialog = document_->GetElementById("search");
+    Rml::Element* input = document_->GetElementById("search-input");
+    if (!bind_search_open_)
+      search_focus_pending_ = false;
+    else if (dialog && input && dialog->IsVisible() && input->Focus())
+      search_focus_pending_ = false;
+  }
+  if (filter_focus_pending_) {
+    Rml::Element* bar = document_->GetElementById("filter-bar");
+    Rml::Element* input = document_->GetElementById("filter-input");
+    if (!bind_filter_open_)
+      filter_focus_pending_ = false;
+    else if (bar && input && bar->IsVisible() && input->Focus()) {
+      filter_focus_pending_ = false;
+      scroll_entries_pending_ = true; // the list got shorter
+      // The filter put back in the field is there to be added to: the caret
+      // goes after it (this only holds once the field has the focus).
+      const int end = (int)static_cast<Rml::ElementFormControlInput*>(input)->GetValue().size();
+      static_cast<Rml::ElementFormControlInput*>(input)->SetSelectionRange(end, end);
+    }
+  }
+  // The list follows what is typed into the filter bar, a key at a time.
+  // (Polled: the field has no change event worth depending on, and the
+  // system keyboard hands over its text all at once anyway.)
+  if (bind_filter_open_ && !filter_focus_pending_)
+    ApplyFilter(FilterFieldText());
   if (scroll_sources_pending_) {
     EnsureRowVisible("rail", sel_rail_, kRailRowPitch);
     if (Rml::Element* shelves = document_->GetElementById("shelves")) {
@@ -615,6 +653,29 @@ void App::ProcessEvent(Rml::Event& event) {
     return;
   }
 
+  // From a folder: Ctrl+F filters it, Ctrl+S searches the source. Not
+  // buttons of the controller; there the options menu has both.
+  if ((key == Rml::Input::KI_F || key == Rml::Input::KI_S) &&
+      (event.GetParameter<int>("ctrl_key", 0) != 0) &&
+      view_ == View::Browse && !bind_filter_open_ && !bind_search_open_ &&
+      !bind_menu_open_ && !bind_photo_ && !bind_watching_) {
+    if (key == Rml::Input::KI_F)
+      OpenFilter();
+    else
+      OpenSearch();
+    event.StopPropagation();
+    return;
+  }
+
+  // The text fields come first: they have to see the typing.
+  if (bind_filter_open_) {
+    HandleKeyFilter(event, key);
+    return;
+  }
+  if (bind_search_open_) {
+    HandleKeySearch(event, key);
+    return;
+  }
   if (bind_menu_open_) {
     HandleKeyMenu(event, key);
     return;

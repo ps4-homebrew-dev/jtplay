@@ -332,3 +332,47 @@
 	border-radius: 28px;
 	box-shadow: #000000a0 0px 20px 60px 0px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Filter bar                                                         */
+/* ------------------------------------------------------------------ */
+
+/* Between the pane head and the list, which follows what is typed (see
+ * OpenFilter in src/app_browse.cpp). The app focuses the field, which is
+ * what brings up the system keyboard on a console; on a PC it is typed
+ * into. Return keeps the filter, Escape drops it. */
+#filter-bar {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 72px;
+	margin: 0px 0px 10px 0px;
+	padding: 0px 24px;
+	background-color: #151d2f;
+	border-left: 4px #4dd6b8;
+	border-radius: 10px;
+}
+
+.filter-icon {
+	margin-right: 18px;
+	font-size: 28px;
+}
+
+#filter-input {
+	display: block;
+	flex: 1;
+	box-sizing: border-box;
+	height: 72px;
+	padding: 18px 0px 0px 0px;
+	font-size: 30px;
+	color: #ffffff;
+	background-color: transparent;
+	overflow: hidden;
+	caret-color: #4dd6b8;
+}
+
+#filter-input::selection {
+	color: #06231d;
+	background-color: #4dd6b8;
+}
