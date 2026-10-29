@@ -15,8 +15,7 @@ plugins, in the spirit of Kodi.
 - **UPnP/DLNA servers** on the local network (MiniDLNA, Jellyfin, Plex, ...).
 - **JavaScript plugins** (see below). Bundled: internet radio from
   radio-browser.info (by popularity, country and genre), podcasts (the
-  Apple Podcasts chart plus your own feeds, listed at the top of
-  `plugins/podcasts.js`), Sveriges Radio, SVT Play and Pluto TV (free live
+  Apple Podcasts chart; add the shows you follow to Favorites), Sveriges Radio, SVT Play and Pluto TV (free live
   channels, films and series; the catalogue is whatever Pluto serves your
   region).
 

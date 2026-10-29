@@ -1,29 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Podcasts: the Apple Podcasts charts, plus any feeds of your own.
+// Podcasts: the Apple Podcasts chart.
 //
 // The tree:
-//   /                    My podcasts (FEEDS below), Top podcasts
-//   mine                 the feeds in FEEDS
-//   top                  the chart for COUNTRY
+//   /  or  top           the chart for COUNTRY
 //   feed:<url>           a show's episodes, newest first, from its RSS feed
 //   apple:<id>           a charted show: its feed is looked up, then as above
 //                        (Apple's episode list if the feed cannot be read)
+//
+// Shows you follow are kept with jtplay's own favorites ("Add to favorites"
+// in the options menu, on any folder), so there is no list of feeds to edit
+// here. "feed:" folders are still understood, so favorites made with an
+// earlier version of this plugin keep working.
 //
 // Episodes are long enough to count as audiobooks for the app, so they
 // remember where they were stopped, show up under Continue watching and
 // get a tick when finished, like videos do.
 
-// Your own shows: RSS feed URLs. Edit to taste.
-const FEEDS = [
-    "https://feeds.simplecast.com/54nAGcIl",      // The Daily
-    "https://feeds.simplecast.com/BqbsxVfO",      // 99% Invisible
-    "https://feeds.npr.org/510289/podcast.xml"    // Planet Money
-];
-
-// Which country's chart "Top podcasts" shows (two-letter store code).
+// Which country's chart is shown (two-letter store code).
 const COUNTRY = "us";
-const CHART_SIZE = 50;
+// How many shows to ask the chart for, largest first. Apple refuses a size it
+// does not serve; the next smaller one is then tried.
+const CHART_SIZES = [200, 100, 50];
 const MAX_EPISODES = 200;
 
 // Long-running shows have feeds of 10 MB and more, every episode since the
@@ -228,24 +226,23 @@ function showFolder(id, name, description, image) {
     return { id: id, type: "folder", name: name, description: description || "", image: image || "" };
 }
 
-function browseMine() {
-    return FEEDS.map(url => {
-	try {
-	    const show = readFeed(url);
-	    return showFolder("feed:" + url, show.title || url,
-			      show.episodes.length + " episodes", show.image);
-	} catch (e) {
-	    // Still listed: opening it tries again and shows the error.
-	    console.warn("podcasts: " + url + ": " + e.message);
-	    return showFolder("feed:" + url, url, "Could not load: " + e.message);
-	}
-    });
+// The chart at the largest size Apple will serve.
+function fetchChart() {
+    let status = 0;
+    for (const size of CHART_SIZES) {
+	const res = http.get("https://rss.applemarketingtools.com/api/v2/" + COUNTRY +
+			     "/podcasts/top/" + size + "/podcasts.json", { timeout: 20 });
+	if (res.ok)
+	    return JSON.parse(res.body);
+	status = res.status;
+	console.warn("podcasts: chart of " + size + ": HTTP " + status);
+    }
+    throw new Error("HTTP " + status + " from the Apple Podcasts chart");
 }
 
 function browseTop() {
     return cached("top", 60, () => {
-	const data = getJson("https://rss.applemarketingtools.com/api/v2/" + COUNTRY +
-			     "/podcasts/top/" + CHART_SIZE + "/podcasts.json");
+	const data = fetchChart();
 	const results = (data.feed && data.feed.results) || [];
 	if (!results.length)
 	    throw new Error("the Apple Podcasts chart came back empty");
@@ -309,19 +306,11 @@ return {
     discover() {
 	return [{
 	    name: "Podcasts",
-	    detail: "Top charts and your own feeds",
+	    detail: "The Apple Podcasts chart",
 	    icon: "🎙",
 	    root: "/",
 	    browse(id) {
-		if (id === "/") {
-		    return [
-			showFolder("mine", "My podcasts", FEEDS.length + " shows (edit plugins/podcasts.js)"),
-			showFolder("top", "Top podcasts", "The Apple Podcasts chart")
-		    ];
-		}
-		if (id === "mine")
-		    return browseMine();
-		if (id === "top")
+		if (id === "/" || id === "top")
 		    return browseTop();
 		if (id.startsWith("feed:"))
 		    return readFeed(id.slice(5)).episodes;
