@@ -813,6 +813,276 @@ function stitchUrl(s, path) {
         "&includeExtendedEvents=true";
 }
 
+/* ---------------------------------------------------------- clip stitching */
+
+// The stitcher splices the advertising into an on-demand title as separate
+// clips, with a discontinuity between clips, and every clip numbers its
+// timestamps from the start again. Played as one HLS stream, the player's
+// clock jumps back at every ad break (so the position restarts), and a seek
+// cannot work: FFmpeg's HLS demuxer picks the right segment from the
+// playlist and then discards packets until one reaches the target in
+// timestamps, which no packet in a later clip ever does, so it reads to the
+// end of the title.
+//
+// So an on-demand title is cut at its discontinuities here, one self-contained
+// playlist per clip, and handed over as an mpv EDL: the clips play as one
+// seamless timeline, each started afresh as if it were its own file, and a
+// seek is a seek inside one clip. The clip playlists travel inline (as
+// data: URIs), so nothing is written anywhere.
+//
+// Live channels have no end to cut at and keep the plain manifest URL, and
+// so does anything this cannot make sense of.
+
+// Pluto numbers every clip from one second (90000 ticks) and mpv needs the
+// number to line the clips up; without it each ad loses most of a second.
+const CLIP_START_S = 1.0;
+
+// Set to false to play on-demand titles as one stream again.
+const STITCH_CLIPS = true;
+
+// ref against base, as a URL (QuickJS has no URL class).
+function urlJoin(base, ref) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(ref)) {
+        return ref;
+    }
+    const m = /^([a-z][a-z0-9+.-]*:)\/\/([^\/?#]*)([^?#]*)/i.exec(base);
+    if (!m) {
+        return ref;
+    }
+    if (ref.indexOf("//") === 0) {
+        return m[1] + ref;
+    }
+    const cut = ref.search(/[?#]/);
+    const rpath = cut < 0 ? ref : ref.substring(0, cut);
+    const rest = cut < 0 ? "" : ref.substring(cut);
+    let path;
+    if (rpath === "") {
+        path = m[3];
+    } else if (rpath.charAt(0) === "/") {
+        path = rpath;
+    } else {
+        path = m[3].substring(0, m[3].lastIndexOf("/") + 1) + rpath;
+    }
+    const out = [];
+    const segs = path.split("/");
+    for (let i = 0; i < segs.length; i++) {
+        const seg = segs[i];
+        const last = i === segs.length - 1;
+        if (seg === "..") {
+            if (out.length > 1) {
+                out.pop();
+            }
+            if (last) {
+                out.push("");
+            }
+        } else if (seg === ".") {
+            if (last) {
+                out.push("");
+            }
+        } else {
+            out.push(seg);
+        }
+    }
+    return m[1] + "//" + m[2] + out.join("/") + rest;
+}
+
+// An attribute of a tag line: URI="x" -> x, BANDWIDTH=12 -> 12.
+function tagAttr(line, name) {
+    const m = new RegExp("[:,]" + name + "=(\"[^\"]*\"|[^,]*)").exec(line);
+    return m ? m[1].replace(/^"|"$/g, "") : "";
+}
+
+// The URI="..." inside a tag, made absolute.
+function absoluteTagUri(line, base) {
+    return line.replace(/URI="([^"]*)"/, (all, uri) => {
+        return 'URI="' + urlJoin(base, uri) + '"';
+    });
+}
+
+function fetchPlaylist(url) {
+    const res = http.get(url, {timeout: 20});
+    if (!res.ok) {
+        throw new Error("HTTP " + res.status + " for a playlist");
+    }
+    return {body: String(res.body), url: res.url || url};
+}
+
+// The media playlist mpv would play for this master: the variant with the
+// highest bandwidth (mpv's own default), whose audio rides in the stream.
+function mediaPlaylist(masterUrl) {
+    const master = fetchPlaylist(masterUrl);
+    const lines = master.body.split(/\r?\n/);
+    let best = null;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.indexOf("#EXT-X-STREAM-INF:") !== 0) {
+            continue;
+        }
+        let j = i + 1;
+        while (j < lines.length &&
+               (lines[j].trim() === "" || lines[j].trim().charAt(0) === "#")) {
+            j++;
+        }
+        if (j >= lines.length) {
+            break;
+        }
+        const bw = parseInt(tagAttr(line, "BANDWIDTH"), 10) || 0;
+        if (!best || bw > best.bw) {
+            best = {bw: bw, url: urlJoin(master.url, lines[j].trim())};
+        }
+    }
+    if (!best) {
+        // Not a master after all: this is the media playlist itself.
+        return master;
+    }
+    return fetchPlaylist(best.url);
+}
+
+// Cuts a media playlist at its discontinuities. Returns the clips, each with
+// the text of a playlist of its own and its length in seconds, or null when
+// there is nothing to cut (a live playlist, or no discontinuity).
+function splitClips(body, baseUrl) {
+    const lines = body.split(/\r?\n/);
+    if (lines[0].trim().indexOf("#EXTM3U") !== 0) {
+        return null;
+    }
+
+    let version = "";
+    let sequence = 0;
+    let ended = false;
+    let key = null;   // the tags in force at this point, which a new clip
+    let map = null;   // inherits when it does not set its own
+    let seen = 0;     // segments before the current clip, for MEDIA-SEQUENCE
+    const clips = [];
+    let cur = {lines: [], dur: 0, segments: 0, key: key, map: map, first: 0};
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line === "") {
+            continue;
+        }
+        if (line.indexOf("#EXT-X-ENDLIST") === 0) {
+            ended = true;
+        } else if (line.indexOf("#EXT-X-VERSION:") === 0) {
+            version = line;
+        } else if (line.indexOf("#EXT-X-MEDIA-SEQUENCE:") === 0) {
+            sequence = parseInt(line.substring(22), 10) || 0;
+        } else if (line.indexOf("#EXT-X-TARGETDURATION:") === 0 ||
+                   line.indexOf("#EXT-X-PLAYLIST-TYPE:") === 0 ||
+                   line.indexOf("#EXT-X-DISCONTINUITY-SEQUENCE:") === 0) {
+            continue; // rebuilt for each clip
+        } else if (line.indexOf("#EXT-X-DISCONTINUITY") === 0) {
+            if (cur.segments > 0) {
+                clips.push(cur);
+                seen += cur.segments;
+                cur = {lines: [], dur: 0, segments: 0, key: key, map: map,
+                       first: seen};
+            }
+        } else if (line.indexOf("#EXT-X-KEY:") === 0) {
+            key = absoluteTagUri(line, baseUrl);
+            cur.lines.push(key);
+        } else if (line.indexOf("#EXT-X-MAP:") === 0) {
+            map = absoluteTagUri(line, baseUrl);
+            cur.lines.push(map);
+        } else if (line.charAt(0) === "#") {
+            if (line.indexOf("#EXTINF:") === 0) {
+                cur.dur += parseFloat(line.substring(8)) || 0;
+            }
+            cur.lines.push(line);
+        } else {
+            cur.lines.push(urlJoin(baseUrl, line));
+            cur.segments++;
+        }
+    }
+    if (cur.segments > 0) {
+        clips.push(cur);
+    }
+    if (!ended || clips.length < 2) {
+        return null;
+    }
+
+    return clips.map((c) => {
+        const own = [];
+        for (let i = 0; i < c.lines.length &&
+             c.lines[i].indexOf("#EXTINF:") !== 0; i++) {
+            own.push(c.lines[i]);
+        }
+        const has = (tag) => own.some((l) => l.indexOf(tag) === 0);
+        let target = 0;
+        c.lines.forEach((l) => {
+            if (l.indexOf("#EXTINF:") === 0) {
+                target = Math.max(target, Math.ceil(parseFloat(l.substring(8)) || 0));
+            }
+        });
+        const head = ["#EXTM3U", version || "#EXT-X-VERSION:3",
+                      "#EXT-X-TARGETDURATION:" + Math.max(target, 1),
+                      // Segments with no IV of their own are decrypted with
+                      // their sequence number, so it must not start over.
+                      "#EXT-X-MEDIA-SEQUENCE:" + (sequence + c.first),
+                      "#EXT-X-PLAYLIST-TYPE:VOD"];
+        if (c.key && !has("#EXT-X-KEY:")) {
+            head.push(c.key);
+        }
+        if (c.map && !has("#EXT-X-MAP:")) {
+            head.push(c.map);
+        }
+        return {
+            text: head.concat(c.lines, ["#EXT-X-ENDLIST"]).join("\n") + "\n",
+            seconds: c.dur
+        };
+    });
+}
+
+function base64Encode(s) {
+    const bytes = unescape(encodeURIComponent(s)); // UTF-8, one char per byte
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 3) {
+        const n = (bytes.charCodeAt(i) << 16) |
+            ((i + 1 < bytes.length ? bytes.charCodeAt(i + 1) : 0) << 8) |
+            (i + 2 < bytes.length ? bytes.charCodeAt(i + 2) : 0);
+        out += B64.charAt((n >> 18) & 63) + B64.charAt((n >> 12) & 63) +
+            (i + 1 < bytes.length ? B64.charAt((n >> 6) & 63) : "=") +
+            (i + 2 < bytes.length ? B64.charAt(n & 63) : "=");
+    }
+    return out;
+}
+
+// Each clip's playlist travels inside its own source name, as a data: URI
+// that FFmpeg reads itself (the ffmpeg:// prefix hands it over; FFmpeg's HLS
+// demuxer opens a playlist again by name, so a name mpv alone understands,
+// such as memory://, does not do). The player has to be told these are HLS,
+// as nothing in a data: name says so; see Player::Open().
+function clipsEdl(clips) {
+    const parts = clips.map((c) => {
+        const source = "ffmpeg://data:application/vnd.apple.mpegurl;base64," +
+            base64Encode(c.text);
+        // %n% is the length of the name in bytes; it is all ASCII here.
+        return "%" + source.length + "%" + source +
+            ",start=" + CLIP_START_S + ",length=" + c.seconds.toFixed(3);
+    });
+    return "edl://!no_chapters;" + parts.join(";");
+}
+
+// The EDL for the title behind 'manifest', or null to play the manifest
+// as it is.
+function stitchedUrl(manifest) {
+    try {
+        const media = mediaPlaylist(manifest);
+        const clips = splitClips(media.body, media.url);
+        if (!clips) {
+            return null;
+        }
+        let total = 0;
+        clips.forEach((c) => { total += c.seconds; });
+        console.log("playing " + clips.length + " clips, " +
+                    Math.round(total) + " s");
+        return clipsEdl(clips);
+    } catch (e) {
+        console.warn("not stitching: " + e);
+        return null;
+    }
+}
+
 function resolveStream(id) {
     const s = authorize();
     let path = paths[id];
@@ -828,6 +1098,12 @@ function resolveStream(id) {
         }
     }
     const url = stitchUrl(s, path);
+    if (STITCH_CLIPS && id.indexOf("channel:") !== 0) {
+        const edl = stitchedUrl(url);
+        if (edl) {
+            return edl;
+        }
+    }
     console.log("playing hls: " + url);
     return url;
 }

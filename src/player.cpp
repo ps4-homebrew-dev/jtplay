@@ -44,6 +44,14 @@ bool IsAdaptivePlaylist(const std::string& url) {
          lower.find(".mpd") != std::string::npos;
 }
 
+// True for a list of clips, an mpv EDL whose parts are HLS playlists carried
+// inline as data: URIs (see plugins/plutotv.js): one title in several clips
+// that play as a single timeline. It has no file name to probe, so it is
+// only ever told apart by its scheme.
+bool IsClipList(const std::string& url) {
+  return url.compare(0, 6, "edl://") == 0;
+}
+
 // The spectrum shown for audio-only files, fed from track 'aid'. It is a
 // lavfi graph: the audio goes to the output untouched ([ao]), a copy is
 // drawn as a tiny white-on-black bar spectrum ([vo]). That picture is not
@@ -339,17 +347,28 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   const std::string start = start_seconds > 0 ? std::to_string(start_seconds) : "none";
   mpv_set_property_string(mpv_, "start", start.c_str());
   // Also per file: reconnecting suits plain files, not HLS/DASH segments.
-  const bool adaptive = IsAdaptivePlaylist(url);
+  const bool clips = IsClipList(url);
+  const bool adaptive = clips || IsAdaptivePlaylist(url);
   mpv_set_property_string(mpv_, "stream-lavf-o",
                           adaptive ? "" : kReconnectOptions);
-  // A stitched playlist (Pluto TV, and any server that splices ads in) puts
-  // a discontinuity between clips, and every clip starts its own timestamps
-  // again near zero. Left alone, mpv sees the audio clock jump back, resets
-  // playback and reports the position as 0 at every ad break, so the stream
-  // seems to start over. Linearizing makes the demuxer carry the timeline
-  // on across the discontinuity instead.
+  // A stream with ads spliced in (Pluto TV) puts a discontinuity between
+  // clips, and every clip starts its own timestamps again near zero. Left
+  // alone, mpv sees the audio clock jump back, resets playback and reports
+  // the position as 0 at every ad break, so the stream seems to start over.
+  // Linearizing makes the demuxer carry the timeline on across the
+  // discontinuity instead. (A clip list needs none of it: its clips are
+  // separate sources, joined by mpv on one timeline.)
   mpv_set_property_string(mpv_, "demuxer-lavf-linearize-timestamps",
-                          adaptive ? "yes" : "auto");
+                          adaptive && !clips ? "yes" : "auto");
+  // The playlists of a clip list are data: URIs, which say nothing about
+  // being HLS, so the demuxer is told.
+  mpv_set_property_string(mpv_, "demuxer-lavf-format", clips ? "hls" : "");
+  // mpv opens the parts of an EDL with the origin of the EDL itself, and
+  // some builds count a list handed over as a playlist and so refuse the
+  // ffmpeg:// names in it ("Refusing to load potentially unsafe URL from a
+  // playlist"). The list is made by a plugin, not read from a server, so it
+  // is trusted; other files keep the default.
+  mpv_set_property_string(mpv_, "load-unsafe-playlists", clips ? "yes" : "no");
 
   int64_t starts_before;
   {
