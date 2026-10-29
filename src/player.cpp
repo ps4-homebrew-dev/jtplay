@@ -339,8 +339,17 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   const std::string start = start_seconds > 0 ? std::to_string(start_seconds) : "none";
   mpv_set_property_string(mpv_, "start", start.c_str());
   // Also per file: reconnecting suits plain files, not HLS/DASH segments.
+  const bool adaptive = IsAdaptivePlaylist(url);
   mpv_set_property_string(mpv_, "stream-lavf-o",
-                          IsAdaptivePlaylist(url) ? "" : kReconnectOptions);
+                          adaptive ? "" : kReconnectOptions);
+  // A stitched playlist (Pluto TV, and any server that splices ads in) puts
+  // a discontinuity between clips, and every clip starts its own timestamps
+  // again near zero. Left alone, mpv sees the audio clock jump back, resets
+  // playback and reports the position as 0 at every ad break, so the stream
+  // seems to start over. Linearizing makes the demuxer carry the timeline
+  // on across the discontinuity instead.
+  mpv_set_property_string(mpv_, "demuxer-lavf-linearize-timestamps",
+                          adaptive ? "yes" : "auto");
 
   int64_t starts_before;
   {
