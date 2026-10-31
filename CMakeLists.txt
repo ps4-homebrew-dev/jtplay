@@ -109,7 +109,7 @@ if(ORBIS)
                          -i ATTRIBUTE=2
                          -i DOWNLOAD_DATA_SIZE=0
                          -i SYSTEM_VER=0
-                         -s4 CATEGORY=gdc
+                         -s4 CATEGORY=gd
                          ${PKG_DIR}/sce_sys/param.sfo
         VERBATIM
     )
