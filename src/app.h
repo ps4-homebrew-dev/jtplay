@@ -329,7 +329,6 @@ private:
   void UpdateSleepTimer(double now);
   std::string SleepLabel() const;
   void CycleAudioTrack(int direction = +1);
-  void CycleVideoTrack(int direction = +1);
   void HandleKeyWatch(Rml::Event& event, int key);
 
   // --- Photo viewer --------------------------------------------------------

@@ -427,27 +427,14 @@ void App::CycleAudioTrack(int direction) {
       ShowToast("Only one audio track");
     return;
   }
+  if (!player_->CanSwitchAudio()) {
+    ShowToast("The audio track can't be changed on this channel");
+    return;
+  }
   const size_t next = NextTrack(tracks, player_->CurrentAudioStream(), direction);
   if (player_->SelectAudioTrack(tracks[next].stream_index)) {
     ShowToast("Audio " + std::to_string(next + 1) + "/" +
               std::to_string(tracks.size()) + ": " + tracks[next].label, "🔊");
-  }
-}
-
-// Space (square) / the playback menu: next video track. Streams that carry
-// several camera angles or bitrate variants show up as separate video
-// streams in one container, which is what this walks.
-void App::CycleVideoTrack(int direction) {
-  const std::vector<VideoTrackInfo> tracks = player_->VideoTracks();
-  if (tracks.size() < 2) {
-    if (!tracks.empty())
-      ShowToast("Only one video track");
-    return;
-  }
-  const size_t next = NextTrack(tracks, player_->CurrentVideoStream(), direction);
-  if (player_->SelectVideoTrack(tracks[next].stream_index)) {
-    ShowToast("Video " + std::to_string(next + 1) + "/" +
-              std::to_string(tracks.size()) + ": " + tracks[next].label, "🎬");
   }
 }
 
@@ -502,11 +489,6 @@ void App::OpenWatchMenu() {
         const int i = std::max(0, player_->CurrentChapter());
         player_->SeekChapter(std::clamp(i + (d < 0 ? -1 : 1), 0, n - 1));
       }});
-  }
-  if (player_->VideoTracks().size() > 1) {
-    menu_items_.push_back({"Video",
-      [this] { return player_->CurrentVideoLabel(); },
-      [this](int d) { CycleVideoTrack(d < 0 ? -1 : +1); }});
   }
   if (player_->CanSeek()) {
     menu_items_.push_back({"Speed",
@@ -820,11 +802,6 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
 
   case Rml::Input::KI_T:     // next audio track
     CycleAudioTrack();
-    ShowWatchInfo(kWatchInfoSec);
-    break;
-
-  case Rml::Input::KI_SPACE: // next video track
-    CycleVideoTrack();
     ShowWatchInfo(kWatchInfoSec);
     break;
 

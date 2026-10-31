@@ -10,10 +10,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
+#include <utility>
 
 #include <SDL.h>
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
+
+#include "net/http_client.h"
 
 namespace {
 
@@ -25,6 +29,19 @@ constexpr auto kOpenTimeout = std::chrono::minutes(5);
 // A reported duration that moves by more than this once playback has started
 // is an estimate, not the length of the file (see Player::DurationReliable).
 constexpr int64_t kDurationDriftUs = 2 * 1000000;
+
+// How far ahead of playback mpv reads a live stream, in seconds. An audio
+// track picked on a live stream (another language: an HLS rendition with a
+// playlist of its own) joins where FFmpeg's HLS demuxer is reading, not
+// where playback is: mpv cannot seek a live demuxer back to fetch it from
+// the play position, as it does for files and on-demand streams. Whatever
+// is read ahead is how far in the future the new track starts. With mpv's
+// default that is the whole live window, ten seconds and more, and the
+// sound either stays silent that long or runs that far ahead of the
+// picture. At one second the new language is heard at once and the two
+// are back in step within about a second. The price is less buffer
+// against a network hiccup; raise this if live channels start to stall.
+constexpr const char* kLiveReadaheadSecs = "1";
 
 // FFmpeg's http options for plain files: DLNA servers recycle sockets
 // aggressively, and a dropped transfer should pick up where it was.
@@ -50,6 +67,78 @@ bool IsAdaptivePlaylist(const std::string& url) {
 // only ever told apart by its scheme.
 bool IsClipList(const std::string& url) {
   return url.compare(0, 6, "edl://") == 0;
+}
+
+// 'ref' (a URI from inside a playlist) made absolute against 'base' (the
+// playlist's own URL, after redirects).
+std::string ResolveUrl(const std::string& base, const std::string& ref) {
+  if (ref.find("://") != std::string::npos)
+    return ref;
+  const size_t scheme_end = base.find("://");
+  if (scheme_end == std::string::npos)
+    return ref;
+  if (ref.compare(0, 2, "//") == 0)
+    return base.substr(0, scheme_end + 1) + ref;
+  const size_t host_end = base.find('/', scheme_end + 3);
+  if (!ref.empty() && ref[0] == '/')
+    return base.substr(0, host_end) + ref;
+  const std::string path = base.substr(0, base.find_first_of("?#"));
+  const size_t dir_end = path.rfind('/');
+  return (dir_end != std::string::npos && dir_end >= scheme_end + 3
+            ? path.substr(0, dir_end + 1) : path + "/") + ref;
+}
+
+// Whether the HLS or DASH stream at 'url' is live (a playlist that keeps
+// growing) rather than on demand. Looks at the manifest itself: an HLS
+// media playlist is on demand once it has #EXT-X-ENDLIST (a master playlist
+// says nothing, so its first variant is asked), a DASH manifest is live when
+// its type is "dynamic". Anything that cannot be fetched or read counts as
+// live, which is what every adaptive stream was taken for before.
+bool IsLiveStream(const std::string& url) {
+  net::HttpClient http;
+  net::HttpClient::Request req;
+  req.stall_timeout_ms = 4000;
+  req.deadline_ms = 5000;
+  req.max_bytes = 4u << 20; // a long title, short segments, signed URLs
+  req.truncate = true;
+  net::HttpClient::Response res;
+  std::string error;
+
+  req.url = url;
+  if (!http.Perform(req, res, error) || res.status != 200)
+    return true;
+  if (res.body.find("<MPD") != std::string::npos)
+    return res.body.find("\"dynamic\"") != std::string::npos ||
+           res.body.find("'dynamic'") != std::string::npos;
+  if (res.body.compare(0, 7, "#EXTM3U") != 0)
+    return true;
+
+  // A master playlist: the variants are all live or all on demand, so the
+  // first one speaks for them.
+  const size_t inf = res.body.find("#EXT-X-STREAM-INF");
+  if (inf != std::string::npos) {
+    size_t at = res.body.find('\n', inf);
+    std::string variant;
+    while (at != std::string::npos && variant.empty()) {
+      const size_t end = res.body.find('\n', at + 1);
+      std::string line = res.body.substr(at + 1, end == std::string::npos
+                                                   ? std::string::npos : end - at - 1);
+      while (!line.empty() && std::isspace((unsigned char)line.back()))
+        line.pop_back();
+      if (!line.empty() && line[0] != '#')
+        variant = line;
+      at = end;
+    }
+    if (variant.empty())
+      return true;
+    req.url = ResolveUrl(res.url.empty() ? url : res.url, variant);
+    res = {};
+    if (!http.Perform(req, res, error) || res.status != 200 ||
+        res.body.compare(0, 7, "#EXTM3U") != 0)
+      return true;
+  }
+  return res.body.find("#EXT-X-ENDLIST") == std::string::npos &&
+         res.body.find("#EXT-X-PLAYLIST-TYPE:VOD") == std::string::npos;
 }
 
 // The spectrum shown for audio-only files, fed from track 'aid'. It is a
@@ -190,6 +279,9 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
     // Cover art is shown by the UI, from the server's metadata.
     {"audio-display", "no", false},
     {"network-timeout", "30", false},
+    // HLS and DASH: the highest-bitrate variant, for the whole stream (there
+    // is no switching between video tracks; see player.h).
+    {"hls-bitrate", "max", false},
     // Set again for every file by Open(); see kReconnectOptions.
     {"stream-lavf-o", kReconnectOptions, false},
 #if defined(__ORBIS__)
@@ -241,6 +333,16 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
     mpv_terminate_destroy(mpv_);
     mpv_ = nullptr;
     return false;
+  }
+
+  // The read-ahead files and on-demand streams get, JTPLAY_MPV included;
+  // Open() shortens it for live streams and puts this back for the rest.
+  for (auto [name, into] : {std::pair{"cache-secs", &cache_secs_},
+                            std::pair{"demuxer-readahead-secs", &readahead_secs_}}) {
+    if (char* value = mpv_get_property_string(mpv_, name)) {
+      *into = value;
+      mpv_free(value);
+    }
   }
 
   mpv_opengl_init_params gl_init = {};
@@ -358,8 +460,27 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   // Linearizing makes the demuxer carry the timeline on across the
   // discontinuity instead. (A clip list needs none of it: its clips are
   // separate sources, joined by mpv on one timeline.)
+  //
+  // Only for live streams, though. mpv linearizes each stream on its own
+  // and never forgets the highest timestamp it has seen of it. An audio
+  // track switch on a seekable stream makes mpv drop its read-ahead and
+  // seek the demuxer back to where playback is ("refresh seek"); the video,
+  // already playing, then comes back "jumping backwards" and is pushed
+  // forward by the whole read-ahead, while the new audio track is not: the
+  // picture ends up minutes behind the sound. A live stream is never
+  // refresh-seeked, and an on-demand one has no use for linearizing
+  // (Pluto's on-demand titles are clip lists).
+  const bool live = adaptive && !clips && IsLiveStream(url);
   mpv_set_property_string(mpv_, "demuxer-lavf-linearize-timestamps",
-                          adaptive && !clips ? "yes" : "auto");
+                          live ? "yes" : "auto");
+  // A live stream reads only a little ahead, so an audio switch is quick;
+  // see kLiveReadaheadSecs.
+  for (auto [name, normal] : {std::pair{"cache-secs", &cache_secs_},
+                              std::pair{"demuxer-readahead-secs", &readahead_secs_}}) {
+    const char* value = live ? kLiveReadaheadSecs : normal->c_str();
+    if (*value)
+      mpv_set_property_string(mpv_, name, value);
+  }
   // The playlists of a clip list are data: URIs, which say nothing about
   // being HLS, so the demuxer is told.
   mpv_set_property_string(mpv_, "demuxer-lavf-format", clips ? "hls" : "");
@@ -527,6 +648,9 @@ void Player::EventThread() {
       // and then makes the timeline as long as what it has seen so far.
       if (std::strstr(msg->text, "has unknown duration"))
         duration_unreliable_ = true;
+      // An ad break on a live stream; see CanSwitchAudio().
+      if (std::strstr(msg->text, "Linearizing discontinuity"))
+        linearized_ = true;
       break;
     }
 
@@ -536,6 +660,7 @@ void Player::EventThread() {
       started_count_++;
       started_id_ = start ? start->playlist_entry_id : -1;
       duration_unreliable_ = false; // per file; the log may set it again
+      linearized_ = false;
       cv_.notify_all();
       break;
     }
@@ -633,10 +758,37 @@ void Player::EventThread() {
 // (language, title) plus the codec and, depending on the kind, the channel
 // layout or the frame size: "eng · ac3 5.1(side)", "Commentary · aac
 // stereo", "h264 1920x1080".
+//
+// An HLS or DASH stream with its audio inside each variant (Pluto TV) has
+// as many audio tracks as variants, all the same sound at another bitrate.
+// Only the one of the variant playing is listed: picking another would
+// not change the language, only have FFmpeg fetch a second variant, whose
+// audio joins seconds away from the picture. FFmpeg marks such a track
+// with its variant's bitrate ("hls-bitrate"); a separate audio rendition
+// (another language, SVT Play) belongs to every variant and has none, so
+// those are all listed.
 void Player::UpdateTracks(const mpv_node* list) {
   std::vector<VideoTrackInfo> video;
   std::vector<AudioTrackInfo> audio;
   std::vector<SubtitleTrackInfo> subs;
+
+  // The variant playing: that of the video track shown, or for a stream
+  // without video, of the audio track heard. Unknown (-1) for plain files.
+  int64_t program = -1, program_bitrate = 0;
+  if (list && list->format == MPV_FORMAT_NODE_ARRAY && list->u.list) {
+    for (const char* kind : {"video", "audio"}) {
+      for (int i = 0; i < list->u.list->num && program < 0; i++) {
+        const mpv_node* track = &list->u.list->values[i];
+        if (NodeString(MapGet(track, "type")) != kind ||
+            !NodeFlag(MapGet(track, "selected")) ||
+            NodeFlag(MapGet(track, "albumart")) ||
+            NodeInt(MapGet(track, "hls-bitrate"), 0) <= 0)
+          continue;
+        program = NodeInt(MapGet(track, "program-id"), -1);
+        program_bitrate = NodeInt(MapGet(track, "hls-bitrate"), 0);
+      }
+    }
+  }
 
   if (list && list->format == MPV_FORMAT_NODE_ARRAY && list->u.list) {
     for (int i = 0; i < list->u.list->num; i++) {
@@ -649,6 +801,13 @@ void Player::UpdateTracks(const mpv_node* list) {
       // Cover art is a video track in name only; not selectable.
       if (is_video && NodeFlag(MapGet(track, "albumart")))
         continue;
+      // Another variant's copy of the sound; see above.
+      if (type == "audio" && program >= 0 && !NodeFlag(MapGet(track, "selected"))) {
+        const int64_t bitrate = NodeInt(MapGet(track, "hls-bitrate"), 0);
+        if (bitrate > 0 && bitrate != program_bitrate &&
+            NodeInt(MapGet(track, "program-id"), -1) != program)
+          continue;
+      }
 
       std::string label;
       auto append = [&label](const std::string& part) {
@@ -831,22 +990,8 @@ std::string Player::CurrentAudioLabel() const {
   return {};
 }
 
-bool Player::SelectVideoTrack(int stream_index) {
-  if (!active_ || stream_index == CurrentVideoStream())
-    return false;
-  bool known = false;
-  for (const TrackInfo& t : VideoTracks())
-    known |= t.stream_index == stream_index;
-  if (!known)
-    return false;
-  int64_t id = stream_index;
-  mpv_set_property_async(mpv_, 0, "vid", MPV_FORMAT_INT64, &id);
-  video_id_ = stream_index;
-  return true;
-}
-
 bool Player::SelectAudioTrack(int stream_index) {
-  if (!active_ || stream_index == CurrentAudioStream())
+  if (!active_ || stream_index == CurrentAudioStream() || !CanSwitchAudio())
     return false;
   bool known = false;
   for (const TrackInfo& t : AudioTracks())

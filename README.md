@@ -147,7 +147,7 @@ to the next item in the folder; select plays it at once, back waves it
 away and the player then stops at the end.
 
 The options button opens the playback menu: audio track, subtitles,
-chapter, video track, speed (0.5× to 2×), shuffle, repeat (all / one),
+chapter, speed (0.5× to 2×), shuffle, repeat (all / one),
 night mode (dynamic range compression: dialogue up, explosions down),
 picture (fit / fill / stretch), subtitle delay and size, audio delay, a
 sleep timer (15 min to 2 h, or the end of the item), favorites, play next
@@ -286,7 +286,7 @@ options button is the way into everything that is not on the d-pad.
 | cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now | slideshow on / off   |
 | circle (B)            | Backspace       | to the rail; up a group      | back (Home from a source root)       | stop; up next: dismiss   | close                |
 | options (start)       | F1              | options for the card         | options menu                         | playback menu            | photo menu           |
-| square (X)            | Space           | search the group again       | next sort key                        | next video track         |                      |
+| square (X)            | Space           | search the group again       | next sort key                        |                          |                      |
 | triangle (Y)          | T               |                              | reverse sort order                   | next audio track         | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item | previous / next |
 | L2 / R2               | Home / End      | first / last                 | first / last                         |                          | first / last         |

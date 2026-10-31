@@ -157,15 +157,23 @@ public:
   int CurrentVideoStream() const { return video_id_.load(); }
   // Label of the track being shown; "" when there is no video.
   std::string CurrentVideoLabel() const;
-  // Switches to another video track of the open file. False if the id is
-  // unknown or already active, or nothing is playing.
-  bool SelectVideoTrack(int stream_index);
+  // There is no switching between them: mpv picks the best one when the
+  // file opens (for HLS and DASH the highest-bitrate variant) and that is
+  // what plays. A switch mid-stream cannot be made seamless with mpv on a
+  // live stream: the new variant joins where FFmpeg is reading, seconds
+  // ahead of what is shown, and the picture stops while the sound plays on.
 
   // --- Audio tracks -------------------------------------------------------
   std::vector<AudioTrackInfo> AudioTracks() const;
   int CurrentAudioStream() const;
   std::string CurrentAudioLabel() const;
   bool SelectAudioTrack(int stream_index);
+  // False on a live stream once an ad break (a timestamp reset that the
+  // demuxer smoothed over) has gone by. mpv keeps that correction for the
+  // tracks it was reading at the time only; a track picked after it starts
+  // out of step with the picture and is never heard. Re-opening the stream
+  // would be the way to change the sound then.
+  bool CanSwitchAudio() const { return !linearized_.load(); }
 
   // --- Subtitles ------------------------------------------------------------
   std::vector<SubtitleTrackInfo> SubtitleTracks() const;
@@ -212,6 +220,7 @@ private:
   std::atomic<int64_t> position_us_{-1};
   std::atomic<int64_t> duration_us_{-1};
   std::atomic<bool> duration_unreliable_{false};
+  std::atomic<bool> linearized_{false}; // see CanSwitchAudio()
   std::atomic<int> video_id_{-1};
   std::atomic<int> audio_id_{-1};
   std::atomic<int> sub_id_{-1};
@@ -234,6 +243,11 @@ private:
   std::vector<SubtitleTrackInfo> sub_tracks_;
   std::atomic<int> vtrack_count_{0};
   std::atomic<int> atrack_count_{0};
+
+  // mpv's read-ahead as Initialize() found it (seconds, as mpv prints
+  // them): what files and on-demand streams use. Live ones read less.
+  std::string cache_secs_;
+  std::string readahead_secs_;
 };
 
 #endif
