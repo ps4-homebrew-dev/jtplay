@@ -13,43 +13,9 @@
 #define SCREEN_WIDTH  1920
 #define SCREEN_HEIGHT 1080
 
-#if defined(__ORBIS__)
-typedef struct SceAppContentInitParam {
-  char reserved[32];
-} SceAppContentInitParam;
-
-typedef struct SceAppContentBootParam {
-  char     reserved1[4];
-  uint32_t attr;
-  char     reserved2[32];
-} SceAppContentBootParam;
-
-typedef struct SceAppContentMountPoint {
-  char data[16];
-} SceAppContentMountPoint;
-
 extern "C" {
   int sceSystemServiceLoadExec(const char* path, char* const argv[]);
-  int sceAppContentInitialize(const SceAppContentInitParam* initParam,
-                              SceAppContentBootParam* bootParam);
-  int sceAppContentTemporaryDataMount2(uint32_t option, SceAppContentMountPoint* mountPoint);
-  int sceAppContentTemporaryDataUnmount(const SceAppContentMountPoint* mountPoint);
-  int sceSysmoduleLoadModule(uint64_t);
 }
-
-// /temp0 (the artwork cache and settings) is mounted before main() runs.
-static SceAppContentMountPoint g_tmpmnt = {};
-
-__attribute__((constructor))
-static void OrbisInit(void) {
-  SceAppContentInitParam ip = {};
-  SceAppContentBootParam bp = {};
-
-  sceSysmoduleLoadModule(0x00b4);
-  sceAppContentInitialize(&ip, &bp);
-  sceAppContentTemporaryDataMount2(0, &g_tmpmnt);
-}
-#endif
 
 
 static void PrintUsage(const char* argv0) {
@@ -69,15 +35,15 @@ static void PrintUsage(const char* argv0) {
     argv0);
 }
 
-static int Run(int argc, char* argv[]) {
-  App::Options options;
-  std::string fonts_dir;
 
-#if defined(__ORBIS__)
+extern "C" int SDL_main(int argc, char* argv[]) {
+  App::Options options;
+
+#if defined(__SCE__)
   options.assets_dir = "/app0/assets";
   options.plugins_dir = "/app0/plugins";
-  options.cache_dir = "/temp0";
-  fonts_dir = "/app0/fonts";
+  options.fonts_dir = "/app0/fonts";
+  options.cache_dir = ::getenv("XDG_CACHE_HOME");
   ::setenv("SSL_CERT_FILE", "/app0/ca-bundle.crt", 0);
 #endif
 
@@ -93,8 +59,8 @@ static int Run(int argc, char* argv[]) {
       return argv[++i];
     };
 
-    if (arg("-a", "--assets"))     options.assets_dir = value();
-    else if (arg("-f", "--fonts")) fonts_dir = value();
+    if (arg("-a", "--assets")) options.assets_dir = value();
+    else if (arg("-f", "--fonts")) options.fonts_dir = value();
     else if (arg("-p", "--plugins")) options.plugins_dir = value();
     else if (arg("-c", "--cache")) options.cache_dir = value();
     else if (arg("-h", "--help")) { PrintUsage(argv[0]); return 0; }
@@ -109,11 +75,12 @@ static int Run(int argc, char* argv[]) {
   // the asset directory, matching the repository layout.
   while (options.assets_dir.size() > 1 && options.assets_dir.back() == '/')
     options.assets_dir.pop_back();
-  if (fonts_dir.empty())
-    fonts_dir = options.assets_dir + "/../fonts";
+
+  if (options.fonts_dir.empty())
+    options.fonts_dir = options.assets_dir + "/../fonts";
+
   if (options.plugins_dir.empty())
     options.plugins_dir = options.assets_dir + "/../plugins";
-  options.fonts_dir = fonts_dir;
 
   if (!Backend::Initialize("jtplay", SCREEN_WIDTH, SCREEN_HEIGHT, false))
     return -1;
@@ -136,10 +103,10 @@ static int Run(int argc, char* argv[]) {
   bool fonts_ok = true;
   for (const char* face : {"LatoLatin-Bold.ttf", "LatoLatin-BoldItalic.ttf",
                            "LatoLatin-Italic.ttf", "LatoLatin-Regular.ttf"})
-    fonts_ok &= Rml::LoadFontFace(fonts_dir + "/" + face, false);
-  fonts_ok &= Rml::LoadFontFace(fonts_dir + "/NotoEmoji-VariableFont_wght.ttf", true);
+    fonts_ok &= Rml::LoadFontFace(options.fonts_dir + "/" + face, false);
+  fonts_ok &= Rml::LoadFontFace(options.fonts_dir + "/NotoEmoji-VariableFont_wght.ttf", true);
   if (!fonts_ok)
-    return fail("Failed to load fonts from '" + fonts_dir + "' (see --fonts)");
+    return fail("Failed to load fonts from '" + options.fonts_dir + "' (see --fonts)");
 
   App app;
   std::string err;
@@ -164,12 +131,8 @@ static int Run(int argc, char* argv[]) {
   return 0;
 }
 
+#if defined(__linux__)
 int main(int argc, char* argv[]) {
-  const int status = Run(argc, argv);
-#if defined(__ORBIS__)
-  // A PS4 process that returns from main() is reported as a crash; asking
-  // the system to close the title is the clean way out.
-  sceSystemServiceLoadExec("exit", nullptr);
-#endif
-  return status;
+  return SDL_main(argc, argv);
 }
+#endif
