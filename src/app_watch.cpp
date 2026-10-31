@@ -427,10 +427,6 @@ void App::CycleAudioTrack(int direction) {
       ShowToast("Only one audio track");
     return;
   }
-  if (!player_->CanSwitchAudio()) {
-    ShowToast("The audio track can't be changed on this channel");
-    return;
-  }
   const size_t next = NextTrack(tracks, player_->CurrentAudioStream(), direction);
   if (player_->SelectAudioTrack(tracks[next].stream_index)) {
     ShowToast("Audio " + std::to_string(next + 1) + "/" +

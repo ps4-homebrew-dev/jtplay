@@ -168,12 +168,6 @@ public:
   int CurrentAudioStream() const;
   std::string CurrentAudioLabel() const;
   bool SelectAudioTrack(int stream_index);
-  // False on a live stream once an ad break (a timestamp reset that the
-  // demuxer smoothed over) has gone by. mpv keeps that correction for the
-  // tracks it was reading at the time only; a track picked after it starts
-  // out of step with the picture and is never heard. Re-opening the stream
-  // would be the way to change the sound then.
-  bool CanSwitchAudio() const { return !linearized_.load(); }
 
   // --- Subtitles ------------------------------------------------------------
   std::vector<SubtitleTrackInfo> SubtitleTracks() const;
@@ -220,7 +214,6 @@ private:
   std::atomic<int64_t> position_us_{-1};
   std::atomic<int64_t> duration_us_{-1};
   std::atomic<bool> duration_unreliable_{false};
-  std::atomic<bool> linearized_{false}; // see CanSwitchAudio()
   std::atomic<int> video_id_{-1};
   std::atomic<int> audio_id_{-1};
   std::atomic<int> sub_id_{-1};

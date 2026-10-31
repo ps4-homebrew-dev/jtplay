@@ -453,28 +453,17 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   const bool adaptive = clips || IsAdaptivePlaylist(url);
   mpv_set_property_string(mpv_, "stream-lavf-o",
                           adaptive ? "" : kReconnectOptions);
-  // A stream with ads spliced in (Pluto TV) puts a discontinuity between
-  // clips, and every clip starts its own timestamps again near zero. Left
-  // alone, mpv sees the audio clock jump back, resets playback and reports
-  // the position as 0 at every ad break, so the stream seems to start over.
-  // Linearizing makes the demuxer carry the timeline on across the
-  // discontinuity instead. (A clip list needs none of it: its clips are
-  // separate sources, joined by mpv on one timeline.)
-  //
-  // Only for live streams, though. mpv linearizes each stream on its own
-  // and never forgets the highest timestamp it has seen of it. An audio
-  // track switch on a seekable stream makes mpv drop its read-ahead and
-  // seek the demuxer back to where playback is ("refresh seek"); the video,
-  // already playing, then comes back "jumping backwards" and is pushed
-  // forward by the whole read-ahead, while the new audio track is not: the
-  // picture ends up minutes behind the sound. A live stream is never
-  // refresh-seeked, and an on-demand one has no use for linearizing
-  // (Pluto's on-demand titles are clip lists).
   const bool live = adaptive && !clips && IsLiveStream(url);
-  mpv_set_property_string(mpv_, "demuxer-lavf-linearize-timestamps",
-                          live ? "yes" : "auto");
   // A live stream reads only a little ahead, so an audio switch is quick;
   // see kLiveReadaheadSecs.
+  //
+  // mpv's timestamp linearizing (demuxer-lavf-linearize-timestamps) is
+  // left off on purpose. On a live stream with ads spliced in (Pluto TV)
+  // the timestamps start again at every ad break; without it, the shown
+  // position jumps back there and the picture holds for half a second.
+  // With it, mpv corrects only the tracks it is reading at the time: an
+  // audio track picked after the first ad break is never heard, and on an
+  // on-demand stream an audio switch left the picture minutes behind.
   for (auto [name, normal] : {std::pair{"cache-secs", &cache_secs_},
                               std::pair{"demuxer-readahead-secs", &readahead_secs_}}) {
     const char* value = live ? kLiveReadaheadSecs : normal->c_str();
@@ -648,9 +637,6 @@ void Player::EventThread() {
       // and then makes the timeline as long as what it has seen so far.
       if (std::strstr(msg->text, "has unknown duration"))
         duration_unreliable_ = true;
-      // An ad break on a live stream; see CanSwitchAudio().
-      if (std::strstr(msg->text, "Linearizing discontinuity"))
-        linearized_ = true;
       break;
     }
 
@@ -660,7 +646,6 @@ void Player::EventThread() {
       started_count_++;
       started_id_ = start ? start->playlist_entry_id : -1;
       duration_unreliable_ = false; // per file; the log may set it again
-      linearized_ = false;
       cv_.notify_all();
       break;
     }
@@ -991,7 +976,7 @@ std::string Player::CurrentAudioLabel() const {
 }
 
 bool Player::SelectAudioTrack(int stream_index) {
-  if (!active_ || stream_index == CurrentAudioStream() || !CanSwitchAudio())
+  if (!active_ || stream_index == CurrentAudioStream())
     return false;
   bool known = false;
   for (const TrackInfo& t : AudioTracks())
