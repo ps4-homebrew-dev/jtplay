@@ -13,10 +13,6 @@
 #define SCREEN_WIDTH  1920
 #define SCREEN_HEIGHT 1080
 
-extern "C" {
-  int sceSystemServiceLoadExec(const char* path, char* const argv[]);
-}
-
 
 static void PrintUsage(const char* argv0) {
   std::printf(
