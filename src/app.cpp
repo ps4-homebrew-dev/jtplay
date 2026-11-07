@@ -493,7 +493,12 @@ void App::Update() {
 
   if (bind_watching_) {
     UpdateWatchOverlay();
-    if (player_->IsPlaying() && player_->AtEnd())
+    // Once per item: the player keeps reporting the end of the item that
+    // finished until the launch of the next one stops it, which takes a
+    // resolve() and an open. Handled again on every frame meanwhile, each
+    // time from the item being launched, the end walked through the rest of
+    // the folder and left the player at its end.
+    if (!launch_request_ && player_->IsPlaying() && player_->AtEnd())
       HandlePlaybackEnd();
     if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
         now > info_deadline_)
