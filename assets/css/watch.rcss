@@ -548,8 +548,11 @@ body.watching #shell {
 #upnext {
 	z-index: 6;
 	position: absolute;
-	right: 72px;
-	bottom: 250px; /* clear of the OSD bar */
+	/* Top left, where the launch indicator (#launch-overlay) takes over
+	   once the next item starts opening; clear of the clock (top right)
+	   and the OSD bar (bottom). */
+	top: 48px;
+	left: 64px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -564,7 +567,7 @@ body.watching #shell {
 }
 
 @keyframes upnext-in {
-	from { transform: translateX(60px); opacity: 0; }
+	from { transform: translateX(-60px); opacity: 0; }
 	to   { transform: translateX(0px); opacity: 1; }
 }
 

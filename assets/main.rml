@@ -254,7 +254,8 @@
 			</div>
 		</div>
 
-		<!-- Up next: over the end of an episode, counting down to the next. -->
+		<!-- Up next: over the end of an episode, counting down to the next;
+		     top left, where the launch indicator then takes over. -->
 		<div id="upnext" data-if="watching && upnext && !menu_open">
 			<div class="upnext-art">
 				<div class="upnext-img" data-if="upnext_art != 'none'" data-style-decorator="upnext_art"/>
