@@ -50,7 +50,7 @@ struct GroupInfo {
 const GroupInfo& InfoFor(Group group) {
   static const GroupInfo kLocal{"💾", "Local filesystem",
                                 "Drives and folders on this machine."};
-  static const GroupInfo kNetwork{"🖥", "Network sources",
+  static const GroupInfo kNetwork{"🖥", "Local network",
                                   "Media servers (UPnP/DLNA) on the network."};
   static const GroupInfo kPlugin{"🧩", "Plugins",
                                  "Sources added by JavaScript plugins."};

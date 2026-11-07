@@ -28,7 +28,7 @@ shelves of cards from your library: **Continue watching** and
 - **Home**: the shelves hold everything.
 - **Local filesystem**: USB drives and internal storage on the console,
   the home folder on a PC, and the entire filesystem.
-- **Network sources**: UPnP/DLNA media servers found on the network.
+- **Local network**: UPnP/DLNA media servers found on the network.
 - **Plugins**: one source per JavaScript plugin source.
 - **Settings**: playback, languages and the screensaver.
 
