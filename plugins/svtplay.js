@@ -9,11 +9,16 @@
 // "PersistedQueryNotFound" and that listing stops working until the hash is
 // refreshed. Playback goes through the separate video API, which mints
 // short-lived manifest URLs, hence resolve() rather than a uri per entry.
+//
+// Search (options menu) goes to SVT's search endpoint, a GraphQL server of
+// its own with persisted queries of its own (SEARCH below).
 
 const VIDEO_API = "https://api.svt.se/video/";
 const QUERY_API = "https://api.svt.se/contento/graphql";
 const IMAGE_API = "https://www.svtstatic.se/image";
 const CLIENT_UA = "svtplaywebb-play-render-prod-client";
+const SEARCH_API = "https://contento-search.svt.se/graphql";
+const SEARCH_UA = "svtplaywebb-render-prod-client";
 
 // [operationName, sha256 of the query document]. Several listings share an
 // operation name with different documents, so the hash travels with the call
@@ -36,6 +41,20 @@ const OP = {
     VIDEO_ID:  ["DetailsPageQuery",
 		"5be42eb4028ed8f2680ce2302f6887df3fed2dcb6f61ac091ff5a37a3d0bf477"]
 };
+
+// The searches svtplay.se makes, tried in order: [operation, variables for
+// a query]. Two, so that search outlives one of the hashes being retired;
+// both answer with searchPage.flat.hits. SearchPage is what the site's
+// search page asks; AutoCompleteSearch what its search box suggests from.
+const SEARCH = [
+    [["SearchPage",
+      "665488250690ac83cac858021011cee4d5b22cff046e74d7ab65b72384dfe09e"],
+     (q) => ({abTestVariants: [], kidsFilter: false, onlyKidsContent: false,
+	      query: q, searchClickHistory: []})],
+    [["AutoCompleteSearch",
+      "8989b62115022fda8a6129d0f512b94f4d2de3bf2110415647c09c4316ce4a91"],
+     (q) => ({querystring: q, searchClickHistory: []})]
+];
 
 // The fixed rows of the start page: [id, name, description, selectionId].
 const START_ROWS = [
@@ -80,17 +99,26 @@ function cached(key, produce) {
     return value;
 }
 
-function query(op, variables) {
+// 'endpoint' is [url, ua]: the listings' server unless said otherwise.
+function query(op, variables, endpoint) {
+    const api = endpoint ? endpoint[0] : QUERY_API;
+    const ua = endpoint ? endpoint[1] : CLIENT_UA;
     const extensions = {
 	persistedQuery: {version: 1, sha256Hash: op[1]}
     };
-    const url = QUERY_API +
-	  "?ua=" + CLIENT_UA +
+    const url = api +
+	  "?ua=" + ua +
 	  "&operationName=" + op[0] +
 	  "&variables=" + encodeURIComponent(JSON.stringify(variables || {})) +
 	  "&extensions=" + encodeURIComponent(JSON.stringify(extensions));
 
-    const res = http.get(url, {headers: {Accept: "application/json"}});
+    // The search server is asked as the site asks it, from its origin.
+    const headers = {Accept: "application/json"};
+    if (endpoint) {
+	headers.Origin = "https://www.svtplay.se";
+	headers.Referer = "https://www.svtplay.se/";
+    }
+    const res = http.get(url, {headers: headers});
     if (!res.ok) {
 	throw new Error(op[0] + ": HTTP " + res.status);
     }
@@ -444,6 +472,76 @@ function fetchShow(path, folderId) {
     }));
 }
 
+// One hit of a search: a Teaser (a show, an episode, a clip), or a genre
+// ("categoryTeaser"). Headings come with the matched words in <em>, which
+// text() takes out.
+function searchHitToEntry(hit) {
+    if (!hit) {
+	return null;
+    }
+    const teaser = hit.teaser;
+    if (teaser && teaser.item) {
+	// Whatever the teaser is called this year, it is read as a Teaser.
+	return toEntry({
+	    __typename: "Teaser",
+	    heading: teaser.heading,
+	    subHeading: teaser.subHeading,
+	    description: teaser.description,
+	    images: teaser.images,
+	    image: teaser.image,
+	    item: teaser.item
+	});
+    }
+    const category = hit.categoryTeaser;
+    if (category && category.id) {
+	const name = text(category.heading || category.name);
+	return name ? {
+	    id: "genre:" + category.id,
+	    type: "folder",
+	    name: name,
+	    description: "Kategori",
+	    image: pickImage(category, "")
+	} : null;
+    }
+    return null;
+}
+
+// SVT's own search, over the whole catalogue: shows, episodes, clips and
+// genres, in the order SVT ranks them. Each search in SEARCH is tried until
+// one answers; only when none does is it an error (the first one's, since
+// that is the one the site uses).
+function search(q) {
+    q = String(q || "").trim();
+    if (!q) {
+	return [];
+    }
+    let firstError = null;
+    for (let i = 0; i < SEARCH.length; i++) {
+	const op = SEARCH[i][0];
+	let res;
+	try {
+	    res = query(op, SEARCH[i][1](q), [SEARCH_API, SEARCH_UA]);
+	} catch (e) {
+	    console.warn("search: " + e.message);
+	    firstError = firstError || e;
+	    continue;
+	}
+	const page = res.searchPage || {};
+	const hits = (page.flat && page.flat.hits) || [];
+	const seen = {};
+	const out = [];
+	hits.forEach((hit) => {
+	    const entry = searchHitToEntry(hit);
+	    if (entry && !seen[entry.id]) {
+		seen[entry.id] = true;
+		out.push(entry);
+	    }
+	});
+	return out;
+    }
+    throw firstError;
+}
+
 // Trades an svtplay path for the svt id of the video on that page, for the
 // listings that give a path and no id.
 function svtIdForPath(path) {
@@ -606,6 +704,11 @@ return {
 
 		console.warn("cannot browse " + id);
 		return [];
+	    },
+
+	    // The folder on screen does not matter: SVT searches everything.
+	    search(q) {
+		return search(q);
 	    },
 
 	    resolve(id) {
