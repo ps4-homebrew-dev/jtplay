@@ -99,7 +99,8 @@ letters; other characters have to match as typed.
 **Search**, in the options menu (or Ctrl+S), is for sources that can ask a
 backend for content that is not listed, and is only there for those. The
 podcast plugin searches all of Apple Podcasts, not just its chart, and SVT
-Play searches its whole catalogue (shows, episodes, clips and genres). What the
+Play searches its whole catalogue (shows, episodes, clips and genres), and
+Pluto TV everything its region can watch (channels, films and series). What the
 backend finds is a folder of its own that sorts, filters, plays and takes
 favorites like any other, and back returns to the folder, with the selection
 where it was. Searching from the hits searches again; Refresh asks again.

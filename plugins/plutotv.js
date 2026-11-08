@@ -13,6 +13,11 @@
 // response. On demand comes from /v3/vod/categories, which carries its items
 // inline, so every genre and collection below is served from a single request.
 //
+// Search (options menu) asks Pluto's search service, which answers with
+// little more than ids, names and types; each hit is looked up in the
+// catalogue and the channel list above, so it reads like the same title
+// does when browsed.
+//
 // Playback is a URL built from the token rather than a request of its own:
 // the stitcher takes a channel or episode id and answers with an HLS manifest
 // with the advertising already spliced in. drmCapabilities is deliberately not
@@ -31,6 +36,13 @@ const IMAGE_HOST = "https://images.pluto.tv";
 // Where the manifests come from when the boot response names no stitcher.
 const STITCHER_FALLBACK =
       "https://cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv";
+
+// The search service when the boot response names none.
+const SEARCH_FALLBACK = "https://service-media-search.clusters.pluto.tv";
+
+// Hits a search asks for. Pluto pads a search that finds little with
+// loosely related titles, so the tail of a long answer is mostly that.
+const SEARCH_LIMIT = 100;
 
 // What this client claims to be. Pluto reads these to decide which catalogue
 // to serve; the web values are the ones that produce an ordinary HLS stream.
@@ -198,6 +210,7 @@ function boot() {
         token: token,
         params: params,
         stitcher: text(get(json, "servers.stitcher")) || STITCHER_FALLBACK,
+        search: text(get(json, "servers.search")) || SEARCH_FALLBACK,
         region: text(claims.activeRegion) || text(claims.country),
         language: text(claims.preferredLanguage),
         expires: claims.exp ? claims.exp * 1000 : Date.now() + 3600 * 1000
@@ -1108,6 +1121,120 @@ function resolveStream(id) {
     return url;
 }
 
+/* ----------------------------------------------------------------- search */
+
+// The catalogue's films and series by id, for dressing up search hits.
+function vodById() {
+    return cached("byid", CACHE_TTL_MS, () => {
+        const byId = {};
+        vodCategories().forEach((c) => {
+            (c.items || []).forEach((item) => {
+                const id = itemId(item);
+                if (id && !byId[id]) {
+                    byId[id] = item;
+                }
+            });
+        });
+        return byId;
+    });
+}
+
+function channelsById() {
+    const byId = {};
+    channels().forEach((c) => {
+        byId[itemId(c)] = c;
+    });
+    return byId;
+}
+
+// A lookup that is only made when a hit needs it, and that a failure only
+// costs the details of: the hits are still listed, plainly.
+function lazyLookup(load) {
+    let table = null;
+    return (id) => {
+        if (table === null) {
+            try {
+                table = load();
+            } catch (e) {
+                console.warn("search: " + e.message);
+                table = {};
+            }
+        }
+        return table[id] || null;
+    };
+}
+
+// Pluto's search over everything this region can watch: channels, films
+// and series, in Pluto's order. A hit is listed as browsing lists it when
+// the catalogue has it, and from what the hit says when not (a title from a
+// part of the catalogue not listed, say); either way it plays by its id.
+function search(q) {
+    q = text(q);
+    if (!q) {
+        return [];
+    }
+    const s = authorize();
+    const json = api(s.search, "/v1/search", {
+        q: q,
+        limit: SEARCH_LIMIT,
+        includeItems: "true",
+        deviceType: DEVICE.deviceType
+    });
+    const hits = (json && json.data) || [];
+    const vod = lazyLookup(vodById);
+    const channel = lazyLookup(channelsById);
+
+    const seen = {};
+    const out = [];
+    hits.forEach((hit) => {
+        const id = text(hit && hit.id);
+        const type = text(hit && hit.type).toLowerCase();
+        // A timeline is a programme on a channel's schedule, not something
+        // to play on its own; and what is not free to stream will not play.
+        if (!id || type === "timeline" ||
+            get(hit, "distributeAs.AVOD") === false) {
+            return;
+        }
+
+        let entry = null;
+        if (type === "channel") {
+            const c = channel(id);
+            entry = c ? channelEntry(c) : {
+                id: "channel:" + id,
+                type: "video",
+                name: (hit.number ? hit.number + ". " : "") + text(hit.name),
+                description: "Live channel"
+            };
+        } else if (type === "series") {
+            const item = vod(id);
+            entry = item ? vodEntry(item) : {
+                id: "series:" + id,
+                type: "folder",
+                name: text(hit.name),
+                description: "Series"
+            };
+        } else if (FILM_TYPES[type] || type === "episode") {
+            const item = vod(id);
+            entry = item && !isSeries(item) ? vodEntry(item) : {
+                id: "episode:" + id,
+                type: "video",
+                name: text(hit.name),
+                description: describe([
+                    hit.season ? "Season " + hit.season : "", text(hit.rating)
+                ])
+            };
+        } else {
+            console.log("search: skipping a " + type);
+            return;
+        }
+        if (entry && entry.name && !seen[entry.id]) {
+            seen[entry.id] = true;
+            out.push(entry);
+        }
+    });
+    return out;
+}
+
 /* ----------------------------------------------------------------- browse */
 
 const ROOT = [
@@ -1171,6 +1298,11 @@ return {
                 }
                 console.warn("cannot browse " + id);
                 return [];
+            },
+
+            // The folder on screen does not matter: Pluto searches everything.
+            search(q) {
+                return search(q);
             },
 
             resolve(id) {
