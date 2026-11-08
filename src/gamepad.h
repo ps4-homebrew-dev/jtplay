@@ -33,11 +33,19 @@
 
 #include <SDL.h>
 
+#include <RmlUi/Core/Input.h>
+
 namespace Rml {
 class Context;
 }
 
 namespace gamepad {
+
+// A remote's rewind and fast forward keys. RmlUi has no identifiers for
+// them, so RmlSDL::ConvertKey gives them these two, which no other key
+// produces (a keyboard's browser back is Backspace there).
+inline constexpr Rml::Input::KeyIdentifier kKeyRewind = Rml::Input::KI_BROWSER_BACK;
+inline constexpr Rml::Input::KeyIdentifier kKeyFastForward = Rml::Input::KI_BROWSER_FORWARD;
 
 // Opens the game controller subsystem and the pads already connected.
 // Call after SDL_Init(). Failure only means there will be no pads.

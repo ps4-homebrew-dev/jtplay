@@ -19,6 +19,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "gamepad.h"
 #include "icons.h"
 
 using namespace appdetail;
@@ -338,6 +339,8 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
   // Home's row of what is playing: there, or now this.
   if (view_ == View::Home)
     RebuildShelves();
+  if (view_ == View::Browse)
+    RebuildDetail(); // its status: now playing
 }
 
 void App::ExitWatch() {
@@ -376,6 +379,8 @@ void App::SetFullscreen(bool on) {
     // The shell was hidden: put its lists back where they were.
     scroll_entries_pending_ = true;
     scroll_sources_pending_ = true;
+    if (view_ == View::Browse)
+      RebuildDetail(); // its status: now playing
   }
   // Home's row of what is playing (it was out of sight: it may be new).
   if (view_ == View::Home)
@@ -884,6 +889,13 @@ void App::HandlePlaybackEnd() {
 }
 
 void App::HandleKeyWatch(Rml::Event& event, int key) {
+  // A remote's rewind and fast forward seek as left and right do, speeding
+  // up the same way.
+  if (key == gamepad::kKeyRewind)
+    key = Rml::Input::KI_LEFT;
+  else if (key == gamepad::kKeyFastForward)
+    key = Rml::Input::KI_RIGHT;
+
   switch (key) {
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:
@@ -950,6 +962,13 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     OpenWatchMenu();
     break;
 
+  case Rml::Input::KI_F4:    // a remote's display / info key: the bar, or away with it
+    if (bind_info_visible_ && !bind_watch_audio_)
+      Set("info_visible", bind_info_visible_, false);
+    else
+      ShowWatchInfo(kWatchInfoSec);
+    break;
+
   case Rml::Input::KI_BACK:  // back: the menus, playing on; held: stop
     if (bind_upnext_) {      // ... or just away with the up-next card
       upnext_dismissed_ = true;
@@ -1002,6 +1021,7 @@ bool App::HandleMediaKey(int key) {
   if (!bind_watching_)
     return false;
   switch (key) {
+  case Rml::Input::KI_PAUSE:            // a remote's pause key; again: play on
   case Rml::Input::KI_MEDIA_PLAY_PAUSE: {
     const bool was_paused = player_->IsPaused();
     player_->TogglePause();
@@ -1020,6 +1040,23 @@ bool App::HandleMediaKey(int key) {
     return true;
   case Rml::Input::KI_MEDIA_PREV_TRACK:
     SkipChapter(-1);
+    return true;
+  // Behind the menus (in full screen they are left and right, see
+  // HandleKeyWatch): a step either way, said in a toast.
+  case gamepad::kKeyRewind:
+  case gamepad::kKeyFastForward: {
+    if (!player_->CanSeek())
+      return true;
+    const bool back = key == gamepad::kKeyRewind;
+    player_->SeekRelative((back ? -kSeekSteps[0] : kSeekSteps[0]) * 1000000);
+    ShowToast((back ? "-" : "+") + std::to_string(kSeekSteps[0]) + " s",
+              back ? icon::kRewind : icon::kForward);
+    return true;
+  }
+  case Rml::Input::KI_F2:    // a remote's audio key: the next audio track
+    CycleAudioTrack(+1);
+    if (bind_fullscreen_)
+      ShowWatchInfo(kWatchInfoSec);
     return true;
   default:
     return false;

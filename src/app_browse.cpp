@@ -303,7 +303,12 @@ void App::RebuildDetail() {
     library::Ref ref;
     if (Identify(*e, ref)) {
       library::Progress p;
-      if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
+      // The one in the player (behind the menus, or the music): what it
+      // was left at is out of date while it plays on.
+      if (bind_watching_ && playing_identified_ && ref.source_key == playing_ref_.source_key &&
+          ref.entry.id == playing_ref_.entry.id) {
+        add("Status", "Now playing");
+      } else if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
         if (p.watched)
           add("Status", "Watched");
         else if (p.position > 0)

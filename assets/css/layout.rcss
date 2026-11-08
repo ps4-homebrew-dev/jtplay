@@ -56,9 +56,11 @@ body.home.featured #backdrop {
 	opacity: 1;
 	bottom: 410px;
 }
+/* The fade down is solid by 62%: 670 of 1080px, where the artwork ends
+ * (bottom: 410px). Any later and its bottom edge shows as a line. */
 body.home.featured #backdrop-shade {
 	decorator: linear-gradient(90deg, #0b1020 0%, #0b1020e6 24%, #0b102080 50%, #0b102000 76%),
-	           linear-gradient(180deg, #0b1020c0 0%, #0b102000 20%, #0b102000 40%, #0b1020 66%);
+	           linear-gradient(180deg, #0b1020c0 0%, #0b102000 20%, #0b102000 40%, #0b1020 62%);
 }
 
 /* ------------------------------------------------------------------ */

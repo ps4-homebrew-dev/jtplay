@@ -3,6 +3,9 @@
 #include <RmlUi/Core/Input.h>
 #include <RmlUi/Core/StringUtilities.h>
 #include <RmlUi/Core/SystemInterface.h>
+#if SDL_MAJOR_VERSION == 2
+	#include "../gamepad.h" // jtplay: kKeyRewind, kKeyFastForward
+#endif
 
 SystemInterface_SDL::SystemInterface_SDL()
 {
@@ -444,6 +447,11 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	// Application) or a keyboard's menu key.
 	case SDLK_MENU:         return Rml::Input::KI_F1;
 	case SDLK_APPLICATION:  return Rml::Input::KI_F1;
+	// jtplay: a remote's rewind and fast forward, which RmlUi has no keys
+	// for. (Its pause key is SDLK_PAUSE, above; its audio and display keys
+	// arrive as F2 and F4.)
+	case SDLK_AUDIOREWIND:      return gamepad::kKeyRewind;
+	case SDLK_AUDIOFASTFORWARD: return gamepad::kKeyFastForward;
 #endif
 	default: break;
 	}
