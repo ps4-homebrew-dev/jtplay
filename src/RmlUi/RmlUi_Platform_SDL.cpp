@@ -431,6 +431,15 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	case SDLK_LSUPER:       return Rml::Input::KI_LWIN;
 	case SDLK_RSUPER:       return Rml::Input::KI_RWIN;
 	*/
+#if SDL_MAJOR_VERSION == 2
+	// jtplay: a media remote's (or keyboard's) transport keys. Its back key
+	// is the app's back, Backspace.
+	case SDLK_AUDIOPLAY:    return Rml::Input::KI_MEDIA_PLAY_PAUSE;
+	case SDLK_AUDIOSTOP:    return Rml::Input::KI_MEDIA_STOP;
+	case SDLK_AUDIONEXT:    return Rml::Input::KI_MEDIA_NEXT_TRACK;
+	case SDLK_AUDIOPREV:    return Rml::Input::KI_MEDIA_PREV_TRACK;
+	case SDLK_AC_BACK:      return Rml::Input::KI_BACK;
+#endif
 	default: break;
 	}
 	// clang-format on

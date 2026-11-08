@@ -1,118 +1,175 @@
 /*
- * Home: the rail of places on the left, and on the right a hero for the
- * place the rail is on, above shelves of cards from the library. Heights
- * must stay in sync with kRailRowPitch / kShelfPitch / kCardPitch in
+ * Home: tabs of places across the top (in the top bar), a banner showing
+ * the card in focus large over its artwork, and rows of cards below.
+ * Heights must stay in sync with kShelfPitch / kCardPitch in
  * src/app_internal.h.
  */
 
-#home {
-	flex-direction: row;
+/* The page's margin is 72px, as everywhere; but what clips the rows
+ * (.content, #home-main, #shelves) reaches 24px into it, so that a focused
+ * card in the first column can grow to the left without losing its edge. */
+#home.content {
+	padding-left: 48px;
 }
-
-/* ------------------------------------------------------------------ */
-/* Rail                                                               */
-/* ------------------------------------------------------------------ */
-
-#rail {
-	box-sizing: border-box;
-	width: 460px;
-	padding-top: 8px;
-	overflow-y: auto;
-}
-
-#rail scrollbarvertical { width: 0px; }
-
-.rail-row {
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	height: 80px;
-	margin-bottom: 8px;
-	padding: 0px 22px;
-	border-radius: 12px;
-	transition: background-color 0.12s linear-in-out;
-}
-
-.rail-icon {
-	width: 52px;
-	font-size: 32px;
-	font-weight: bold;
-	text-align: center;
-	margin-right: 20px;
-	color: #aab6cc;
-}
-
-.rail-text {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	overflow: hidden;
-}
-
-.rail-label {
-	font-size: 30px;
-	font-weight: bold;
-	color: #aab6cc;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.rail-detail {
-	margin-top: 2px;
-	font-size: 19px;
-	color: #6f7b92;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-/* Focused: the solid accent bar. */
-.rail-row.selected {
-	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
-}
-.rail-row.selected .rail-icon,
-.rail-row.selected .rail-label { color: #06231d; }
-.rail-row.selected .rail-detail { color: #0d3d33; }
-
-/* Focus has moved on to the shelves: the rail keeps a quiet marker of
- * where it is. */
-#rail.away .rail-row.selected {
-	decorator: none;
-	background-color: #ffffff10;
-	border-left: 4px #4dd6b8;
-}
-#rail.away .rail-row.selected .rail-icon,
-#rail.away .rail-row.selected .rail-label { color: #e8edf7; }
-#rail.away .rail-row.selected .rail-detail { color: #8593ab; }
-
-/* ------------------------------------------------------------------ */
-/* Hero                                                               */
-/* ------------------------------------------------------------------ */
-
 #home-main {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
-	margin-left: 56px;
 	overflow: hidden;
+	padding-left: 24px;
 }
 
-#hero {
+/* ------------------------------------------------------------------ */
+/* Tabs                                                               */
+/* ------------------------------------------------------------------ */
+
+/* Always the five, at their full width; the first tab's icon on the page
+ * margin, as the text below it is (its pill reaching out into the margin
+ * when focused). */
+#tabs {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	min-height: 200px;
-	margin-bottom: 24px;
+	flex: 0 0 auto;
+	margin-left: -26px;
+	white-space: nowrap;
+}
+
+.tab {
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 60px;
+	margin-right: 6px;
+	padding: 0px 26px;
+	border-radius: 30px;
+	transition: background-color 0.12s linear-in-out;
+}
+
+.tab-icon {
+	margin-right: 12px;
+	font-size: 26px;
+	color: #aab6cc;
+}
+
+.tab-label {
+	font-size: 27px;
+	font-weight: bold;
+	color: #aab6cc;
+}
+
+/* Focused: the solid accent, as everywhere. */
+.tab.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.tab.selected .tab-icon,
+.tab.selected .tab-label { color: #06231d; }
+
+/* Focus is down in the rows: the tab stays marked as where we are. */
+#tabs.away .tab.selected {
+	decorator: none;
+	background-color: #ffffff1f;
+}
+#tabs.away .tab.selected .tab-icon,
+#tabs.away .tab.selected .tab-label { color: #ffffff; }
+
+/* ------------------------------------------------------------------ */
+/* Banner                                                             */
+/* ------------------------------------------------------------------ */
+
+/* The card in focus, large; its artwork is the backdrop (layout.rcss).
+ * Anchored to the bottom of its space, so it sits on the rows whatever
+ * it has to say. */
+#feature {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	height: 470px;
+	width: 1040px;
+	padding-bottom: 30px;
+}
+
+.feat-eyebrow {
+	font-size: 20px;
+	font-weight: bold;
+	letter-spacing: 3px;
+	text-transform: uppercase;
+	color: #4dd6b8;
+}
+
+.feat-title {
+	margin-top: 6px;
+	font-size: 78px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-effect: shadow(0px 2px #00000066);
+}
+
+.feat-meta {
+	margin-top: 4px;
+	font-size: 27px;
+	color: #e8edf7;
+}
+
+.feat-state {
+	margin-right: 10px;
+	font-size: 24px;
+	color: #4dd6b8;
+}
+.feat-live {
+	margin-left: 14px;
+	padding: 2px 10px;
+	font-size: 17px;
+	font-weight: bold;
+	letter-spacing: 2px;
+	color: #0b1020;
+	background-color: #4dd6b8;
+	border-radius: 4px;
+}
+
+.feat-progress {
+	width: 420px;
+	height: 6px;
+	margin-top: 16px;
+	background-color: #ffffff33;
+	border-radius: 3px;
+}
+.feat-progress-bar {
+	height: 6px;
+	background-color: #4dd6b8;
+	border-radius: 3px;
+}
+
+/* Three lines at most; the rest is for the browse view. */
+.feat-desc {
+	margin-top: 18px;
+	max-height: 114px;
+	font-size: 26px;
+	line-height: 38px;
+	color: #c5cee0;
+	overflow: hidden;
+}
+
+/* A place (a group, a source, Settings), when there is no card to show:
+ * its icon, name and what it is, in the banner's space. */
+#hero {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 470px;
 }
 
 .hero-icon {
 	width: 150px;
 	height: 150px;
 	margin-right: 40px;
-	font-size: 96px;
-	font-weight: bold;
+	font-size: 84px;
 	line-height: 150px;
 	text-align: center;
 	color: #4dd6b8;
@@ -148,7 +205,18 @@
 .hero-note {
 	margin-top: 18px;
 	font-size: 24px;
-	color: #6f7b92;
+	color: #8593ab;
+}
+
+/* On a group's page the banner gives way to the grid of its sources;
+ * the rows have that much more room, and so does the space after the last
+ * (for it to get to the top too, rather than leave the one above it cut). */
+body.compact #feature,
+body.compact #hero {
+	height: 300px;
+}
+body.compact .shelves-end {
+	height: 270px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -158,14 +226,93 @@
 #shelves {
 	flex: 1;
 	overflow-y: auto;
+	margin-left: -24px;
+	padding-left: 24px;
 }
 
 #shelves scrollbarvertical { width: 0px; }
 
-.shelf {
+.shelf-in {
 	box-sizing: border-box;
 	height: 380px;
 	padding-top: 8px;
+}
+
+/* A group's sources: rows of four tiles, lower than rows of cards, so that
+ * several show at once under the shorter banner (body.compact). */
+.shelf-in.sources {
+	height: auto;
+	padding-bottom: 10px;
+}
+/* The first row after them: a gap between the grid and the next section. */
+.shelf-in.gap {
+	height: 404px;
+	padding-top: 32px;
+}
+
+.source-tile {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	width: 384px;
+	height: 112px;
+	padding: 0px 22px;
+	background-color: #ffffff0f;
+	border: 3px transparent;
+	border-radius: 14px;
+}
+
+.source-icon {
+	flex-shrink: 0;
+	width: 64px;
+	height: 64px;
+	margin-right: 20px;
+	font-size: 36px;
+	line-height: 64px;
+	text-align: center;
+	color: #4dd6b8;
+	background-color: #4dd6b81a;
+	border-radius: 14px;
+}
+
+.source-text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+}
+
+.source-name {
+	font-size: 25px;
+	font-weight: bold;
+	color: #c5cee0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.source-detail {
+	margin-top: 4px;
+	font-size: 19px;
+	color: #6f7b92;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.card.selected .source-tile {
+	background-color: #4dd6b81f;
+	border: 3px #4dd6b8;
+	box-shadow: #4dd6b855 0px 0px 24px 0px;
+}
+.card.selected .source-name { color: #ffffff; }
+.card.selected .source-detail { color: #aab6cc; }
+
+/* The rows scroll so that the focused one is at the top (src/app.cpp);
+ * room after the last, so that it can get there too. */
+.shelves-end {
+	height: 100px;
 }
 
 .shelf-head {
@@ -193,12 +340,15 @@
 }
 
 /* The row of cards scrolls sideways under program control; the padding
- * leaves room for the focused card to grow without being clipped. */
+ * leaves room for the focused card to grow without being clipped (it
+ * grows 10px each way, its border and glow a little more), and the
+ * negative margin keeps the cards where they were. */
 .cards {
 	display: flex;
 	flex-direction: row;
 	flex-wrap: nowrap;
-	padding: 14px 20px 0px 6px;
+	margin-left: -18px;
+	padding: 14px 20px 0px 24px;
 	overflow-x: auto;
 	overflow-y: hidden;
 	white-space: nowrap;

@@ -19,6 +19,8 @@
 #include "browse/dlna_source.h"
 #include "browse/fs_source.h"
 #include "browse/js_source.h"
+#include "gamepad.h"
+#include "icons.h"
 
 using namespace appdetail;
 
@@ -42,6 +44,8 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
 
   document_->Show();
   document_->AddEventListener(Rml::EventId::Keydown, this, true);
+  // Releases too: a short press of back and a held one do different things.
+  document_->AddEventListener(Rml::EventId::Keyup, this, true);
 
   // The player draws with the window's GL context, current here. Without it
   // the app still browses; playing says why it can't.
@@ -90,6 +94,9 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
 
   Set("view_mode", bind_view_mode_,
       Rml::String(view_mode_ == ViewMode::Grid ? "grid" : "list"));
+  // JTPLAY_INPUT_LOG=1: Settings > Show input from the start.
+  if (const char* trace = std::getenv("JTPLAY_INPUT_LOG"); trace && *trace && *trace != '0')
+    SetInputTrace(true);
   RebuildHome();
   // Only the local drives up front: they are found at once. Network
   // servers and plugins are searched for when the rail enters their group.
@@ -135,8 +142,10 @@ void App::Shutdown() {
     player_->Shutdown();
   }
 
+  gamepad::SetTrace(nullptr); // it calls back into this
   if (document_) {
     document_->RemoveEventListener(Rml::EventId::Keydown, this, true);
+    document_->RemoveEventListener(Rml::EventId::Keyup, this, true);
     document_->Close();
     document_ = nullptr;
   }
@@ -301,6 +310,9 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
 
   if (auto row = ctor.RegisterStruct<ShelfRow>()) {
     row.RegisterMember("title", &ShelfRow::title);
+    row.RegisterMember("count", &ShelfRow::count);
+    row.RegisterMember("sources", &ShelfRow::sources);
+    row.RegisterMember("gap", &ShelfRow::gap);
     row.RegisterMember("cards", &ShelfRow::cards);
   }
   ctor.RegisterArray<std::vector<ShelfRow>>();
@@ -355,6 +367,13 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("hero_title", &bind_hero_title_);
   ctor.Bind("hero_detail", &bind_hero_detail_);
   ctor.Bind("hero_note", &bind_hero_note_);
+  ctor.Bind("feat_title", &bind_feat_title_);
+  ctor.Bind("feat_eyebrow", &bind_feat_eyebrow_);
+  ctor.Bind("feat_meta", &bind_feat_meta_);
+  ctor.Bind("feat_desc", &bind_feat_desc_);
+  ctor.Bind("feat_progress", &bind_feat_progress_);
+  ctor.Bind("feat_live", &bind_feat_live_);
+  ctor.Bind("home_compact", &bind_home_compact_);
 
   ctor.Bind("entries", &entry_rows_);
   ctor.Bind("entry_count", &entry_count_);
@@ -369,6 +388,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("detail_description", &bind_detail_description_);
   ctor.Bind("detail_props", &detail_props_);
   ctor.Bind("detail_image", &bind_detail_image_);
+  ctor.Bind("detail_cover", &bind_detail_cover_);
   ctor.Bind("detail_favorite", &bind_detail_favorite_);
 
   ctor.Bind("saver", &bind_saver_);
@@ -403,6 +423,8 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("photo_meta", &bind_photo_meta_);
 
   ctor.Bind("watching", &bind_watching_);
+  ctor.Bind("fullscreen", &bind_fullscreen_);
+  ctor.Bind("video_behind", &bind_video_behind_);
   ctor.Bind("info_visible", &bind_info_visible_);
   ctor.Bind("watch_audio", &bind_watch_audio_);
   ctor.Bind("watch_paused", &bind_watch_paused_);
@@ -505,6 +527,15 @@ void App::Update() {
       Set("info_visible", bind_info_visible_, false);
     if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
       Set("watch_seek", bind_watch_seek_, Rml::String());
+    // Back held long enough in full screen: stop (see HandleKeyUp).
+    if (back_held_ && now - back_down_at_ >= kHoldStopSec) {
+      back_held_ = false;
+      back_swallow_ = true;
+      if (bind_fullscreen_) {
+        StopPlayback();
+        ShowToast("Playback stopped", icon::kStop);
+      }
+    }
   }
 
   if (!bind_jump_letter_.empty() && now > jump_letter_until_)
@@ -557,33 +588,8 @@ void App::Update() {
   // system keyboard hands over its text all at once anyway.)
   if (bind_filter_open_ && !filter_focus_pending_)
     ApplyFilter(FilterFieldText());
-  if (scroll_sources_pending_) {
-    EnsureRowVisible("rail", sel_rail_, kRailRowPitch);
-    if (Rml::Element* shelves = document_->GetElementById("shelves")) {
-      // The focused shelf in view, then the focused card in its row.
-      const float pitch = kShelfPitch;
-      const float view_h = shelves->GetClientHeight();
-      float top = shelves->GetScrollTop();
-      const float row_top = sel_shelf_ * pitch;
-      if (row_top < top)
-        top = row_top;
-      else if (row_top + pitch > top + view_h)
-        top = row_top + pitch - view_h;
-      shelves->SetScrollTop(std::max(0.0f, top));
-      const std::string id = "cards-" + std::to_string(sel_shelf_);
-      if (Rml::Element* row = document_->GetElementById(id)) {
-        const float view_w = row->GetClientWidth();
-        float left = row->GetScrollLeft();
-        const float card_left = sel_card_ * kCardPitch;
-        if (card_left < left + kCardPitch * 0.5f)
-          left = card_left - kCardPitch * 0.5f;
-        else if (card_left + kCardPitch * 1.5f > left + view_w)
-          left = card_left + kCardPitch * 1.5f - view_w;
-        row->SetScrollLeft(std::max(0.0f, left));
-      }
-    }
+  if (scroll_sources_pending_ && ScrollRows())
     scroll_sources_pending_ = false;
-  }
 
   if (art_scan_pending_) {
     art_scan_pending_ = false;
@@ -593,12 +599,53 @@ void App::Update() {
 
 void App::RenderVideo(int width, int height) {
   // Audio-only: the visualizer is the picture. It also covers the moment
-  // before the player is up, so the screen never flashes black.
+  // before the player is up, so the screen never flashes black. Behind the
+  // menus there is nothing to draw: they have their own background.
   if (bind_watching_ && bind_watch_audio_) {
-    visualizer_.Render(*player_, width, height, player_->IsPaused());
+    if (bind_fullscreen_)
+      visualizer_.Render(*player_, width, height, player_->IsPaused());
     return;
   }
+  // Behind the menus as in full screen: the picture as it is, the menus'
+  // shade over it (#video-shade).
   player_->RenderVideo(width, height);
+}
+
+// Home's rows: the focused one at the top, as the streaming apps do, the
+// next one peeking in below it; then the focused card in its row. False
+// when the page does not have the rows yet.
+bool App::ScrollRows() {
+  if (Rml::Element* shelves = document_->GetElementById("shelves")) {
+    // (Rows of sources are lower than rows of cards, so it goes by the
+    // heights the rows have.)
+    Rml::ElementList rows;
+    shelves->QuerySelectorAll(rows, ".shelf");
+    // (Not the hidden one the rows are made from, which keeps 'data-for'.)
+    rows.erase(std::remove_if(rows.begin(), rows.end(),
+                              [](Rml::Element* e) { return e->HasAttribute("data-for"); }),
+               rows.end());
+    // Rows just added or taken away are only on the page from the next
+    // update of the data views: until then, measuring would go by the
+    // rows that were.
+    if (rows.size() != shelves_.size())
+      return false;
+    float top = 0.0f;
+    for (int i = 0; i < sel_shelf_ && i < (int)rows.size(); i++)
+      top += rows[i]->GetOffsetHeight();
+    shelves->SetScrollTop(top);
+    const std::string id = "cards-" + std::to_string(sel_shelf_);
+    if (Rml::Element* row = document_->GetElementById(id)) {
+      const float view_w = row->GetClientWidth();
+      float left = row->GetScrollLeft();
+      const float card_left = sel_card_ * kCardPitch;
+      if (card_left < left + kCardPitch * 0.5f)
+        left = card_left - kCardPitch * 0.5f;
+      else if (card_left + kCardPitch * 1.5f > left + view_w)
+        left = card_left + kCardPitch * 1.5f - view_w;
+      row->SetScrollLeft(std::max(0.0f, left));
+    }
+  }
+  return true;
 }
 
 void App::EnsureRowVisible(const char* list_id, int index, float row_pitch) {
@@ -630,15 +677,40 @@ void App::ShowToast(const std::string& text, const char* icon) {
   Set("toast_icon", bind_toast_icon_, Rml::String(icon ? icon : "ℹ"));
 }
 
+// Every input event SDL delivers goes to the log, and each press to a toast
+// as well, whether anything reacts to it or not: what a TV remote's buttons
+// arrive as (over HDMI-CEC, say) is otherwise anyone's guess.
+void App::SetInputTrace(bool on) {
+  input_trace_ = on;
+  if (!on) {
+    gamepad::SetTrace(nullptr);
+    return;
+  }
+  gamepad::SetTrace([this](const std::string& line, bool press) {
+    SDL_Log("input: %s", line.c_str());
+    if (press)
+      ShowToast(line, icon::kGamepad);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Input routing
 // ---------------------------------------------------------------------------
 
 void App::ProcessEvent(Rml::Event& event) {
+  if (event.GetId() == Rml::EventId::Keyup) {
+    HandleKeyUp(event.GetParameter<int>("key_identifier", 0));
+    return;
+  }
   if (event.GetId() != Rml::EventId::Keydown)
     return;
 
   const int key = event.GetParameter<int>("key_identifier", 0);
+
+  if (back_swallow_ && key == Rml::Input::KI_BACK) {
+    event.StopPropagation();
+    return;
+  }
 
   // The first key after the screensaver came up only wakes the screen.
   last_input_ = Now();
@@ -663,7 +735,7 @@ void App::ProcessEvent(Rml::Event& event) {
   if ((key == Rml::Input::KI_F || key == Rml::Input::KI_S) &&
       (event.GetParameter<int>("ctrl_key", 0) != 0) &&
       view_ == View::Browse && !bind_filter_open_ && !bind_search_open_ &&
-      !bind_menu_open_ && !bind_photo_ && !bind_watching_) {
+      !bind_menu_open_ && !bind_photo_ && !FullscreenPlayback()) {
     if (key == Rml::Input::KI_F)
       OpenFilter();
     else
@@ -689,8 +761,13 @@ void App::ProcessEvent(Rml::Event& event) {
     HandleKeyPhoto(event, key);
     return;
   }
-  if (bind_watching_) {
+  if (FullscreenPlayback()) {
     HandleKeyWatch(event, key);
+    return;
+  }
+  // Playing behind the menus: a few keys still go to playback.
+  if (bind_watching_ && HandleKeyBehind(key)) {
+    event.StopPropagation();
     return;
   }
   if (view_ == View::Home) {
@@ -780,6 +857,7 @@ void App::RefreshImageBindings() {
       detail = ImagePathFor(ArtUri(*entry));
   }
   Set("detail_image", bind_detail_image_, detail);
+  Set("detail_cover", bind_detail_cover_, CoverDecorator(detail));
 
   // Now-playing card / transport bar follows the playing item.
   Rml::String watch;
@@ -790,17 +868,19 @@ void App::RefreshImageBindings() {
   UpdateBackdrop();
 }
 
-// The selected item's artwork, large and dim behind everything (Kodi's
-// fanart): the focused card at home, the selection while browsing.
+// The selected item's artwork behind everything: at home, the featured
+// card's, large across the top as the banner's picture; while browsing,
+// the selection's, dim (Kodi's fanart).
 void App::UpdateBackdrop() {
   std::string uri;
   if (view_ == View::Browse) {
     if (const browse::Entry* entry = SelectedEntry())
       uri = ArtUri(*entry);
-  } else if (bind_home_shelves_) {
-    if (const browse::Entry* card = SelectedCard())
-      uri = ArtUri(*card);
+  } else if (const browse::Entry* card = FeaturedCard()) {
+    uri = ArtUri(*card);
   }
+  if (view_ == View::Home)
+    UpdateFeature();
   // Keep the last picture while the next one loads, rather than flash to
   // nothing between two items that both have art.
   const std::string path = uri.empty() ? std::string() : ImagePathFor(uri);

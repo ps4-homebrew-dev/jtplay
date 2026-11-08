@@ -50,6 +50,8 @@ public:
   // Adds or removes; returns whether it is a favorite now.
   bool ToggleFavorite(const Ref& ref);
   std::vector<Ref> Favorites() const;
+  // The name the library remembers for a source, "" if it has none.
+  std::string SourceName(const std::string& source_key) const;
 
   bool GetProgress(const std::string& source_key, const std::string& id,
                    Progress& out) const;

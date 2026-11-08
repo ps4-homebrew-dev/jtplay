@@ -1,16 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The home screen: a rail of places down the left (Home, the groups of
-// sources -- local, network, plugins -- and Settings) and shelves of cards
-// on the right, drawn from the library -- Continue watching and Favorites,
-// for everything when the rail is on Home and for one group or source when
-// it is on that. Selecting a group lists its sources in the rail, selecting
-// a source opens it in the browse view, and selecting a card plays it, or
-// opens a favorite folder, without going through the source's own tree.
+// The home screen: tabs of places across the top (Home, the groups of
+// sources -- local, network, plugins -- and Settings), always those five
+// however many sources there are, a banner, and rows of cards.
+//
+// On Home the rows are the library's: Continue watching and Favorites. On
+// a group they are first its sources, as a grid of tiles (rows of four,
+// as many rows as it takes: fifty plugins are thirteen rows), and then
+// what the library has from that group. A group is searched as soon as
+// its tab is reached. Selecting a source opens it in the browse view, and
+// selecting a card plays it, or opens a favorite folder, without going
+// through the source's own tree.
+//
+// The banner shows the card in focus, large -- its artwork across the top
+// of the screen, its title, what is left of it, its description -- and so
+// follows the focus along the rows, as the big streaming apps do. With the
+// focus on the tabs it shows what Home has first, or the place itself
+// (a group, a source, Settings). Whatever a card has no data for is left
+// out rather than shown empty.
+//
+// The internals still say "rail" for the places: they were a rail down the
+// left once, and are the same list.
 #include <algorithm>
 
 #include "app.h"
 #include "app_internal.h"
+#include "icons.h"
 
 using namespace appdetail;
 
@@ -23,7 +38,7 @@ std::string Plural(size_t n, const char* one, const char* many) {
 } // namespace
 
 void App::GoHome() {
-  CancelLaunch();
+  CancelForegroundLaunch();
   browse_request_++; // invalidate any browse that is still in flight
   path_.clear();
   current_source_.reset();
@@ -48,11 +63,11 @@ struct GroupInfo {
 };
 
 const GroupInfo& InfoFor(Group group) {
-  static const GroupInfo kLocal{"💾", "Local filesystem",
+  static const GroupInfo kLocal{icon::kDrive, "Local filesystem",
                                 "Drives and folders on this machine."};
-  static const GroupInfo kNetwork{"🖥", "Local network",
+  static const GroupInfo kNetwork{icon::kServer, "Local network",
                                   "Media servers (UPnP/DLNA) on the network."};
-  static const GroupInfo kPlugin{"🧩", "Plugins",
+  static const GroupInfo kPlugin{icon::kPlugin, "Plugins",
                                  "Sources added by JavaScript plugins."};
   switch (group) {
   case Group::Local:   return kLocal;
@@ -162,15 +177,7 @@ void App::RebuildHome(const std::string& select) {
 
   rail_.clear();
   rail_rows_.clear();
-  if (rail_in_group_) {
-    // One group's sources; back leads up to the top again.
-    for (const browse::SourcePtr& s : discovered_) {
-      if (s->RailGroup() != rail_group_)
-        continue;
-      rail_.push_back({RailKind::Source, s});
-      rail_rows_.push_back({s->Icon(), s->Name(), s->Detail()});
-    }
-  } else {
+  {
     const size_t in_progress = library_.InProgress().size();
     const size_t favorites = library_.Favorites().size();
     rail_.push_back({RailKind::Home, nullptr});
@@ -180,7 +187,7 @@ void App::RebuildHome(const std::string& select) {
     if (favorites)
       home_detail += (home_detail.empty() ? "" : "  ·  ") +
                      Plural(favorites, "favorite", "favorites");
-    rail_rows_.push_back({"🏠", "Home", home_detail});
+    rail_rows_.push_back({icon::kHome, "Home", home_detail});
     for (Group group : kGroups) {
       const GroupScan& scan = scans_[(int)group];
       const size_t n = std::count_if(discovered_.begin(), discovered_.end(),
@@ -195,10 +202,10 @@ void App::RebuildHome(const std::string& select) {
       rail_rows_.push_back({info.icon, info.name, detail});
     }
     rail_.push_back({RailKind::Settings, nullptr});
-    rail_rows_.push_back({"⚙", "Settings", ""});
+    rail_rows_.push_back({icon::kSettings, "Settings", ""});
   }
 
-  // Stay where we were; just inside a group, that is its first source.
+  // Stay where we were.
   sel_rail_ = 0;
   for (size_t i = 0; i < rail_.size(); i++) {
     if (RailKey(rail_[i]) == selected) {
@@ -212,33 +219,32 @@ void App::RebuildHome(const std::string& select) {
   scroll_sources_pending_ = true;
 }
 
-void App::EnterRailGroup(browse::Source::Group group) {
-  rail_in_group_ = true;
-  rail_group_ = group;
-  sel_shelf_ = 0;
-  shelf_card_sel_.clear();
-  RebuildHome("-"); // no such key: lands on the group's first source
-  StartDiscovery(group);
-}
-
-void App::LeaveRailGroup() {
-  rail_in_group_ = false;
-  sel_shelf_ = 0;
-  shelf_card_sel_.clear();
-  RailItem item{RailKind::Group, nullptr, rail_group_};
-  RebuildHome(RailKey(item));
+bool App::PlaceGroup(browse::Source::Group& group) const {
+  if (sel_rail_ >= (int)rail_.size() || rail_[sel_rail_].kind != RailKind::Group)
+    return false;
+  group = rail_[sel_rail_].group;
+  return true;
 }
 
 void App::MoveRail(int delta) {
   const int n = (int)rail_.size();
   if (n == 0)
     return;
-  sel_rail_ = (sel_rail_ + delta + n) % n;
+  // Tabs stop at either end, rather than wrap round behind the screen edge.
+  const int to = std::clamp(sel_rail_ + delta, 0, n - 1);
+  if (to == sel_rail_)
+    return;
+  sel_rail_ = to;
   model_.DirtyVariable("sel_rail");
   sel_shelf_ = 0;
   shelf_card_sel_.clear();
   RebuildShelves();
   scroll_sources_pending_ = true;
+  // A group's sources are looked for as soon as its tab is reached (once;
+  // square looks again).
+  Group group;
+  if (PlaceGroup(group) && !scans_[(int)group].scanned && !scans_[(int)group].running)
+    StartDiscovery(group);
 }
 
 void App::ActivateRail() {
@@ -247,12 +253,13 @@ void App::ActivateRail() {
   const RailItem item = rail_[sel_rail_]; // a copy: the rail is rebuilt below
   switch (item.kind) {
   case RailKind::Home:
+  case RailKind::Group:
+    // Into the rows; a group with nothing found yet is looked for again.
     if (!shelves_.empty())
       Set("home_shelves", bind_home_shelves_, true);
+    else if (item.kind == RailKind::Group)
+      StartDiscovery(item.group);
     RefreshImageBindings();
-    break;
-  case RailKind::Group:
-    EnterRailGroup(item.group);
     break;
   case RailKind::Source:
     OpenSource(item.source);
@@ -273,8 +280,6 @@ void App::RebuildShelves() {
   RailItem place{RailKind::Home, nullptr};
   if (sel_rail_ < (int)rail_.size())
     place = rail_[sel_rail_];
-  else if (rail_in_group_)
-    place = {RailKind::Group, nullptr, rail_group_};
   const RailKind kind = place.kind;
   const RailItem* item = &place;
   auto wanted = [&](const std::string& source_key) {
@@ -288,9 +293,39 @@ void App::RebuildShelves() {
     }
   };
 
+  // What the rows were, to keep the focus on the same row when the one of
+  // what is playing comes or goes above it.
+  const bool had_now_playing = NowPlayingShelf(0);
   shelves_.clear();
+  // Home, while something plays: that first, the way back to it.
+  if (kind == RailKind::Home && bind_watching_) {
+    Shelf now{"Now playing", nullptr, {playing_}, {}};
+    now.now_playing = true;
+    shelves_.push_back(std::move(now));
+  }
+  // A group: its sources first, as rows of tiles that make a grid; the
+  // first row says what they are and how many.
+  if (kind == RailKind::Group) {
+    std::vector<browse::SourcePtr> sources;
+    for (const browse::SourcePtr& s : discovered_)
+      if (s->RailGroup() == item->group)
+        sources.push_back(s);
+    for (size_t i = 0; i < sources.size(); i += kSourcesPerRow) {
+      Shelf row{i == 0 ? "Sources" : "", nullptr, {}, {}};
+      for (size_t j = i; j < std::min(sources.size(), i + kSourcesPerRow); j++) {
+        browse::Entry stand_in;
+        stand_in.id = "source:" + sources[j]->Key();
+        stand_in.name = sources[j]->Name();
+        stand_in.type = browse::Entry::Type::Folder;
+        row.entries.push_back(std::move(stand_in));
+        row.sources.push_back(sources[j]);
+      }
+      shelves_.push_back(std::move(row));
+    }
+  }
+  Set("home_compact", bind_home_compact_, kind == RailKind::Group);
   if (kind != RailKind::Settings) {
-    Shelf resume{"Continue watching", continue_source_, {}};
+    Shelf resume{"Continue watching", continue_source_, {}, {}};
     for (const auto& item : library_.InProgress()) {
       if (!wanted(item.first.source_key))
         continue;
@@ -301,7 +336,7 @@ void App::RebuildShelves() {
     if (!resume.entries.empty())
       shelves_.push_back(std::move(resume));
 
-    Shelf favs{"Favorites", favorites_source_, {}};
+    Shelf favs{"Favorites", favorites_source_, {}, {}};
     for (const library::Ref& ref : library_.Favorites()) {
       if (!wanted(ref.source_key))
         continue;
@@ -318,11 +353,11 @@ void App::RebuildShelves() {
   // The hero: what the rail is on, in large.
   switch (kind) {
   case RailKind::Home:
-    Set("hero_icon", bind_hero_icon_, Rml::String(shelves_.empty() ? "🏠" : ""));
+    Set("hero_icon", bind_hero_icon_, Rml::String(shelves_.empty() ? icon::kHome : ""));
     Set("hero_title", bind_hero_title_,
         Rml::String(shelves_.empty() ? "Welcome" : ""));
     Set("hero_detail", bind_hero_detail_, Rml::String(shelves_.empty()
-      ? "Pick a source on the left to start browsing." : ""));
+      ? "Pick a place from the tabs above to start browsing." : ""));
     Set("hero_note", bind_hero_note_, Rml::String(shelves_.empty()
       ? "Favorites and anything left unfinished will gather here." : ""));
     break;
@@ -336,7 +371,7 @@ void App::RebuildShelves() {
     break;
   }
   case RailKind::Settings:
-    Set("hero_icon", bind_hero_icon_, Rml::String("⚙"));
+    Set("hero_icon", bind_hero_icon_, Rml::String(icon::kSettings));
     Set("hero_title", bind_hero_title_, Rml::String("Settings"));
     Set("hero_detail", bind_hero_detail_,
         Rml::String("Playback, languages and the screensaver."));
@@ -345,13 +380,12 @@ void App::RebuildShelves() {
   case RailKind::Group: {
     const GroupInfo& info = InfoFor(item->group);
     const GroupScan& scan = scans_[(int)item->group];
-    Rml::String note;
-    if (!shelves_.empty())
-      note = "";
-    else if (rail_in_group_ || scan.running)
-      note = scan.status; // "Searching...", "3 sources found", errors
-    else
-      note = "Press select to look for them.";
+    // "Searching...", "50 sources found", errors; it is looked for as
+    // soon as the tab is reached, so there is hardly a moment before.
+    Rml::String note = scan.running || scan.scanned ? Rml::String(scan.status)
+                                                   : Rml::String("Looking for them...");
+    if (scan.scanned && !scan.running && shelves_.empty())
+      note += " Square searches again.";
     Set("hero_icon", bind_hero_icon_, Rml::String(info.icon));
     Set("hero_title", bind_hero_title_, Rml::String(info.name));
     Set("hero_detail", bind_hero_detail_, Rml::String(info.blurb));
@@ -360,6 +394,15 @@ void App::RebuildShelves() {
   }
   }
 
+  if (NowPlayingShelf(0) != had_now_playing && !shelf_card_sel_.empty()) {
+    if (had_now_playing) {
+      shelf_card_sel_.erase(shelf_card_sel_.begin());
+      sel_shelf_--;
+    } else {
+      shelf_card_sel_.insert(shelf_card_sel_.begin(), 0);
+      sel_shelf_++;
+    }
+  }
   shelf_card_sel_.resize(shelves_.size(), 0);
   sel_shelf_ = std::clamp(sel_shelf_, 0, std::max(0, (int)shelves_.size() - 1));
   if (shelves_.empty())
@@ -369,9 +412,39 @@ void App::RebuildShelves() {
 
 void App::RebuildCards() {
   shelf_rows_.clear();
+  size_t source_total = 0;
+  for (const Shelf& shelf : shelves_)
+    source_total += shelf.sources.size();
   for (const Shelf& shelf : shelves_) {
     ShelfRow row;
     row.title = shelf.title;
+    row.sources = !shelf.sources.empty();
+    row.gap = !row.sources && !shelf_rows_.empty() && shelf_rows_.back().sources;
+    if (row.sources) {
+      // A source: its own icon and what it says it is.
+      row.count = shelf.title.empty() ? 0 : (int)source_total;
+      for (const browse::SourcePtr& s : shelf.sources) {
+        CardRow card;
+        card.title = s->Name();
+        card.subtitle = s->Detail();
+        card.glyph = s->Icon();
+        card.kind = "source"; // drawn as a launcher tile (main.rml)
+        row.cards.push_back(std::move(card));
+      }
+      shelf_rows_.push_back(std::move(row));
+      continue;
+    }
+    if (shelf.now_playing) {
+      // Its time and progress are the player's, live (main.rml).
+      CardRow card;
+      card.title = DisplayName(playing_);
+      card.glyph = IconFor(playing_);
+      card.kind = "playing";
+      row.cards.push_back(std::move(card));
+      shelf_rows_.push_back(std::move(row));
+      continue;
+    }
+    row.count = (int)shelf.entries.size();
     for (const browse::Entry& e : shelf.entries) {
       CardRow card;
       card.title = DisplayName(e);
@@ -390,10 +463,12 @@ void App::RebuildCards() {
             card.subtitle = FormatTime((p.duration - p.position) * 1000000) + " left";
         }
       }
+      // Time left, and where it is from; what kind of entry it is only
+      // when there is nothing else to say.
+      if (!where.empty())
+        card.subtitle += (card.subtitle.empty() ? "" : "  ·  ") + where;
       if (card.subtitle.empty())
         card.subtitle = TypeLabel(e);
-      if (!where.empty())
-        card.subtitle += "  ·  " + where;
       row.cards.push_back(std::move(card));
     }
     shelf_rows_.push_back(std::move(row));
@@ -411,6 +486,54 @@ void App::RebuildCards() {
   UpdateBackdrop();
 }
 
+bool App::FeaturedIndex(int& shelf, int& card) const {
+  if (view_ != View::Home || shelves_.empty())
+    return false;
+  if (bind_home_shelves_) {
+    shelf = sel_shelf_;
+    card = sel_card_;
+  } else {
+    // On the tabs: Home shows what it has first; a group, a source or
+    // Settings is shown as the place it is.
+    // (In a group's sources, too: the tiles say what each one is, and the
+    // banner what they are together.)
+    if (sel_rail_ >= (int)rail_.size() || rail_[sel_rail_].kind != RailKind::Home)
+      return false;
+    shelf = 0;
+    card = shelf_card_sel_.empty() ? 0 : shelf_card_sel_[0];
+  }
+  return shelf >= 0 && shelf < (int)shelves_.size() && !SourceShelf(shelf) && card >= 0 &&
+         card < (int)shelves_[shelf].entries.size() && shelf < (int)shelf_rows_.size() &&
+         card < (int)shelf_rows_[shelf].cards.size();
+}
+
+const browse::Entry* App::FeaturedCard() const {
+  int shelf = 0, card = 0;
+  return FeaturedIndex(shelf, card) ? &shelves_[shelf].entries[card] : nullptr;
+}
+
+void App::UpdateFeature() {
+  int shelf = 0, card = 0;
+  Rml::String title, eyebrow, meta, desc, progress = "0%";
+  if (FeaturedIndex(shelf, card)) {
+    const CardRow& row = shelf_rows_[shelf].cards[card];
+    title = row.title;
+    eyebrow = shelf_rows_[shelf].title;
+    if (eyebrow.empty() && SourceShelf(shelf))
+      eyebrow = "Sources";
+    meta = row.subtitle;
+    desc = shelves_[shelf].entries[card].description;
+    progress = row.progress;
+  }
+  // What is playing: its time and progress are the player's, live.
+  Set("feat_live", bind_feat_live_, NowPlayingShelf(shelf) && !title.empty());
+  Set("feat_title", bind_feat_title_, title);
+  Set("feat_eyebrow", bind_feat_eyebrow_, eyebrow);
+  Set("feat_meta", bind_feat_meta_, meta);
+  Set("feat_desc", bind_feat_desc_, desc);
+  Set("feat_progress", bind_feat_progress_, progress);
+}
+
 const browse::Entry* App::SelectedCard() const {
   if (sel_shelf_ < 0 || sel_shelf_ >= (int)shelves_.size())
     return nullptr;
@@ -424,6 +547,14 @@ void App::ActivateCard() {
   const browse::Entry* card = SelectedCard();
   if (!card)
     return;
+  if (SourceShelf(sel_shelf_)) {
+    OpenSource(shelves_[sel_shelf_].sources[sel_card_]);
+    return;
+  }
+  if (NowPlayingShelf(sel_shelf_)) {
+    SetFullscreen(true); // back to it
+    return;
+  }
   const browse::Entry entry = *card;
   const browse::SourcePtr shelf_source = shelves_[sel_shelf_].source;
 
@@ -437,7 +568,7 @@ void App::ActivateCard() {
       ShowToast(std::string("Looking for ") + InfoFor(group).name + "...",
                 InfoFor(group).icon);
       StartDiscovery(group, [this, entry, shelf_source] {
-        if (view_ == View::Home && !bind_watching_)
+        if (view_ == View::Home && !FullscreenPlayback())
           OpenCard(entry, shelf_source);
       });
       return;
@@ -475,26 +606,25 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
 
   if (!on_shelves) {
     switch (key) {
-    case Rml::Input::KI_UP:    MoveRail(-1); break;
-    case Rml::Input::KI_DOWN:  MoveRail(+1); break;
+    case Rml::Input::KI_LEFT:  MoveRail(-1); break;
+    case Rml::Input::KI_RIGHT: MoveRail(+1); break;
     case Rml::Input::KI_HOME:  MoveRail(-sel_rail_); break;
     case Rml::Input::KI_END:   MoveRail((int)rail_.size() - 1 - sel_rail_); break;
-    case Rml::Input::KI_RIGHT:
+    case Rml::Input::KI_DOWN:
       if (!shelves_.empty()) {
         Set("home_shelves", bind_home_shelves_, true);
         RefreshImageBindings();
       }
       break;
-    case Rml::Input::KI_SPACE:
-      if (!rail_in_group_)
+    case Rml::Input::KI_UP:
+      break; // nothing above the tabs
+    case Rml::Input::KI_SPACE: {
+      Group group;
+      if (!PlaceGroup(group))
         return;
-      StartDiscovery(rail_group_); // search the group again
+      StartDiscovery(group); // search the group again
       break;
-    case Rml::Input::KI_LEFT:
-      if (!rail_in_group_)
-        return;
-      LeaveRailGroup();
-      break;
+    }
     case Rml::Input::KI_F1:    OpenMenu(); break;
     case Rml::Input::KI_RETURN:
     case Rml::Input::KI_NUMPADENTER:
@@ -502,9 +632,11 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
       break;
     case Rml::Input::KI_BACK:
     case Rml::Input::KI_ESCAPE:
-      if (!rail_in_group_)
-        return; // nothing above the top level
-      LeaveRailGroup();
+      // Nothing above the tabs but what plays behind them, as on Kodi's
+      // home screen: back leads out of it and, step by step, back to it.
+      if (!bind_watching_)
+        return;
+      SetFullscreen(true);
       break;
     default:
       return;
@@ -523,28 +655,44 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     scroll_sources_pending_ = true;
     UpdateBackdrop();
   };
+  // The card to land on in another row: in the grid of a group's sources,
+  // the same column (or the last tile, on a short last row); elsewhere,
+  // wherever that row was left.
+  auto column = [this](int shelf) {
+    if (SourceShelf(sel_shelf_) && SourceShelf(shelf))
+      return std::min(sel_card_, (int)shelves_[shelf].entries.size() - 1);
+    return shelf_card_sel_[shelf];
+  };
 
   switch (key) {
   case Rml::Input::KI_LEFT:
-    if (sel_card_ == 0) {
-      Set("home_shelves", bind_home_shelves_, false);
-      UpdateBackdrop();
-    } else {
+    if (sel_card_ > 0)
       select(sel_shelf_, sel_card_ - 1);
-    }
     break;
   case Rml::Input::KI_RIGHT:
     if (sel_card_ + 1 < cards)
       select(sel_shelf_, sel_card_ + 1);
     break;
   case Rml::Input::KI_UP:
-    if (sel_shelf_ > 0)
-      select(sel_shelf_ - 1, shelf_card_sel_[sel_shelf_ - 1]);
+    if (sel_shelf_ > 0) {
+      select(sel_shelf_ - 1, column(sel_shelf_ - 1));
+    } else { // up out of the first row: the tabs
+      Set("home_shelves", bind_home_shelves_, false);
+      scroll_sources_pending_ = true;
+      UpdateBackdrop();
+    }
     break;
   case Rml::Input::KI_DOWN:
     if (sel_shelf_ + 1 < (int)shelves_.size())
-      select(sel_shelf_ + 1, shelf_card_sel_[sel_shelf_ + 1]);
+      select(sel_shelf_ + 1, column(sel_shelf_ + 1));
     break;
+  case Rml::Input::KI_SPACE: {
+    Group group;
+    if (!PlaceGroup(group))
+      return;
+    StartDiscovery(group); // search the group again
+    break;
+  }
   case Rml::Input::KI_HOME:  select(sel_shelf_, 0); break;
   case Rml::Input::KI_END:   select(sel_shelf_, cards - 1); break;
   case Rml::Input::KI_F1:    OpenMenu(); break;
@@ -623,6 +771,10 @@ void App::OpenSettings() {
   menu_items_.push_back({"Next episode",
     [this] { return std::string(autoplay_ ? "Plays by itself" : "Stop at the end"); },
     [this](int) { autoplay_ = !autoplay_; SaveSettings(); }});
+  // For finding out what a remote's buttons arrive as; not remembered.
+  menu_items_.push_back({"Show input",
+    [this] { return std::string(input_trace_ ? "On" : "Off"); },
+    [this](int) { SetInputTrace(!input_trace_); }});
   menu_items_.push_back({"Audio language",
     [this] { return std::string(kLanguages[LanguageIndex(audio_lang_)].name); },
     [this, step](int d) {
@@ -664,7 +816,7 @@ void App::OpenSettings() {
       library_.SetWatched(item.first, false);
     }
     library_.Save();
-    ShowToast("Cleared " + std::to_string(items.size()) + " in progress", "🧹");
+    ShowToast("Cleared " + std::to_string(items.size()) + " in progress", icon::kClear);
   }});
 
   sel_menu_ = 0;

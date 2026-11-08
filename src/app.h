@@ -102,7 +102,10 @@ private:
     bool watched = false;
   };
   struct ShelfRow {
-    Rml::String title;
+    Rml::String title;  // "" for a row that goes on from the one above
+    int count = 0;        // what the title counts; 0 shows no count
+    bool sources = false; // a row of a group's sources: launcher tiles
+    bool gap = false;     // the first row after those: set apart from them
     std::vector<CardRow> cards;
   };
   struct EntryRow {
@@ -166,6 +169,9 @@ private:
   // The source and source-native id 'entry' belongs to, also for entries
   // listed under Favorites / Continue watching. False when unknown.
   bool Identify(const browse::Entry& entry, library::Ref& out) const;
+  // The same, for an entry listed by 'source' rather than the current one.
+  bool IdentifyIn(const browse::Entry& entry, const browse::SourcePtr& source,
+                  library::Ref& out) const;
   void ToggleFavorite(const browse::Entry& entry);
   // Snapshots of where a video was stopped (see RecordProgress) live in the
   // cache directory and go when their resume point does.
@@ -195,6 +201,12 @@ private:
     std::string title;
     std::shared_ptr<library::LibrarySource> source; // what its cards open in
     browse::Listing entries;                        // ids encoded
+    // Not empty: a row of a group's sources (one per card, 'entries' only
+    // standing in for them), which open in the browse view.
+    std::vector<browse::SourcePtr> sources;
+    // The row of what is playing (Home's first, while something does):
+    // one card, the way back to it.
+    bool now_playing = false;
   };
   // Runs the providers of one rail group on the worker and replaces that
   // group's sources with what they find; 'done' runs on the main thread
@@ -209,8 +221,16 @@ private:
   void RebuildCards();         // card rows from shelves_ (artwork, progress)
   void MoveRail(int delta);
   void ActivateRail();
-  void EnterRailGroup(browse::Source::Group group);
-  void LeaveRailGroup();
+  // The group the tabs are on, if they are on one.
+  bool PlaceGroup(browse::Source::Group& group) const;
+  // A group's sources are rows of tiles, a grid: going up and down between
+  // two such rows keeps the column.
+  bool NowPlayingShelf(int shelf) const {
+    return shelf >= 0 && shelf < (int)shelves_.size() && shelves_[shelf].now_playing;
+  }
+  bool SourceShelf(int shelf) const {
+    return shelf >= 0 && shelf < (int)shelves_.size() && !shelves_[shelf].sources.empty();
+  }
   static std::string RailKey(const RailItem& item); // what RebuildHome keeps
   void ActivateCard();
   void OpenCard(const browse::Entry& entry, const browse::SourcePtr& shelf_source);
@@ -218,6 +238,12 @@ private:
   void OpenSettings();                // the settings menu, from the rail
   void ApplyLanguages();              // preferred languages -> player
   const browse::Entry* SelectedCard() const;
+  // The card the banner shows: the focused one, or with the focus on the
+  // tabs, the first of Home's shelves (other places show themselves).
+  // False when there is none; 'shelf' and 'card' index shelves_.
+  bool FeaturedIndex(int& shelf, int& card) const;
+  const browse::Entry* FeaturedCard() const;
+  void UpdateFeature();               // the banner's text, from FeaturedIndex
   void GoHome();
 
   // --- Browse view -------------------------------------------------------
@@ -294,17 +320,43 @@ private:
   void HandleKeyMenu(Rml::Event& event, int key);
 
   // --- Playback ----------------------------------------------------------
+  // Playback starts full screen. Back leaves full screen without stopping:
+  // the menus come back, drawn over the video (or, for audio, over their
+  // usual background) while it plays on, Kodi style. Triangle (or Tab), or
+  // selecting the item that is playing, returns to full screen; stopping
+  // is hold back, the X key, a remote's stop key or the options menu.
+  //
+  // bind_watching_ says a playback session is on; bind_fullscreen_ says it
+  // has the screen to itself.
+  //
   // Plays 'entry', first offering to resume where it was left off.
   void PlayEntry(const browse::Entry& entry);
-  void Launch(const browse::Entry& entry, int64_t start_seconds);
+  // 'from_queue': the item comes from the play queue (next, previous,
+  // auto-advance, repeat), and resolves through the queue's source rather
+  // than whatever is being browsed now.
+  void Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue = false);
   void OpenWatchMenu();
   void CycleSubtitleTrack(int direction);
   // Abandons an in-flight PlayEntry: the result that eventually arrives is
   // discarded (and the stream torn down again if it did open).
   void CancelLaunch();
+  // CancelLaunch() for moving around the menus: a launch the menus started
+  // would otherwise open over a folder it no longer belongs to. One that
+  // moves the play queue on behind the menus stays.
+  void CancelForegroundLaunch();
   void StopPlayback();                   // posts the stop; exits watch UI
-  void EnterWatch(const browse::Entry& entry);
+  void EnterWatch(const browse::Entry& entry, bool fullscreen);
   void ExitWatch();
+  // Full screen, or the menus over what plays (see above).
+  void SetFullscreen(bool on);
+  bool FullscreenPlayback() const { return bind_watching_ && bind_fullscreen_; }
+  // Keys that work on playback while the menus are up: back to full
+  // screen, stop, and a remote's media keys. True if 'key' was one.
+  bool HandleKeyBehind(int key);
+  // A remote's (or keyboard's) media keys, wherever playback is. True if
+  // 'key' was one.
+  bool HandleMediaKey(int key);
+  void HandleKeyUp(int key);
   void ShowWatchInfo(double seconds);
   void UpdateWatchOverlay();
   // AtEnd(): audio advances to the next track in the folder, video exits.
@@ -314,9 +366,13 @@ private:
   // or not, wrapping around with repeat-all.
   int NeighborIndex(int direction) const;
   bool PlayNeighbor(int direction);      // next/previous playable item
-  // Indices of the playable items of the current folder, in the order
-  // they play (shuffled when shuffle is on); cached per folder.
+  // Indices into queue_.entries of its playable items, in the order they
+  // play (shuffled when shuffle is on); cached per queue.
   const std::vector<int>& PlayOrder() const;
+  // The current folder becomes the play queue.
+  void QueueCurrentFolder();
+  // Playable items in the folder on screen (not the queue).
+  size_t FolderPlayableCount() const;
   void SetShuffle(bool on);
   // Plays the folder from its first playable item (or, shuffled, from a
   // random one).
@@ -372,6 +428,10 @@ private:
   std::string audio_lang_;
   std::string sub_lang_;
   double screensaver_sec_ = 180.0;    // 0 = never
+  // Settings > Show input: a toast (and a log line) for every input event,
+  // also those nothing reacts to, to find out what a remote sends.
+  bool input_trace_ = false;
+  void SetInputTrace(bool on);
   Rml::String bind_jump_letter_;      // letter flashed by JumpLetter()
   double jump_letter_until_ = 0.0;
 
@@ -381,6 +441,7 @@ private:
   void UpdateScreensaver(double now);
 
   void EnsureRowVisible(const char* list_id, int index, float row_pitch);
+  bool ScrollRows();
   // A notification in the corner; 'icon' is a glyph ("⭐", "⚠", ...).
   void ShowToast(const std::string& text, const char* icon = nullptr);
 
@@ -422,7 +483,17 @@ private:
   // The browse view's own feedback is the topbar busy indicator, which
   // keeps running because the shell is not hidden until the player is up.
   Rml::String bind_launch_status_;
-  bool bind_watching_ = false;     // full-screen playback, chrome hidden
+  bool bind_watching_ = false;     // a playback session is on
+  bool bind_fullscreen_ = false;   // ... and has the screen (chrome hidden)
+  // Video plays behind the menus: their background turns see-through.
+  bool bind_video_behind_ = false;
+  // Back held in full screen stops (see HandleKeyUp); a short press leaves
+  // full screen instead, so the press is only acted on when it ends.
+  bool back_held_ = false;
+  double back_down_at_ = 0.0;
+  // Playback was stopped by holding back: what the keyboard repeats of it
+  // until it is let go is not more presses of back.
+  bool back_swallow_ = false;
   bool bind_info_visible_ = false; // watch info bar shown (auto-hides)
   bool bind_watch_audio_ = false;  // audio-only: persistent now-playing card
   bool bind_watch_paused_ = false;
@@ -460,6 +531,7 @@ private:
   Rml::String bind_watch_vtrack_;
   Rml::String bind_watch_atrack_;
   Rml::String bind_detail_image_;  // local image path, "" = none
+  Rml::String bind_detail_cover_ = "none"; // the same as a decorator
   bool bind_detail_favorite_ = false;
 
   bool bind_saver_ = false;        // screensaver up
@@ -520,6 +592,17 @@ private:
   Rml::String bind_hero_title_;
   Rml::String bind_hero_detail_;
   Rml::String bind_hero_note_;
+  // The banner (see FeaturedIndex): what the featured card is, large. An
+  // empty title hides it; any other part that is empty is left out.
+  Rml::String bind_feat_title_;
+  Rml::String bind_feat_eyebrow_;     // the shelf it is on: "Continue watching"
+  Rml::String bind_feat_meta_;        // "17:40 left  ·  SVT Play"
+  Rml::String bind_feat_desc_;
+  Rml::String bind_feat_progress_ = "0%"; // never empty, see EntryRow
+  bool bind_feat_live_ = false;  // the banner shows what plays: live time
+  // On a group's page: a shorter banner, so that more rows of its sources
+  // are in view.
+  bool bind_home_compact_ = false;
   std::vector<RailItem> rail_;
   // Per rail group (indexed by browse::Source::Group): searched at least
   // once, a search under way and what to do when it ends, and how the
@@ -531,8 +614,6 @@ private:
     Rml::String status;
   };
   GroupScan scans_[3];
-  bool rail_in_group_ = false;         // the rail lists one group's sources
-  browse::Source::Group rail_group_ = browse::Source::Group::Local;
   std::vector<Shelf> shelves_;
   std::vector<int> shelf_card_sel_;    // remembered column per shelf
 
@@ -546,6 +627,20 @@ private:
   browse::SourcePtr current_source_;   // source being browsed, or null
   std::vector<BrowseLevel> path_;      // root first
   browse::Entry playing_;              // item in the player right now
+
+  // What playback moves through (next, previous, auto-advance): the folder
+  // an item was started from, as it was listed then, and the source it
+  // resolves through. Copied, because the menus may be anywhere else by
+  // the time the next item is due.
+  struct PlayQueue {
+    browse::SourcePtr source;
+    std::string id;              // the folder's id; "" for a single item
+    browse::Listing entries;
+  };
+  PlayQueue queue_;
+  PlayQueue launch_queue_;             // what a launch from the menus brings
+  bool launch_from_queue_ = false;     // the launch in flight is queue_'s
+  bool launch_behind_ = false;         // ... and stays behind the menus
 
   library::Library library_;
   library::SourceRegistry registry_;

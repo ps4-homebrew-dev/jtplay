@@ -16,6 +16,51 @@ body.watching #shell {
 	display: none;
 }
 
+/* A video playing on behind the menus (back from full screen): the menus'
+   background gives way to the picture, as it is, under a shade.
+
+   On Home the video takes the place of the banner's artwork, and is
+   shaded as that is: clear where the banner is, dark under its text on the
+   left and under the rows. Anywhere else the menus fill the screen with
+   text, and the shade is even, the picture showing through it. */
+body.behind {
+	background-color: #0b102000;
+	decorator: none;
+}
+
+#video-shade {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	background-color: #0b1020d6;
+	animation: 0.25s cubic-out shade-in;
+}
+body.home #video-shade {
+	background-color: #0b102000;
+	decorator: linear-gradient(90deg, #0b1020eb 0%, #0b1020b8 28%, #0b102040 58%, #0b102000 78%),
+	           linear-gradient(180deg, #0b1020c0 0%, #0b102000 18%, #0b102000 36%, #0b1020f2 58%);
+}
+/* A group's page: the banner is lower, the rows start higher. */
+body.home.compact #video-shade {
+	decorator: linear-gradient(90deg, #0b1020eb 0%, #0b1020b8 28%, #0b102040 58%, #0b102000 78%),
+	           linear-gradient(180deg, #0b1020c0 0%, #0b102000 14%, #0b102000 24%, #0b1020f2 42%);
+}
+
+/* Coming and going: the background eases between solid and clear, and the
+   menus and their shade fade in over the video. */
+body {
+	transition: background-color 0.25s cubic-out;
+}
+body.behind #shell {
+	animation: 0.25s cubic-out shade-in;
+}
+@keyframes shade-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
 /* ------------------------------------------------------------------ */
 /* OSD bar                                                            */
 /* ------------------------------------------------------------------ */

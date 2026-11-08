@@ -13,14 +13,16 @@
 
 #include "browse/fs_source.h"
 #include "browse/source.h"
+#include "icons.h"
 
 namespace appdetail {
 
 // Geometry; must match the stylesheets so keyboard scrolling can be
 // computed without layout queries on the generated rows.
-inline constexpr float kRailRowPitch = 80.0f + 8.0f;     // .rail-row
-inline constexpr float kShelfPitch = 380.0f;              // .shelf
 inline constexpr float kCardPitch = 384.0f + 24.0f;       // .card + gap
+// Source tiles per row on a group's page: the rows then make a grid, and
+// four whole cards fit across the screen.
+inline constexpr int kSourcesPerRow = 4;
 inline constexpr float kEntryRowPitch = 72.0f + 6.0f;     // list .entry-row
 inline constexpr int kGridColumns = 6;                    // grid .entry-row
 inline constexpr float kGridRowPitch = 252.0f + 24.0f;    // tile + gap
@@ -42,6 +44,9 @@ inline constexpr double kToastSec = 3.0;
 // appears once the open has taken at least this long.
 inline constexpr double kLaunchFeedbackSec = 0.3;
 inline constexpr double kWatchInfoSec = 5.0;      // watch info bar auto-hide
+// Back held this long in full screen stops playback; shorter, it leaves
+// full screen (as a long press of back does in Kodi).
+inline constexpr double kHoldStopSec = 0.6;
 inline constexpr double kScreensaverMoveSec = 20.0;
 inline constexpr int kDiscoveryWaitMs = 2500;
 
@@ -91,6 +96,17 @@ inline std::string FormatSize(int64_t bytes) {
 
 // Seconds since the epoch -> local "2024-03-01" (with_time: "2024-03-01
 // 14:22"); "" when unknown.
+// Whether a date carries a time worth showing: a source that only knows
+// the day gives midnight.
+inline bool HasTimeOfDay(int64_t epoch) {
+  if (epoch <= 0)
+    return false;
+  const std::time_t t = (std::time_t)epoch;
+  std::tm tm = {};
+  localtime_r(&t, &tm);
+  return tm.tm_hour != 0 || tm.tm_min != 0;
+}
+
 inline std::string FormatDate(int64_t epoch, bool with_time) {
   if (epoch <= 0)
     return {};
@@ -106,11 +122,11 @@ inline std::string FormatDate(int64_t epoch, bool with_time) {
 // so these render everywhere.
 inline const char* IconFor(const browse::Entry& e) {
   switch (e.type) {
-  case browse::Entry::Type::Folder: return "📁";
-  case browse::Entry::Type::Audio:  return "🎵";
-  case browse::Entry::Type::Video:  return "🎬";
-  case browse::Entry::Type::Image:  return "🖼";
-  default:                          return "📄";
+  case browse::Entry::Type::Folder: return icon::kFolder;
+  case browse::Entry::Type::Audio:  return icon::kMusic;
+  case browse::Entry::Type::Video:  return icon::kVideo;
+  case browse::Entry::Type::Image:  return icon::kImage;
+  default:                          return icon::kFile;
   }
 }
 

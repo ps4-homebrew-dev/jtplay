@@ -11,19 +11,44 @@
 		<link type="text/rcss" href="css/busy.rcss"/>
 		<link type="text/rcss" href="css/photo.rcss"/>
 	</head>
-	<body data-model="jtplay" data-class-watching="watching" data-class-photo="photo">
+	<body data-model="jtplay" data-class-watching="watching && fullscreen"
+	      data-class-behind="video_behind" data-class-photo="photo"
+	      data-class-home="view == 'home'" data-class-featured="feat_title != ''"
+	      data-class-compact="view == 'home' && home_compact">
 
-		<!-- Fanart: the focused item's artwork, large and dim, behind it all. -->
-		<div id="backdrop" data-if="backdrop != 'none' && !watching" data-style-decorator="backdrop"/>
-		<div id="backdrop-shade" data-if="!watching"/>
+		<!-- Fanart: the focused item's artwork, large and dim, behind it all;
+		     while a video plays behind the menus, the video instead. -->
+		<div id="backdrop" data-if="backdrop != 'none' && !(watching && fullscreen) && !video_behind" data-style-decorator="backdrop"/>
+		<div id="backdrop-shade" data-if="!(watching && fullscreen) && !video_behind"/>
+		<!-- ...and the shade the menus need over it to be read. -->
+		<div id="video-shade" data-if="video_behind"/>
 
 		<div id="shell">
 			<div id="topbar">
-				<img class="brand-logo" src="icons/logo.png"/>
-				<div class="location">
-					<span class="wordmark" data-if="view == 'home'">jtplay</span>
+				<!-- Home: the places, as tabs (src/app_home.cpp); always these five,
+				     a group's sources being the first rows below. -->
+				<div id="tabs" data-if="view == 'home'" data-class-away="home_shelves">
+					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail">
+						<span class="tab-icon">{{r.icon}}</span>
+						<span class="tab-label">{{r.label}}</span>
+					</div>
+				</div>
+				<!-- (The tabs keep their width; what plays gives way to them.) -->
+				<div class="spacer" data-if="view == 'home'"/>
+				<div class="location" data-if="view != 'home'">
 					<span class="location-source" data-if="view == 'browse'">{{source_name}}</span>
 					<span class="location-path" data-if="view == 'browse' && crumb != ''">›  {{crumb}}</span>
+				</div>
+				<!-- Something playing behind the menus: what, and how far. Back
+				     leads to it from the tabs; so does its card on Home. -->
+				<div id="np-chip" data-if="watching && !fullscreen">
+					<span class="np-chip-state" data-if="watch_paused">&#xE132;</span>
+					<span class="np-chip-state" data-if="!watch_paused">&#xE140;</span>
+					<span class="np-chip-title">{{watch_name}}</span>
+					<span class="np-chip-time" data-if="watch_pos != ''">{{watch_pos}}</span>
+					<div class="np-chip-bar" data-if="watch_seekable">
+						<div class="np-chip-played" data-style-width="watch_progress"/>
+					</div>
 				</div>
 				<span class="busy">
 					<span class="busy-dot busy-dot0"/>
@@ -39,19 +64,30 @@
 
 			<!-- ============================ Home =========================== -->
 			<div id="home" class="content" data-if="view == 'home'">
-				<div id="rail" data-class-away="home_shelves">
-					<div class="rail-row" data-for="r, ri : rail"
-					     data-class-selected="ri == sel_rail">
-						<span class="rail-icon">{{r.icon}}</span>
-						<div class="rail-text">
-							<div class="rail-label">{{r.label}}</div>
-							<div class="rail-detail" data-if="r.detail != ''">{{r.detail}}</div>
-						</div>
-					</div>
-				</div>
-
 				<div id="home-main">
-					<div id="hero" data-if="hero_title != ''">
+					<!-- The banner: the card in focus, large, over its artwork (the
+					     backdrop). Parts it has no data for are left out. -->
+					<div id="feature" data-if="feat_title != ''">
+						<div class="feat-eyebrow" data-if="feat_eyebrow != ''">{{feat_eyebrow}}</div>
+						<div class="feat-title">{{feat_title}}</div>
+						<div class="feat-meta" data-if="!feat_live && feat_meta != ''">{{feat_meta}}</div>
+						<div class="feat-progress" data-if="!feat_live && feat_progress != '0%'">
+							<div class="feat-progress-bar" data-style-width="feat_progress"/>
+						</div>
+						<!-- What is playing: the player's time, as it runs. -->
+						<div class="feat-meta" data-if="feat_live">
+							<span class="feat-state" data-if="watch_paused">&#xE132;</span>
+							<span class="feat-state" data-if="!watch_paused">&#xE140;</span>
+							{{watch_pos}}<span data-if="watch_dur != ''">  /  {{watch_dur}}</span>
+							<span class="feat-live" data-if="!watch_seekable">LIVE</span>
+						</div>
+						<div class="feat-progress" data-if="feat_live && watch_seekable">
+							<div class="feat-progress-bar" data-style-width="watch_progress"/>
+						</div>
+						<div class="feat-desc" data-if="feat_desc != ''">{{feat_desc}}</div>
+					</div>
+					<!-- ...or the place the tabs are on, when there is no card to show. -->
+					<div id="hero" data-if="feat_title == '' && hero_title != ''">
 						<div class="hero-icon">{{hero_icon}}</div>
 						<div class="hero-text">
 							<div class="hero-title">{{hero_title}}</div>
@@ -63,30 +99,54 @@
 					<div id="shelves" data-class-active="home_shelves">
 						<div class="shelf" data-for="sh, si : shelves"
 						     data-class-current="si == sel_shelf">
-							<div class="shelf-head">
-								<span class="shelf-title">{{sh.title}}</span>
-								<span class="shelf-count">{{sh.cards.size}}</span>
-							</div>
-							<div class="cards" data-attr-id="'cards-' + si">
-								<div class="card" data-for="c, ci : sh.cards"
-								     data-class-selected="home_shelves && si == sel_shelf && ci == sel_card">
-									<div class="art-tile"
-									     data-class-k-folder="c.kind == 'folder'"
-									     data-class-k-audio="c.kind == 'audio'"
-									     data-class-k-video="c.kind == 'video'"
-									     data-class-k-image="c.kind == 'image'">
-										<div class="art-img" data-if="c.art != 'none'" data-style-decorator="c.art"/>
-										<div class="art-glyph" data-if="c.art == 'none'">{{c.glyph}}</div>
-										<span class="art-check" data-if="c.watched">✔</span>
-										<div class="art-prog" data-if="c.progress != '0%'">
-											<div class="art-prog-bar" data-style-width="c.progress"/>
+							<!-- (Bindings to sh go on what is inside: on the repeated
+							     element itself they are looked at once more as rows go.) -->
+							<div class="shelf-in" data-class-sources="sh.sources" data-class-gap="sh.gap">
+								<!-- A group's sources make one grid of several rows: only
+								     the first says what they are. -->
+								<div class="shelf-head" data-if="sh.title != ''">
+									<span class="shelf-title">{{sh.title}}</span>
+									<span class="shelf-count" data-if="sh.count > 0">{{sh.count}}</span>
+								</div>
+								<div class="cards" data-attr-id="'cards-' + si">
+									<div class="card" data-for="c, ci : sh.cards"
+									     data-class-selected="home_shelves && si == sel_shelf && ci == sel_card">
+										<!-- A source: its icon, name and what it is, in one tile. -->
+										<div class="source-tile" data-if="c.kind == 'source'">
+											<div class="source-icon">{{c.glyph}}</div>
+											<div class="source-text">
+												<div class="source-name">{{c.title}}</div>
+												<div class="source-detail" data-if="c.subtitle != ''">{{c.subtitle}}</div>
+											</div>
 										</div>
+										<div class="art-tile" data-if="c.kind != 'source'"
+										     data-class-k-folder="c.kind == 'folder'"
+										     data-class-k-audio="c.kind == 'audio'"
+										     data-class-k-video="c.kind == 'video' || c.kind == 'playing'"
+										     data-class-k-image="c.kind == 'image'">
+											<div class="art-img" data-if="c.art != 'none'" data-style-decorator="c.art"/>
+											<div class="art-glyph" data-if="c.art == 'none'">{{c.glyph}}</div>
+											<span class="art-check" data-if="c.watched">&#xE070;</span>
+											<div class="art-prog" data-if="c.kind != 'playing' && c.progress != '0%'">
+												<div class="art-prog-bar" data-style-width="c.progress"/>
+											</div>
+											<!-- What is playing: says so, and goes on as it plays. -->
+											<span class="art-live" data-if="c.kind == 'playing'">
+												<span data-if="watch_paused">&#xE132;  Paused</span>
+												<span data-if="!watch_paused">&#xE140;  Playing</span>
+											</span>
+											<div class="art-prog" data-if="c.kind == 'playing' && watch_seekable">
+												<div class="art-prog-bar" data-style-width="watch_progress"/>
+											</div>
+										</div>
+										<div class="card-title" data-if="c.kind != 'source'">{{c.title}}</div>
+										<div class="card-sub" data-if="c.kind != 'source' && c.kind != 'playing'">{{c.subtitle}}</div>
+										<div class="card-sub" data-if="c.kind == 'playing'">{{watch_pos}}<span data-if="watch_dur != ''">  /  {{watch_dur}}</span></div>
 									</div>
-									<div class="card-title">{{c.title}}</div>
-									<div class="card-sub">{{c.subtitle}}</div>
 								</div>
 							</div>
 						</div>
+						<div class="shelves-end"/>
 					</div>
 				</div>
 			</div>
@@ -97,7 +157,7 @@
 				<div id="entries" class="pane">
 					<div class="pane-head">
 						<span class="eyebrow" data-if="filter_text == ''">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
-						<span class="eyebrow" data-if="filter_text != ''">🔍 {{filter_text}}  ·  {{entry_count}} of {{entry_total}}</span>
+						<span class="eyebrow" data-if="filter_text != ''">&#xE155; {{filter_text}}  ·  {{entry_count}} of {{entry_total}}</span>
 						<span class="spacer"/>
 						<span class="sort">{{sort_label}}</span>
 						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
@@ -105,7 +165,7 @@
 					<!-- The filter (src/app_browse.cpp): the list below follows what is
 					     typed. Focusing the field brings up the system keyboard on a console. -->
 					<div id="filter-bar" data-if="filter_open">
-						<span class="filter-icon">🔍</span>
+						<span class="filter-icon">&#xE155;</span>
 						<input id="filter-input" type="text" maxlength="100"/>
 					</div>
 					<!-- The letter a left / right jump landed on, briefly and large. -->
@@ -120,15 +180,15 @@
 							     data-class-k-image="e.kind == 'image'">
 								<div class="art-img" data-if="e.art != 'none'" data-style-decorator="e.art"/>
 								<div class="art-glyph" data-if="e.art == 'none'">{{e.icon}}</div>
-								<span class="art-check" data-if="e.watched">✔</span>
-								<span class="art-fav" data-if="e.favorite">⭐</span>
+								<span class="art-check" data-if="e.watched">&#xE070;</span>
+								<span class="art-fav" data-if="e.favorite">&#xE17A;</span>
 								<div class="art-prog" data-if="e.progress != '0%'">
 									<div class="art-prog-bar" data-style-width="e.progress"/>
 								</div>
 							</div>
 							<div class="etitle" data-class-folder="e.folder">{{e.name}}</div>
-							<span class="emark" data-if="e.favorite">⭐</span>
-							<span class="emark watched" data-if="e.watched">✔</span>
+							<span class="emark" data-if="e.favorite">&#xE17A;</span>
+							<span class="emark watched" data-if="e.watched">&#xE070;</span>
 							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
 						</div>
 						<div class="empty" data-if="entry_count == 0 && !busy && filter_text == ''">
@@ -143,7 +203,10 @@
 					</div>
 					<!-- Grid: what the focused tile is, along the bottom. -->
 					<div id="grid-info" data-if="view_mode == 'grid' && detail_name != ''">
-						<div class="gi-title"><span class="detail-fav" data-if="detail_favorite">⭐ </span>{{detail_name}}</div>
+						<div class="gi-text">
+							<div class="gi-title"><span class="detail-fav" data-if="detail_favorite">&#xE17A; </span>{{detail_name}}</div>
+							<div class="gi-desc" data-if="detail_description != ''">{{detail_description}}</div>
+						</div>
 						<div class="gi-props">
 							<span class="gi-prop" data-for="p : detail_props">{{p.value}}</span>
 						</div>
@@ -157,10 +220,11 @@
 						     data-class-k-audio="detail_kind == 'audio'"
 						     data-class-k-video="detail_kind == 'video'"
 						     data-class-k-image="detail_kind == 'image'">
+							<div class="detail-ambient" data-if="detail_image != ''" data-style-decorator="detail_cover"/>
 							<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
 							<div class="detail-glyph" data-if="detail_image == ''">{{detail_icon}}</div>
 						</div>
-						<div class="detail-title"><span class="detail-fav" data-if="detail_favorite">⭐ </span>{{detail_name}}</div>
+						<div class="detail-title"><span class="detail-fav" data-if="detail_favorite">&#xE17A; </span>{{detail_name}}</div>
 						<div class="detail-props">
 							<div class="prop" data-for="p : detail_props">
 								<span class="prop-label">{{p.label}}</span>
@@ -176,12 +240,12 @@
 		<!-- ======================== Playback OSD ========================= -->
 
 		<!-- Paused video: a large badge in the middle, Kodi style. -->
-		<div id="pause-badge" data-if="watching && watch_paused && !watch_audio && !menu_open">⏸</div>
+		<div id="pause-badge" data-if="watching && fullscreen && watch_paused && !watch_audio && !menu_open">&#xE132;</div>
 
 		<!-- The bar along the bottom. Its top edge is the timeline: played,
 		     buffered ahead, and a knob at the playhead. Video: auto-hides.
 		     Audio: stays, with large cover art, over the spectrum. -->
-		<div id="osd" data-if="watching && !watch_audio && info_visible">
+		<div id="osd" data-if="watching && fullscreen && !watch_audio && info_visible">
 			<div class="osd-edge" data-if="watch_seekable">
 				<div class="osd-buffered" data-style-width="watch_buffered"/>
 				<div class="osd-played" data-style-width="watch_progress"/>
@@ -193,8 +257,8 @@
 				<img class="osd-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
 				<div class="osd-main">
 					<div class="osd-title">
-						<span class="osd-state" data-if="watch_paused">⏸</span>
-						<span class="osd-state" data-if="!watch_paused">▶</span>
+						<span class="osd-state" data-if="watch_paused">&#xE132;</span>
+						<span class="osd-state" data-if="!watch_paused">&#xE140;</span>
 						{{watch_name}}
 					</div>
 					<div class="osd-desc" data-if="watch_description != ''">{{watch_description}}</div>
@@ -224,10 +288,10 @@
 
 		<!-- Audio: the now-playing card, over the visualizer the player draws
 		     underneath (src/visualizer.cpp). Always up. -->
-		<div id="np-card" data-if="watching && watch_audio">
+		<div id="np-card" data-if="watching && fullscreen && watch_audio">
 			<div class="np-artbox">
 				<img class="np-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
-				<div class="np-glyph" data-if="watch_image == ''">🎵</div>
+				<div class="np-glyph" data-if="watch_image == ''">&#xE126;</div>
 			</div>
 			<div class="np-title">{{watch_name}}</div>
 			<div class="np-meta" data-if="watch_description != ''">{{watch_description}}</div>
@@ -239,8 +303,8 @@
 				<div class="np-knob" data-style-left="watch_progress"/>
 			</div>
 			<div class="np-status">
-				<span class="np-state" data-if="watch_paused">⏸</span>
-				<span class="np-state" data-if="!watch_paused">▶</span>
+				<span class="np-state" data-if="watch_paused">&#xE132;</span>
+				<span class="np-state" data-if="!watch_paused">&#xE140;</span>
 				<span>{{watch_pos}}</span>
 				<span data-if="watch_dur != ''"> / {{watch_dur}}</span>
 				<span class="np-live" data-if="!watch_seekable">LIVE</span>
@@ -256,10 +320,10 @@
 
 		<!-- Up next: over the end of an episode, counting down to the next;
 		     top left, where the launch indicator then takes over. -->
-		<div id="upnext" data-if="watching && upnext && !menu_open">
+		<div id="upnext" data-if="watching && fullscreen && upnext && !menu_open">
 			<div class="upnext-art">
 				<div class="upnext-img" data-if="upnext_art != 'none'" data-style-decorator="upnext_art"/>
-				<div class="upnext-glyph" data-if="upnext_art == 'none'">🎬</div>
+				<div class="upnext-glyph" data-if="upnext_art == 'none'">&#xE29B;</div>
 			</div>
 			<div class="upnext-text">
 				<div class="upnext-label">UP NEXT</div>
@@ -270,10 +334,10 @@
 		</div>
 
 		<!-- The clock in the corner while the OSD is up. -->
-		<div id="osd-clock" data-if="watching && (watch_audio || info_visible)">{{clock}}</div>
+		<div id="osd-clock" data-if="watching && fullscreen && (watch_audio || info_visible)">{{clock}}</div>
 
 		<!-- Launching the next track without leaving watch mode. -->
-		<div id="launch-overlay" data-if="watching && launch_status != ''">
+		<div id="launch-overlay" data-if="watching && fullscreen && launch_status != ''">
 			<span class="busy-dot busy-dot1"/>
 			<span class="busy-dot busy-dot2"/>
 			<span class="busy-dot busy-dot3"/>
@@ -297,7 +361,7 @@
 				<span class="busy-dot busy-dot3"/>
 			</div>
 			<div class="photo-caption" data-if="photo_info">
-				<span class="photo-state" data-if="photo_playing">▶</span>
+				<span class="photo-state" data-if="photo_playing">&#xE140;</span>
 				<div class="photo-text">
 					<div class="photo-name">{{photo_name}}</div>
 					<div class="photo-meta">{{photo_meta}}</div>

@@ -100,6 +100,9 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   for (const char* face : {"LatoLatin-Bold.ttf", "LatoLatin-BoldItalic.ttf",
                            "LatoLatin-Italic.ttf", "LatoLatin-Regular.ttf"})
     fonts_ok &= Rml::LoadFontFace(options.fonts_dir + "/" + face, false);
+  // Fallbacks, for characters the text font lacks: the UI's icons (in the
+  // Private Use Area, see src/icons.h), then emoji in titles and names.
+  fonts_ok &= Rml::LoadFontFace(options.fonts_dir + "/lucide.ttf", true);
   fonts_ok &= Rml::LoadFontFace(options.fonts_dir + "/NotoEmoji-VariableFont_wght.ttf", true);
   if (!fonts_ok)
     return fail("Failed to load fonts from '" + options.fonts_dir + "' (see --fonts)");

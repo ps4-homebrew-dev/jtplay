@@ -12,6 +12,7 @@
 #include "app.h"
 #include "app_internal.h"
 #include "browse/natural_sort.h"
+#include "icons.h"
 
 using namespace appdetail;
 
@@ -114,7 +115,7 @@ const browse::Entry* App::SelectedEntry() const {
 void App::OpenSource(const browse::SourcePtr& source) {
   if (!source)
     return;
-  CancelLaunch();
+  CancelForegroundLaunch();
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
@@ -151,7 +152,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       if (request != browse_request_)
         return; // superseded while it was in flight
       if (!error.empty()) {
-        ShowToast(error, "⚠");
+        ShowToast(error, icon::kWarning);
         // A failed root browse drops back home.
         if (path_.empty())
           GoHome();
@@ -193,7 +194,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
 }
 
 void App::EnterContainer(const browse::Entry& entry) {
-  CancelLaunch(); // the row it was started from is about to go away
+  CancelForegroundLaunch(); // the row it was started from is about to go away
   if (BrowseLevel* level = CurrentLevel())
     level->selection = sel_entry_;
   RequestBrowse(entry.id, entry.name, false);
@@ -203,7 +204,7 @@ void App::RefreshContainer() {
   const BrowseLevel* level = CurrentLevel();
   if (!level)
     return;
-  CancelLaunch();
+  CancelForegroundLaunch();
   if (!level->query.empty()) {
     // A list of results: search again rather than list a folder.
     const std::string query = level->query;
@@ -214,7 +215,7 @@ void App::RefreshContainer() {
 }
 
 void App::LeaveContainer() {
-  CancelLaunch();    // ... otherwise playback pops up over another folder
+  CancelForegroundLaunch(); // ... otherwise playback pops up over another folder
   browse_request_++; // invalidate any browse that is still in flight
   if (path_.size() <= 1) {
     GoHome(); // at the root: back home, where the rail still points here
@@ -294,10 +295,10 @@ void App::RebuildDetail() {
       if (!value.empty())
         props.push_back({label, value});
     };
-    add("Type", TypeLabel(*e));
+    // What it is goes without saying (its icon or artwork says it).
     add("Duration", e->duration > 0 ? FormatTime(e->duration * 1000000) : "");
     add("Size", FormatSize(e->size));
-    add("Date", FormatDate(e->date, true));
+    add("Date", FormatDate(e->date, HasTimeOfDay(e->date)));
 
     library::Ref ref;
     if (Identify(*e, ref)) {
@@ -439,10 +440,11 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     break;
   case Rml::Input::KI_BACK:
   case Rml::Input::KI_ESCAPE:
-    // While something is opening, back cancels that rather than the folder.
-    if (launch_request_) {
+    // While something is opening, back cancels that rather than the folder
+    // (not the next item of what plays behind the menus).
+    if (launch_request_ && !launch_behind_) {
       CancelLaunch();
-      ShowToast("Cancelled", "⏹");
+      ShowToast("Cancelled", icon::kStop);
     } else if (const BrowseLevel* level = CurrentLevel();
                level && !level->filter.empty()) {
       ClearFilter(); // back out of the filter before the folder
@@ -629,13 +631,20 @@ void App::OpenMenu() {
   menu_items_.clear();
   Set("menu_dialog", bind_menu_dialog_, false);
 
+  // Over something playing: back to it, or an end to it.
+  if (bind_watching_) {
+    menu_items_.push_back({bind_watch_audio_ ? "Now playing" : "Back to full screen",
+      nullptr, [this](int) { SetFullscreen(true); }});
+    menu_items_.push_back({"Stop playback", nullptr, [this](int) { StopPlayback(); }});
+  }
+
   if (view_ == View::Browse) {
     const browse::Entry* e = SelectedEntry();
     Set("menu_title", bind_menu_title_, e ? DisplayName(*e) : Rml::String("Options"));
     if (e)
       AddEntryActions(*e);
     // A folder of music or episodes plays as a whole, in order or shuffled.
-    if (PlayOrder().size() > 1) {
+    if (FolderPlayableCount() > 1) {
       menu_items_.push_back({"Play all", nullptr, [this](int) { PlayFolder(false); }});
       menu_items_.push_back({"Shuffle all", nullptr, [this](int) { PlayFolder(true); }});
     }
@@ -675,6 +684,16 @@ void App::OpenMenu() {
     menu_items_.push_back({"Go to top", nullptr,
       [this](int) { MoveSelection(-entry_count_); }});
     menu_items_.push_back({"Home", nullptr, [this](int) { GoHome(); }});
+  } else if (bind_home_shelves_ && SourceShelf(sel_shelf_) && SelectedCard()) {
+    // A source's tile: open it, or look for the group's sources again.
+    const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_];
+    Set("menu_title", bind_menu_title_, source->Name());
+    menu_items_.push_back({"Open", nullptr, [this, source](int) { OpenSource(source); }});
+    const browse::Source::Group group = source->RailGroup();
+    menu_items_.push_back({"Search again", nullptr,
+      [this, group](int) { StartDiscovery(group); }});
+  } else if (bind_home_shelves_ && NowPlayingShelf(sel_shelf_)) {
+    Set("menu_title", bind_menu_title_, bind_watch_name_); // back to it, or stop
   } else if (bind_home_shelves_ && SelectedCard()) {
     const browse::Entry card = *SelectedCard();
     Set("menu_title", bind_menu_title_, DisplayName(card));
@@ -684,11 +703,13 @@ void App::OpenMenu() {
     if (shelves_[sel_shelf_].source == continue_source_)
       menu_items_.push_back({"Remove from Continue watching", nullptr,
         [this, card](int) { SetWatched(card, false); }});
-  } else if (rail_in_group_) {
+  } else if (browse::Source::Group group; view_ == View::Home && PlaceGroup(group)) {
     Set("menu_title", bind_menu_title_, Rml::String("Options"));
-    const browse::Source::Group group = rail_group_;
     menu_items_.push_back({"Search again", nullptr,
       [this, group](int) { StartDiscovery(group); }});
+  } else if (bind_watching_) {
+    // The top level of the rail: only what plays.
+    Set("menu_title", bind_menu_title_, bind_watch_name_);
   } else {
     return; // nothing to offer on the top level of the rail
   }
@@ -852,9 +873,9 @@ std::string CleanFieldText(const std::string& raw) {
 } // namespace
 
 void App::OpenFilter() {
-  if (view_ != View::Browse || path_.empty() || bind_watching_ || bind_photo_)
+  if (view_ != View::Browse || path_.empty() || FullscreenPlayback() || bind_photo_)
     return;
-  CancelLaunch(); // the list is about to change under it
+  CancelForegroundLaunch(); // the list is about to change under it
   // The bar is only hidden between uses (data-if), so the field still holds
   // whatever it held last: put this folder's filter back in, to be edited.
   if (Rml::Element* input = document_->GetElementById("filter-input"))
@@ -883,7 +904,7 @@ void App::ApplyFilter(const std::string& text) {
   BrowseLevel* level = CurrentLevel();
   if (!level || level->filter == text)
     return;
-  CancelLaunch(); // the entry it was started from may be about to go
+  CancelForegroundLaunch(); // the entry it was started from may be about to go
   level->selection = sel_entry_;
   level->filter = text;
   SortLevel(*level);
@@ -965,10 +986,10 @@ size_t App::SearchScope() const {
 
 void App::OpenSearch() {
   if (view_ != View::Browse || !current_source_ || path_.empty() ||
-      bind_watching_ || bind_photo_)
+      FullscreenPlayback() || bind_photo_)
     return;
   if (!current_source_->CanSearch(path_[SearchScope()].id)) {
-    ShowToast("This source cannot search", "🔍");
+    ShowToast("This source cannot search", icon::kSearch);
     return;
   }
   // "Search Podcasts"; under Favorites it is the favorite's own source that
@@ -1043,7 +1064,7 @@ void App::HandleKeySearch(Rml::Event& event, int key) {
 void App::RequestSearch(const std::string& query) {
   if (!current_source_ || path_.empty())
     return;
-  CancelLaunch();
+  CancelForegroundLaunch();
 
   const size_t scope = SearchScope();
   const bool replace = scope + 1 < path_.size();
@@ -1066,11 +1087,11 @@ void App::RequestSearch(const std::string& query) {
       if (request != browse_request_ || scope >= path_.size())
         return; // superseded while it was in flight
       if (!error.empty()) {
-        ShowToast(error, "⚠");
+        ShowToast(error, icon::kWarning);
         return;
       }
       if (result.empty()) {
-        ShowToast("Nothing found for \"" + query + "\"", "🔍");
+        ShowToast("Nothing found for \"" + query + "\"", icon::kSearch);
         return;
       }
 

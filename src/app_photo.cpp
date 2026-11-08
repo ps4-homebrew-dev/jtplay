@@ -16,6 +16,7 @@
 #include "app.h"
 #include "app_internal.h"
 #include "artcache.h"
+#include "icons.h"
 
 using namespace appdetail;
 
@@ -60,7 +61,12 @@ browse::Listing App::FolderPhotos(const browse::Entry& entry, int& index) const 
 void App::OpenPhotos(const browse::Listing& photos, int index, bool slideshow) {
   if (photos.empty())
     return;
-  CancelLaunch();
+  // Pictures cover the screen: a video behind the menus would play on
+  // unseen, so it stops; music plays on under the slideshow.
+  if (bind_watching_ && !bind_watch_audio_)
+    StopPlayback();
+  else
+    CancelForegroundLaunch();
   photo_list_ = photos;
   photo_rotation_.assign(photo_list_.size(), 0);
   for (int i = 0; i < 2; i++) {
@@ -195,7 +201,7 @@ void App::UpdatePhotos(double now) {
       photo_pending_ = false;
       Set("photo_loading", bind_photo_loading_, false);
       if (status == artcache::Status::Failed) {
-        ShowToast("Cannot show " + DisplayName(photo_list_[photo_index_]), "⚠");
+        ShowToast("Cannot show " + DisplayName(photo_list_[photo_index_]), icon::kWarning);
       } else {
         const int back = 1 - bind_photo_front_;
         const char* art = back ? "photo_art1" : "photo_art0";
@@ -297,7 +303,7 @@ void App::HandleKeyPhoto(Rml::Event& event, int key) {
     if (photo_list_.size() > 1) {
       SetSlideshow(!bind_photo_playing_);
       ShowToast(bind_photo_playing_ ? "Slideshow" : "Slideshow paused",
-                bind_photo_playing_ ? "▶" : "⏸");
+                bind_photo_playing_ ? icon::kPlay : icon::kPause);
     }
     break;
   case Rml::Input::KI_UP:

@@ -191,6 +191,51 @@ std::string NodeString(const mpv_node* node) {
            ? std::string(node->u.string) : std::string();
 }
 
+// What a track's codec is called on a box or a menu rather than inside
+// FFmpeg: "H.264", "Dolby Digital". Unknown ones as they are, upper-cased.
+std::string CodecName(const std::string& codec) {
+  static const struct { const char* ffmpeg; const char* name; } kNames[] = {
+    {"h264", "H.264"}, {"hevc", "HEVC"}, {"av1", "AV1"}, {"vp9", "VP9"}, {"vp8", "VP8"},
+    {"mpeg2video", "MPEG-2"}, {"mpeg4", "MPEG-4"}, {"vc1", "VC-1"},
+    {"aac", "AAC"}, {"ac3", "Dolby Digital"}, {"eac3", "Dolby Digital+"},
+    {"truehd", "Dolby TrueHD"}, {"dts", "DTS"}, {"mp3", "MP3"}, {"mp2", "MP2"},
+    {"opus", "Opus"}, {"vorbis", "Vorbis"}, {"flac", "FLAC"}, {"alac", "ALAC"},
+    {"pcm_s16le", "PCM"}, {"pcm_s24le", "PCM"},
+    {"subrip", "SRT"}, {"ass", "ASS"}, {"webvtt", "WebVTT"}, {"mov_text", "Text"},
+    {"hdmv_pgs_subtitle", "PGS"}, {"dvd_subtitle", "VobSub"}, {"dvb_subtitle", "DVB"},
+  };
+  for (const auto& n : kNames)
+    if (codec == n.ffmpeg)
+      return n.name;
+  std::string upper = codec;
+  for (char& c : upper)
+    c = (char)std::toupper((unsigned char)c);
+  return upper;
+}
+
+// A picture's size as it is sold: "4K", "1080p", "720p", "SD".
+std::string ResolutionName(int64_t width, int64_t height) {
+  if (width <= 0 || height <= 0)
+    return {};
+  // Wide films are short for their width: go by whichever says more.
+  if (width >= 3800 || height >= 2100) return "4K";
+  if (width >= 2500 || height >= 1400) return "1440p";
+  if (width >= 1900 || height >= 1000) return "1080p";
+  if (width >= 1260 || height >= 700) return "720p";
+  return "SD";
+}
+
+// mpv's channel layout as a menu says it: "Mono", "Stereo", "5.1".
+std::string ChannelsName(const std::string& layout) {
+  if (layout.empty())
+    return {};
+  if (layout == "mono") return "Mono";
+  if (layout == "stereo") return "Stereo";
+  // "5.1(side)" and the like: the count is what matters.
+  const size_t paren = layout.find('(');
+  return paren == std::string::npos ? layout : layout.substr(0, paren);
+}
+
 int64_t NodeInt(const mpv_node* node, int64_t fallback) {
   if (!node)
     return fallback;
@@ -804,28 +849,27 @@ void Player::UpdateTracks(const mpv_node* list) {
         append(lang);
       append(NodeString(MapGet(track, "title")));
 
-      std::string codec = NodeString(MapGet(track, "codec"));
+      const std::string codec = CodecName(NodeString(MapGet(track, "codec")));
       if (is_sub) {
+        append(codec);
         if (NodeFlag(MapGet(track, "forced")))
           append("Forced");
         if (NodeFlag(MapGet(track, "external")))
           append("External");
       } else if (is_video) {
-        const int64_t w = NodeInt(MapGet(track, "demux-w"), 0);
-        const int64_t h = NodeInt(MapGet(track, "demux-h"), 0);
-        if (w > 0 && h > 0)
-          codec += " " + std::to_string(w) + "x" + std::to_string(h);
+        append(ResolutionName(NodeInt(MapGet(track, "demux-w"), 0),
+                              NodeInt(MapGet(track, "demux-h"), 0)));
+        append(codec);
       } else {
+        append(codec);
         // A layout the container doesn't name comes out as "unknownN".
         std::string channels = NodeString(MapGet(track, "demux-channels"));
         if (channels.empty() || channels.compare(0, 7, "unknown") == 0) {
           const int64_t n = NodeInt(MapGet(track, "demux-channel-count"), 0);
           channels = n == 1 ? "mono" : n == 2 ? "stereo" : n > 0 ? std::to_string(n) + "ch" : "";
         }
-        if (!channels.empty())
-          codec += " " + channels;
+        append(ChannelsName(channels));
       }
-      append(codec);
 
       std::vector<TrackInfo>& into = is_sub ? subs : is_video ? video : audio;
       TrackInfo t;

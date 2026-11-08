@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "library.h"
+#include "icons.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -161,6 +162,17 @@ bool Library::ToggleFavorite(const Ref& ref) {
   return true;
 }
 
+std::string Library::SourceName(const std::string& source_key) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (const Ref& ref : favorites_)
+    if (ref.source_key == source_key && !ref.source_name.empty())
+      return ref.source_name;
+  for (const auto& item : progress_)
+    if (item.second.ref.source_key == source_key && !item.second.ref.source_name.empty())
+      return item.second.ref.source_name;
+  return {};
+}
+
 std::vector<Ref> Library::Favorites() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return favorites_;
@@ -283,7 +295,7 @@ LibrarySource::LibrarySource(Kind kind, Library& library, SourceRegistry& regist
 }
 
 const char* LibrarySource::Icon() const {
-  return kind_ == Kind::Favorites ? "⭐" : "⏯";
+  return kind_ == Kind::Favorites ? icon::kStar : icon::kResume;
 }
 
 std::string LibrarySource::Key() const {

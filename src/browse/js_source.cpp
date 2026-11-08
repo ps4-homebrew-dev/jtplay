@@ -12,6 +12,7 @@
 
 #include "browse/js_http.h"
 #include "browse/js_source.h"
+#include "icons.h"
 
 namespace browse {
   namespace {
@@ -400,7 +401,8 @@ namespace browse {
 		     bool can_search)
     : plugin_(std::move(plugin)), source_(source),
       name_(std::move(name)), detail_(std::move(detail)),
-      icon_(std::move(icon)), root_(std::move(root)),
+      // A plugin names its icon as an emoji; the UI draws its own icons.
+      icon_(icon::FromEmoji(icon)), root_(std::move(root)),
       can_search_(can_search) {}
 
   JsSource::~JsSource() {

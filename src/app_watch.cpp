@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Full-screen playback. For video the UI chrome hides and the decoded
-// frames fill the screen behind a transparent document body, with an
-// auto-hiding info/transport bar. For audio a persistent now-playing card
-// is shown instead. The options button opens a playback menu (tracks,
+// Playback. It starts full screen: for video the UI chrome hides and the
+// decoded frames fill the screen behind a transparent document body, with
+// an auto-hiding info/transport bar; for audio a persistent now-playing
+// card is shown instead. The options button opens a playback menu (tracks,
 // subtitles, speed) over either.
+//
+// Back leaves full screen without stopping, as in Kodi: the menus come
+// back over the video, on a see-through background, and can be used as
+// ever while it plays on and moves through its queue. Triangle (Tab), or
+// selecting the item that plays, goes back to full screen.
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -14,6 +19,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "icons.h"
 
 using namespace appdetail;
 
@@ -106,6 +112,19 @@ size_t NextTrack(const std::vector<T>& tracks, int current, int direction) {
 // Plays an item, offering to pick up where it was left off. The question
 // is a small dialog in the middle of the screen, Kodi style.
 void App::PlayEntry(const browse::Entry& entry) {
+  // The item that plays behind the menus: back to it rather than start it
+  // over.
+  if (bind_watching_ && !bind_fullscreen_ && !launch_request_) {
+    library::Ref ref;
+    const bool same = playing_identified_
+      ? Identify(entry, ref) && ref.source_key == playing_ref_.source_key &&
+        ref.entry.id == playing_ref_.entry.id
+      : entry.id == playing_.id && current_source_ == queue_.source;
+    if (same) {
+      SetFullscreen(true);
+      return;
+    }
+  }
   if (entry.IsImage()) {
     int index = 0;
     const browse::Listing photos = FolderPhotos(entry, index);
@@ -138,7 +157,7 @@ void App::PlayEntry(const browse::Entry& entry) {
 // that the player is running. Entering watch mode any earlier hides the
 // shell, and with it the only sign of life, for as long as the resolve and
 // the open take, which on a remote source is most of the wait.
-void App::Launch(const browse::Entry& entry, int64_t start_seconds) {
+void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue) {
   CancelLaunch();
   // Whatever is playing now is about to be replaced: remember how far it
   // got while the player still knows.
@@ -150,14 +169,34 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds) {
   launch_request_ = ++launch_seq_;
   launch_phase_ = kLaunchResolving;
   launch_visible_at_ = Now() + kLaunchFeedbackSec;
+  launch_from_queue_ = from_queue;
+  // Moving on through the queue behind the menus stays behind them;
+  // anything chosen from the menus starts full screen.
+  launch_behind_ = from_queue && bind_watching_ && !bind_fullscreen_;
+
+  // Chosen from the menus: its folder, as listed, becomes the play queue
+  // once it plays (an item from elsewhere, a card at home, is a queue of
+  // its own).
+  const browse::SourcePtr source = from_queue ? queue_.source : current_source_;
+  if (!from_queue) {
+    launch_queue_ = PlayQueue{current_source_, std::string(), browse::Listing{entry}};
+    if (view_ == View::Browse && !path_.empty()) {
+      const BrowseLevel& level = path_.back();
+      for (const browse::Entry& e : level.entries) {
+        if (e.id == entry.id) {
+          launch_queue_ = PlayQueue{current_source_, level.id, level.entries};
+          break;
+        }
+      }
+    }
+  }
 
   library::Ref ref;
-  const bool identified = Identify(entry, ref);
+  const bool identified = IdentifyIn(entry, source, ref);
 
   // Resolve and open on the worker: a source with expiring URLs mints one
   // here, as late as possible, and both steps may block on the network.
   const browse::Entry item = entry;
-  const browse::SourcePtr source = current_source_;
   const uint32_t request = launch_request_;
   busy_ops_++;
   PostTask([this, item, source, request, start_seconds, ref, identified] {
@@ -183,11 +222,21 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds) {
         // If it did open, take it down again rather than showing it.
         if (ok)
           PostTask([this] { player_->Stop(); });
+        // Cancelled outright, from the menus over something playing, after
+        // the player had let that go to open this one: nothing plays now.
+        if (!launch_request_ && bind_watching_ && (ok || !player_->IsPlaying()))
+          StopPlayback();
       } else if (!ok) {
-        ShowToast(error.empty() ? "Playback failed" : error, "⚠");
+        ShowToast(error.empty() ? "Playback failed" : error, icon::kWarning);
         const int direction = launch_direction_;
+        const bool from_queue = launch_from_queue_;
         const browse::Entry failed = launch_entry_;
         CancelLaunch();
+        // Chosen from the menus over something playing, and it never got
+        // as far as the player (which stops what it plays only to open the
+        // next): what was playing plays on.
+        if (bind_watching_ && !from_queue && player_->IsPlaying())
+          return;
         // Moving through a folder from the player: whatever was playing has
         // been stopped for this one, so carry on past it (as a playlist
         // skips a broken entry) or leave the player when the folder ends.
@@ -210,10 +259,13 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds) {
         progress_saved_at_ = Now();
         watch_last_pos_us_ = watch_last_dur_us_ = -1;
         watch_last_seekable_ = false;
+        if (!launch_from_queue_)
+          queue_ = std::move(launch_queue_);
+        const bool behind = launch_behind_;
         CancelLaunch();
-        EnterWatch(playing_);
+        EnterWatch(playing_, !behind);
         if (start_seconds > 0)
-          ShowToast("Resumed at " + FormatTime(start_seconds * 1000000), "⏯");
+          ShowToast("Resumed at " + FormatTime(start_seconds * 1000000), icon::kResume);
       }
     });
     busy_ops_--;
@@ -230,13 +282,23 @@ void App::CancelLaunch() {
   player_->AbortOpen();
   launch_request_ = 0;
   launch_phase_ = kLaunchIdle;
+  launch_from_queue_ = false;
+  launch_behind_ = false;
   Set("launch_status", bind_launch_status_, Rml::String());
 }
 
-void App::EnterWatch(const browse::Entry& entry) {
+void App::CancelForegroundLaunch() {
+  if (launch_request_ && !launch_behind_)
+    CancelLaunch();
+}
+
+void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
   visualizer_.Reset();
   Set("watching", bind_watching_, true);
+  Set("fullscreen", bind_fullscreen_, fullscreen);
   Set("watch_audio", bind_watch_audio_, entry.IsAudio());
+  Set("video_behind", bind_video_behind_, !fullscreen && !entry.IsAudio());
+  back_held_ = false;
   Set("watch_name", bind_watch_name_, DisplayName(entry));
   Set("watch_description", bind_watch_description_, entry.description);
   Set("watch_paused", bind_watch_paused_, false);
@@ -260,18 +322,56 @@ void App::EnterWatch(const browse::Entry& entry) {
     model_.DirtyVariable("chapter_marks");
   }
   RefreshImageBindings();
-  ShowWatchInfo(kWatchInfoSec);
+  if (fullscreen)
+    ShowWatchInfo(kWatchInfoSec);
+  else
+    Set("info_visible", bind_info_visible_, false);
+  // Home's row of what is playing: there, or now this.
+  if (view_ == View::Home)
+    RebuildShelves();
 }
 
 void App::ExitWatch() {
+  const bool was_fullscreen = bind_fullscreen_;
   Set("watching", bind_watching_, false);
+  Set("fullscreen", bind_fullscreen_, false);
+  Set("video_behind", bind_video_behind_, false);
+  back_held_ = false;
   Set("upnext", bind_upnext_, false);
   Set("info_visible", bind_info_visible_, false);
-  if (bind_menu_open_)
+  // The playback menu goes with the player; one over the menus stays.
+  if (bind_menu_open_ && was_fullscreen)
     CloseMenu();
   playing_identified_ = false;
   RefreshImageBindings();
   OnLibraryChanged(); // progress marks, Continue watching
+}
+
+void App::SetFullscreen(bool on) {
+  if (!bind_watching_ || bind_fullscreen_ == on)
+    return;
+  back_held_ = false;
+  if (bind_menu_open_)
+    CloseMenu(); // the playback menu, or the menu over the menus
+  Set("fullscreen", bind_fullscreen_, on);
+  Set("video_behind", bind_video_behind_, !on && !bind_watch_audio_);
+  if (on) {
+    ShowWatchInfo(kWatchInfoSec);
+  } else {
+    Set("upnext", bind_upnext_, false);
+    Set("info_visible", bind_info_visible_, false);
+    Set("watch_seek", bind_watch_seek_, Rml::String());
+    // The lists come back showing how far it has got.
+    RecordProgress(false);
+    progress_saved_at_ = Now();
+    // The shell was hidden: put its lists back where they were.
+    scroll_entries_pending_ = true;
+    scroll_sources_pending_ = true;
+  }
+  // Home's row of what is playing (it was out of sight: it may be new).
+  if (view_ == View::Home)
+    RebuildShelves();
+  RefreshImageBindings();
 }
 
 void App::StopPlayback() {
@@ -331,10 +431,10 @@ void App::UpdateWatchOverlay() {
 
   // What plays after this one, for the "Up next" line.
   Rml::String next;
-  if (!path_.empty() && (bind_watch_audio_ || autoplay_) && repeat_ != Repeat::One) {
+  if ((bind_watch_audio_ || autoplay_) && repeat_ != Repeat::One) {
     const int i = NeighborIndex(+1);
     if (i >= 0)
-      next = DisplayName(path_.back().entries[i]);
+      next = DisplayName(queue_.entries[i]);
   }
   Set("watch_next", bind_watch_next_, next);
 
@@ -360,13 +460,13 @@ void App::UpdateWatchOverlay() {
 
   Rml::String modes;
   if (shuffle_)
-    modes += "🔀";
+    modes += icon::kShuffle;
   if (repeat_ == Repeat::All)
-    modes += modes.empty() ? "🔁" : " 🔁";
+    modes += modes.empty() ? std::string(icon::kRepeat) : std::string(" ") + icon::kRepeat;
   else if (repeat_ == Repeat::One)
-    modes += modes.empty() ? "🔂" : " 🔂";
+    modes += modes.empty() ? std::string(icon::kRepeatOne) : std::string(" ") + icon::kRepeatOne;
   if (sleep_at_ > 0 || sleep_end_of_item_)
-    modes += modes.empty() ? "🌙" : " 🌙";
+    modes += modes.empty() ? std::string(icon::kSleep) : std::string(" ") + icon::kSleep;
   Set("watch_modes", bind_watch_modes_, modes);
 
   UpdateUpNext(pos, dur);
@@ -377,13 +477,14 @@ void App::UpdateWatchOverlay() {
 // then the player stops at the end rather than going on).
 void App::UpdateUpNext(int64_t pos, int64_t dur) {
   bool show = false;
-  if (!bind_watch_audio_ && autoplay_ && !upnext_dismissed_ && repeat_ != Repeat::One &&
+  if (bind_fullscreen_ && !bind_watch_audio_ && autoplay_ && !upnext_dismissed_ &&
+      repeat_ != Repeat::One &&
       !sleep_end_of_item_ && !launch_request_ && player_->CanSeek() &&
       player_->DurationReliable() && pos >= 0 && dur >= kUpNextMinDurationSec * 1000000 &&
-      dur - pos <= kUpNextSec * 1000000 && !path_.empty()) {
+      dur - pos <= kUpNextSec * 1000000) {
     const int i = NeighborIndex(+1);
     if (i >= 0) {
-      const browse::Entry& next = path_.back().entries[i];
+      const browse::Entry& next = queue_.entries[i];
       show = true;
       Set("upnext_name", bind_upnext_name_, DisplayName(next));
       const double speed = std::max(0.1, player_->Speed());
@@ -404,7 +505,7 @@ void App::UpdateSleepTimer(double now) {
   sleep_at_ = 0;
   if (bind_watching_ || launch_request_) {
     StopPlayback();
-    ShowToast("Sleep timer: playback stopped", "🌙");
+    ShowToast("Sleep timer: playback stopped", icon::kSleep);
   }
   if (bind_photo_)
     ClosePhotos();
@@ -430,7 +531,7 @@ void App::CycleAudioTrack(int direction) {
   const size_t next = NextTrack(tracks, player_->CurrentAudioStream(), direction);
   if (player_->SelectAudioTrack(tracks[next].stream_index)) {
     ShowToast("Audio " + std::to_string(next + 1) + "/" +
-              std::to_string(tracks.size()) + ": " + tracks[next].label, "🔊");
+              std::to_string(tracks.size()) + ": " + tracks[next].label, icon::kAudio);
   }
 }
 
@@ -498,7 +599,7 @@ void App::OpenWatchMenu() {
         player_->SetSpeed(kSpeeds[i]);
       }});
   }
-  if (!path_.empty() && PlayOrder().size() > 1) {
+  if (PlayOrder().size() > 1) {
     menu_items_.push_back({"Shuffle",
       [this] { return std::string(shuffle_ ? "On" : "Off"); },
       [this](int) { SetShuffle(!shuffle_); }});
@@ -560,11 +661,16 @@ void App::OpenWatchMenu() {
       sleep_at_ = kSleepChoices[i] > 0 ? Now() + kSleepChoices[i] * 60.0 : 0.0;
     }});
   if (playing_identified_) {
+    // By what the library knows of it: the menus may have moved on to
+    // another source since it started.
     const bool fav = library_.IsFavorite(playing_ref_.source_key,
                                          playing_ref_.entry.id);
-    const browse::Entry entry = playing_;
     menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
-      nullptr, [this, entry](int) { ToggleFavorite(entry); }});
+      nullptr, [this](int) {
+        const bool now = library_.ToggleFavorite(playing_ref_);
+        library_.Save();
+        ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
+      }});
   }
   if (NeighborIndex(+1) >= 0)
     menu_items_.push_back({"Play next", nullptr, [this](int) { PlayNeighbor(+1); }});
@@ -575,17 +681,18 @@ void App::OpenWatchMenu() {
   Set("menu_open", bind_menu_open_, true);
 }
 
-// The playable items of the current folder in play order: display order,
-// or a shuffle of it that stays put for as long as the folder and the
-// shuffle do (so "up next" is what really comes next).
+// The playable items of the play queue in play order: display order, or a
+// shuffle of it that stays put for as long as the queue and the shuffle do
+// (so "up next" is what really comes next).
 const std::vector<int>& App::PlayOrder() const {
-  if (path_.empty()) {
+  if (queue_.entries.empty()) {
     play_order_.clear();
     play_order_key_.clear();
     return play_order_;
   }
-  const browse::Listing& entries = path_.back().entries;
-  const std::string key = path_.back().id + '\n' + std::to_string(entries.size()) + '\n' +
+  const browse::Listing& entries = queue_.entries;
+  const std::string key = (queue_.source ? queue_.source->Key() : std::string()) + '\n' +
+    queue_.id + '\n' + std::to_string(entries.size()) + '\n' +
     (entries.empty() ? std::string() : entries.front().id) + '\n' +
     (shuffle_ ? std::to_string(shuffle_seed_) : std::string("-"));
   if (key == play_order_key_)
@@ -608,27 +715,27 @@ void App::SetShuffle(bool on) {
   // first, so the rest of the folder all still comes after it.
   shuffle_seed_ = (uint32_t)std::rand() | 1u;
   play_order_key_.clear();
-  if (on && !path_.empty()) {
+  if (on && !queue_.entries.empty()) {
     const std::string& from = launch_request_ ? launch_entry_.id : playing_.id;
     const std::vector<int>& order = PlayOrder();
     for (size_t i = 0; i < order.size(); i++) {
-      if (path_.back().entries[order[i]].id == from) {
+      if (queue_.entries[order[i]].id == from) {
         std::rotate(play_order_.begin(), play_order_.begin() + i, play_order_.begin() + i + 1);
         break;
       }
     }
   }
   SaveSettings();
-  ShowToast(on ? "Shuffle on" : "Shuffle off", "🔀");
+  ShowToast(on ? "Shuffle on" : "Shuffle off", icon::kShuffle);
 }
 
 // Finds the next (direction=+1) or previous (direction=-1) playable item
 // after the one playing, in play order. Used by the track-skip keys,
 // auto-advance and the "Up next" lines.
 int App::NeighborIndex(int direction) const {
-  if (path_.empty())
+  if (queue_.entries.empty())
     return -1;
-  const browse::Listing& entries = path_.back().entries;
+  const browse::Listing& entries = queue_.entries;
   const std::vector<int>& order = PlayOrder();
 
   // Locate the playing item by id; the selection may have moved. While a
@@ -657,25 +764,53 @@ bool App::PlayNeighbor(int direction) {
   const int i = NeighborIndex(direction);
   if (i < 0)
     return false;
-  sel_entry_ = i;
-  path_.back().selection = i;
-  model_.DirtyVariable("sel_entry");
-  RebuildDetail();
-  scroll_entries_pending_ = true;
+  const browse::Entry entry = queue_.entries[i];
+  // The cursor follows along when the queue's folder is the one on screen.
+  if (view_ == View::Browse && !path_.empty() && current_source_ == queue_.source &&
+      path_.back().id == queue_.id) {
+    const browse::Listing& listed = path_.back().entries;
+    for (size_t j = 0; j < listed.size(); j++) {
+      if (listed[j].id == entry.id) {
+        sel_entry_ = (int)j;
+        path_.back().selection = sel_entry_;
+        model_.DirtyVariable("sel_entry");
+        RebuildDetail();
+        scroll_entries_pending_ = true;
+        break;
+      }
+    }
+  }
 
-  const browse::Entry entry = path_.back().entries[i];
   int64_t start = 0;
   library::Ref ref;
   library::Progress p;
-  if (Identify(entry, ref) && library_.GetProgress(ref.source_key, ref.entry.id, p) &&
-      !p.watched)
+  if (IdentifyIn(entry, queue_.source, ref) &&
+      library_.GetProgress(ref.source_key, ref.entry.id, p) && !p.watched)
     start = p.position;
-  Launch(entry, start);
+  Launch(entry, start, true);
   launch_direction_ = direction;
   return true;
 }
 
+void App::QueueCurrentFolder() {
+  if (path_.empty())
+    queue_ = PlayQueue{};
+  else
+    queue_ = PlayQueue{current_source_, path_.back().id, path_.back().entries};
+}
+
+size_t App::FolderPlayableCount() const {
+  if (path_.empty())
+    return 0;
+  size_t n = 0;
+  for (const browse::Entry& e : path_.back().entries)
+    if (!e.IsFolder() && !e.IsImage())
+      n++;
+  return n;
+}
+
 void App::PlayFolder(bool shuffled) {
+  QueueCurrentFolder();
   if (shuffled != shuffle_)
     SetShuffle(shuffled);
   else if (shuffled)
@@ -683,8 +818,8 @@ void App::PlayFolder(bool shuffled) {
   const std::vector<int>& order = PlayOrder();
   if (order.empty())
     return;
-  const browse::Entry entry = path_.back().entries[order.front()];
-  sel_entry_ = order.front();
+  const browse::Entry entry = queue_.entries[order.front()];
+  sel_entry_ = order.front(); // the queue is the folder on screen
   path_.back().selection = sel_entry_;
   model_.DirtyVariable("sel_entry");
   RebuildDetail();
@@ -700,7 +835,7 @@ void App::SkipChapter(int direction) {
     if (direction > 0 && i + 1 < n) {
       player_->SeekChapter(i + 1);
       ShowToast("Chapter " + std::to_string(i + 2) + "/" + std::to_string(n) +
-                (chapters[i + 1].title.empty() ? "" : ": " + chapters[i + 1].title), "⏭");
+                (chapters[i + 1].title.empty() ? "" : ": " + chapters[i + 1].title), icon::kNext);
       return;
     }
     if (direction < 0 && i >= 0) {
@@ -711,7 +846,7 @@ void App::SkipChapter(int direction) {
       if (into >= 3000000 || i > 0) {
         player_->SeekChapter(target);
         ShowToast("Chapter " + std::to_string(target + 1) + "/" + std::to_string(n) +
-                  (chapters[target].title.empty() ? "" : ": " + chapters[target].title), "⏮");
+                  (chapters[target].title.empty() ? "" : ": " + chapters[target].title), icon::kPrevious);
         return;
       }
     }
@@ -724,11 +859,11 @@ void App::HandlePlaybackEnd() {
   if (sleep_end_of_item_) {
     sleep_end_of_item_ = false;
     StopPlayback();
-    ShowToast("Sleep timer: playback stopped", "🌙");
+    ShowToast("Sleep timer: playback stopped", icon::kSleep);
     return;
   }
   if (repeat_ == Repeat::One) {
-    Launch(playing_, 0);
+    Launch(playing_, 0, true);
     return;
   }
   // A video goes on to the next episode only when that is wanted (and the
@@ -767,11 +902,11 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
       char label[48];
       if (secs >= 60 && secs % 60 == 0)
         std::snprintf(label, sizeof(label), "%s %c%lld min",
-                      seek_accum_us_ < 0 ? "⏪" : "⏩", seek_accum_us_ < 0 ? '-' : '+',
+                      seek_accum_us_ < 0 ? icon::kRewind : icon::kForward, seek_accum_us_ < 0 ? '-' : '+',
                       (long long)(secs / 60));
       else
         std::snprintf(label, sizeof(label), "%s %c%s",
-                      seek_accum_us_ < 0 ? "⏪" : "⏩", seek_accum_us_ < 0 ? '-' : '+',
+                      seek_accum_us_ < 0 ? icon::kRewind : icon::kForward, seek_accum_us_ < 0 ? '-' : '+',
                       secs >= 60 ? FormatTime(secs * 1000000).c_str()
                                  : (std::to_string(secs) + " s").c_str());
       Set("watch_seek", bind_watch_seek_, Rml::String(label));
@@ -796,9 +931,9 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     ShowWatchInfo(kWatchInfoSec);
     break;
 
-  case Rml::Input::KI_T:     // next audio track
-    CycleAudioTrack();
-    ShowWatchInfo(kWatchInfoSec);
+  case Rml::Input::KI_T:     // triangle: the menus, playing on (Kodi's FullScreen)
+  case Rml::Input::KI_TAB:
+    SetFullscreen(false);
     break;
 
   case Rml::Input::KI_F1:    // playback menu
@@ -806,18 +941,90 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     OpenWatchMenu();
     break;
 
-  case Rml::Input::KI_BACK:  // back to the browse list
-  case Rml::Input::KI_ESCAPE:
+  case Rml::Input::KI_BACK:  // back: the menus, playing on; held: stop
     if (bind_upnext_) {      // ... or just away with the up-next card
       upnext_dismissed_ = true;
       Set("upnext", bind_upnext_, false);
       break;
     }
+    // Only the release (HandleKeyUp) or the hold (Update) tells which.
+    if (!back_held_) {
+      back_held_ = true;
+      back_down_at_ = Now();
+    }
+    break;
+  case Rml::Input::KI_ESCAPE: // select / Escape: the menus, playing on
+    if (bind_upnext_) {
+      upnext_dismissed_ = true;
+      Set("upnext", bind_upnext_, false);
+      break;
+    }
+    SetFullscreen(false);
+    break;
+
+  case Rml::Input::KI_X:     // keyboard: stop, as in Kodi
     StopPlayback();
     break;
 
   default:
-    return;
+    if (!HandleMediaKey(key))
+      return;
+    break;
   }
   event.StopPropagation();
+}
+
+bool App::HandleKeyBehind(int key) {
+  switch (key) {
+  case Rml::Input::KI_T:     // triangle / Tab: back to full screen
+  case Rml::Input::KI_TAB:
+    SetFullscreen(true);
+    return true;
+  case Rml::Input::KI_X:     // keyboard: stop
+    StopPlayback();
+    ShowToast("Playback stopped", icon::kStop);
+    return true;
+  default:
+    return HandleMediaKey(key);
+  }
+}
+
+bool App::HandleMediaKey(int key) {
+  if (!bind_watching_)
+    return false;
+  switch (key) {
+  case Rml::Input::KI_MEDIA_PLAY_PAUSE: {
+    const bool was_paused = player_->IsPaused();
+    player_->TogglePause();
+    if (bind_fullscreen_)
+      ShowWatchInfo(kWatchInfoSec);
+    else
+      ShowToast(was_paused ? "Playing" : "Paused", was_paused ? icon::kPlay : icon::kPause);
+    return true;
+  }
+  case Rml::Input::KI_MEDIA_STOP:
+    StopPlayback();
+    ShowToast("Playback stopped", icon::kStop);
+    return true;
+  case Rml::Input::KI_MEDIA_NEXT_TRACK:
+    SkipChapter(+1);
+    return true;
+  case Rml::Input::KI_MEDIA_PREV_TRACK:
+    SkipChapter(-1);
+    return true;
+  default:
+    return false;
+  }
+}
+
+// Back let go in full screen before it was held long enough to stop: the
+// menus, playing on.
+void App::HandleKeyUp(int key) {
+  if (key == Rml::Input::KI_BACK)
+    back_swallow_ = false;
+  if (key != Rml::Input::KI_BACK || !back_held_)
+    return;
+  back_held_ = false;
+  if (FullscreenPlayback() && Now() - back_down_at_ < kHoldStopSec)
+    SetFullscreen(false);
 }

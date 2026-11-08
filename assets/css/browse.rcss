@@ -184,15 +184,30 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	height: 72px;
+	min-height: 72px;
 	margin-top: 12px;
-	padding: 0px 24px;
+	padding: 14px 24px;
 	background-color: #ffffff0a;
 	border-radius: 12px;
 }
 
-.gi-title {
+/* Title, and under it the start of the description: what the tile is,
+ * not only what it is called. */
+.gi-text {
 	flex: 1;
+	overflow: hidden;
+}
+
+.gi-desc {
+	margin-top: 4px;
+	font-size: 21px;
+	color: #aab6cc;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gi-title {
 	font-size: 28px;
 	font-weight: bold;
 	color: #ffffff;
@@ -223,25 +238,40 @@
 }
 
 /* Fixed-height art box, so the text below does not jump around while the
- * selection moves between items with and without artwork. */
+ * selection moves between items with and without artwork. 16:9 at the
+ * panel's width, the shape of most stills and key art, which so fill it. */
 .detail-artbox {
+	position: relative;
 	display: flex;
 	flex-direction: row;
 	justify-content: center;
 	align-items: center;
-	height: 400px;
+	height: 352px;
 	margin-bottom: 26px;
 	background-color: #00000040;
 	border-radius: 12px;
 	overflow: hidden;
 }
 
+/* Art of another shape (an album cover, a poster) sits on a blurred, dim
+ * copy of itself filling the box, rather than on empty bands. */
+.detail-ambient {
+	position: absolute;
+	left: -40px;
+	top: -40px;
+	right: -40px;
+	bottom: -40px;
+	filter: blur(28px);
+	opacity: 0.55;
+}
+
 /* Cover art / thumbnail of the selected entry, scaled to fit the box with
  * its aspect ratio. */
 .detail-art {
+	position: relative;
 	display: block;
 	max-width: 100%;
-	max-height: 400px;
+	max-height: 352px;
 }
 
 .detail-glyph {

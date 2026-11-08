@@ -4,7 +4,7 @@
  * driven by the remote, and the options button opens a menu (menu.rcss)
  * for whatever is not on the d-pad.
  *
- * Focus is a solid accent bar with dark text everywhere (rail, rows,
+ * Focus is a solid accent bar with dark text everywhere (tabs, rows,
  * tiles, menus), as in Kodi: the one bright thing on screen is where you
  * are.
  */
@@ -34,7 +34,7 @@
 	top: 0px;
 	right: 0px;
 	bottom: 0px;
-	opacity: 0.32;
+	opacity: 0.45;
 }
 
 /* Darkens the left, where the lists are, and lets the art show on the
@@ -47,6 +47,18 @@
 	bottom: 0px;
 	decorator: linear-gradient(90deg, #0b1020f2 0%, #0b1020cc 45%, #0b102066 100%),
 	           linear-gradient(180deg, #0b102000 55%, #0b1020e6 100%);
+}
+
+/* Home, with a card to feature: its artwork is the banner's picture, at
+ * full strength across the top of the screen, darkened only where the
+ * text and the tabs sit, and fading into the background above the rows. */
+body.home.featured #backdrop {
+	opacity: 1;
+	bottom: 280px;
+}
+body.home.featured #backdrop-shade {
+	decorator: linear-gradient(90deg, #0b1020 0%, #0b1020e6 24%, #0b102080 50%, #0b102000 76%),
+	           linear-gradient(180deg, #0b1020c0 0%, #0b102000 20%, #0b102000 40%, #0b1020 66%);
 }
 
 /* ------------------------------------------------------------------ */
@@ -62,13 +74,6 @@
 	padding: 0px 72px;
 }
 
-#topbar img.brand-logo {
-	display: inline-block;
-	width: 64px;
-	height: 64px;
-	margin-right: 24px;
-}
-
 #topbar .location {
 	display: flex;
 	flex-direction: row;
@@ -76,13 +81,6 @@
 	flex: 1;
 	overflow: hidden;
 	white-space: nowrap;
-}
-
-#topbar .wordmark {
-	font-size: 36px;
-	font-weight: bold;
-	letter-spacing: 2px;
-	color: #e8edf7;
 }
 
 #topbar .location-source {
@@ -101,8 +99,70 @@
 	text-overflow: ellipsis;
 }
 
+/* What plays behind the menus: a pill by the clock, with the time and a
+ * hairline of progress along its bottom. It is what gives way when the
+ * top bar is short of room: the title is cut short, never the tabs. */
+#np-chip {
+	position: relative;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	flex: 0 1 auto;
+	min-width: 140px;
+	max-width: 520px;
+	height: 52px;
+	margin-left: 24px;
+	padding: 0px 22px 0px 18px;
+	background-color: #ffffff14;
+	border-radius: 26px;
+	overflow: hidden;
+	white-space: nowrap;
+	animation: 0.25s cubic-out np-chip-in;
+}
+@keyframes np-chip-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+.np-chip-state {
+	flex-shrink: 0;
+	margin-right: 12px;
+	font-size: 22px;
+	color: #4dd6b8;
+}
+.np-chip-title {
+	flex: 0 1 auto;
+	min-width: 0px;
+	max-width: 380px;
+	font-size: 23px;
+	font-weight: bold;
+	color: #e8edf7;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.np-chip-time {
+	flex-shrink: 0;
+	margin-left: 14px;
+	font-size: 21px;
+	color: #8593ab;
+}
+.np-chip-bar {
+	position: absolute;
+	left: 22px;
+	right: 22px;
+	bottom: 6px;
+	height: 3px;
+	background-color: #ffffff1f;
+	border-radius: 2px;
+}
+.np-chip-played {
+	height: 3px;
+	background-color: #4dd6b8;
+	border-radius: 2px;
+}
+
 #topbar .busy {
 	display: flex;
+	flex-shrink: 0;
 	gap: 6dp;
 	margin: 0px 36px;
 }
@@ -111,6 +171,8 @@
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
+	flex-shrink: 0;
+	white-space: nowrap;
 }
 
 #topbar .clock {
@@ -269,6 +331,20 @@
 	right: auto;
 	left: 10px;
 	color: #e0b84d;
+}
+
+/* The card of what plays: says so, in the corner. */
+.art-live {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	padding: 4px 12px;
+	font-size: 19px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	color: #0b1020;
+	background-color: #4dd6b8;
+	border-radius: 14px;
 }
 
 /* How far an unfinished item got, along the bottom edge of the art. */

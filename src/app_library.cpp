@@ -9,6 +9,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "icons.h"
 
 using namespace appdetail;
 
@@ -25,6 +26,11 @@ constexpr double kWatchedFraction = 0.92;
 } // namespace
 
 bool App::Identify(const browse::Entry& entry, library::Ref& out) const {
+  return IdentifyIn(entry, current_source_, out);
+}
+
+bool App::IdentifyIn(const browse::Entry& entry, const browse::SourcePtr& source,
+                     library::Ref& out) const {
   std::string key, id;
   if (library::DecodeId(entry.id, key, id)) {
     // Listed under Favorites / Continue watching: the id carries its source.
@@ -32,14 +38,16 @@ bool App::Identify(const browse::Entry& entry, library::Ref& out) const {
     out.entry = entry;
     out.entry.id = id;
     out.source_name.clear();
-    if (const browse::SourcePtr source = registry_.Find(key))
-      out.source_name = source->Name();
+    if (const browse::SourcePtr known = registry_.Find(key))
+      out.source_name = known->Name();
+    else // not searched for yet: what the library remembers it as
+      out.source_name = library_.SourceName(key);
     return true;
   }
-  if (!current_source_)
+  if (!source)
     return false;
-  out.source_key = current_source_->Key();
-  out.source_name = current_source_->Name();
+  out.source_key = source->Key();
+  out.source_name = source->Name();
   out.entry = entry;
   return true;
 }
@@ -62,7 +70,7 @@ void App::ToggleFavorite(const browse::Entry& entry) {
     ref.source_name = current_source_ ? current_source_->Name() : std::string();
   const bool now = library_.ToggleFavorite(ref);
   library_.Save();
-  ShowToast(now ? "Added to favorites" : "Removed from favorites", "⭐");
+  ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
 }
 
 bool App::IsSnapshot(const std::string& image) const {
@@ -83,7 +91,7 @@ void App::SetWatched(const browse::Entry& entry, bool watched) {
   DropSnapshot(library_.ImageFor(ref.source_key, ref.entry.id));
   library_.SetWatched(ref, watched);
   library_.Save();
-  ShowToast(watched ? "Marked as watched" : "Marked as unwatched", "✔");
+  ShowToast(watched ? "Marked as watched" : "Marked as unwatched", icon::kCheck);
 }
 
 void App::RecordProgress(bool final, bool ended) {

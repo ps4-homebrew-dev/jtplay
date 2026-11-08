@@ -292,6 +292,7 @@ bool Backend::ProcessEvents(Rml::Context* context, KeyDownCallback key_down_call
 	while (has_event)
 	{
 #if SDL_MAJOR_VERSION == 2
+		gamepad::Trace(ev); // jtplay: Settings > Show input
 		if (gamepad::HandleEvent(context, ev))
 		{
 			has_event = SDL_PollEvent(&ev);

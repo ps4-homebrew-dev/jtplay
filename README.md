@@ -21,9 +21,10 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-The home screen is a rail of places down the left and, on the right,
-shelves of cards from your library: **Continue watching** and
-**Favorites**. The rail stays short however many sources there are:
+The home screen has tabs of places across the top, a banner, and rows
+of cards from your library below it: **Continue watching** and
+**Favorites**. The tabs are always these five, however many sources
+there are:
 
 - **Home**: the shelves hold everything.
 - **Local filesystem**: USB drives and internal storage on the console,
@@ -32,15 +33,24 @@ shelves of cards from your library: **Continue watching** and
 - **Plugins**: one source per JavaScript plugin source.
 - **Settings**: playback, languages and the screensaver.
 
-Select on a group searches it and lists its sources in the rail; circle
-(or left) goes back up. Only the local drives are looked for at start-up:
-network servers and plugins are searched for each time their group is
-entered, and square searches the group again. A card from a group not
-searched yet searches it first, then opens. On a group or one of its
-sources the shelves hold only what came from there. Right moves from the rail onto the
-shelves, select on a card plays it (or opens a favorite folder), and
-select on a source browses it. The focused card's artwork fills the
-background.
+Left and right move along the tabs. On a group the banner is lower, and
+the rows begin with the group's sources: a grid of tiles, four to a row
+and as many rows as it takes, headed by how many there are (fifty
+plugins are thirteen rows). Up and down move through it as through any
+rows, keeping the column; select on a tile opens that source. After the
+sources come the group's own Continue watching and Favorites rows.
+Only the local drives are looked for at start-up: network servers and
+plugins are searched for the first time their tab is reached, and square
+searches the group again. A card from a group not searched yet searches
+it first, then opens.
+
+Down moves from the tabs into the rows, and up from the first row back
+to the tabs. The banner shows the card in focus, large, over its artwork
+across the top of the screen -- where it is from, what is left of it, its
+description -- and follows the focus along the rows; the focused row
+sits right under it. Whatever a card has no data for is left out. Select
+on a card plays it (or opens a favorite folder), and select on a source
+browses it.
 
 ## Browsing
 
@@ -120,6 +130,22 @@ All of this is stored in `library.xml` in the cache directory.
 
 ## Playing
 
+Playback starts full screen. Back leaves full screen without stopping, as
+in Kodi: the menus fade in over the video, which plays on behind them as
+it is, under a shade that keeps them readable (on Home the video takes
+the place of the banner's picture), and can be used as ever while it
+plays on (music plays on under the usual menus). It keeps moving through
+the folder it was started from, wherever the menus are by then.
+
+What plays is in the top bar, by the clock, with its time; Home's first
+row, **Now playing**, holds its card. The way back to full screen is the
+way out of it: back, step by step (from a list to Home, from the rows to
+the tabs, from the tabs to the video), as on any remote; or selecting the
+Now playing card or the item that is playing, triangle (Tab on a
+keyboard), or the options menu's **Back to full screen**. Holding back in
+full screen, the options menu's **Stop playback**, a remote's stop key or
+X on a keyboard stops it.
+
 The bar along the bottom shows title, tracks, elapsed and total time and,
 for anything longer than five minutes, the time it will end; its top edge
 is the timeline, with the played part in the accent colour,
@@ -156,7 +182,10 @@ skipped.
 
 ## Settings
 
-Settings, on the home rail, has whether the next episode plays by itself,
+Settings, the last of the home tabs, has whether the next episode plays by itself,
+**Show input** (every key and button as it arrives, in a corner of the
+screen and the log, also those nothing reacts to: for finding out what a
+TV remote sends; `JTPLAY_INPUT_LOG=1` turns it on from the start),
 the preferred audio and subtitle language (a matching track is picked when
 a file opens), the screensaver delay, night mode and forgetting Continue
 watching. These and the playback choices
@@ -279,18 +308,26 @@ Keyboard, game controller (any pad SDL knows, and the DualShock 4 on a PS4)
 and media remote do the same things. The UI shows no button hints; the
 options button is the way into everything that is not on the d-pad.
 
-| Controller            | Key             | Home                         | Browsing                             | Playing                  | Photos               |
-|-----------------------|-----------------|------------------------------|--------------------------------------|--------------------------|----------------------|
-| d-pad up / down       | arrows          | rail / shelf (rail wraps)    | move (wraps around)                  | seek +5 / -5 min         | caption              |
-| d-pad left / right    | arrows          | rail ↔ cards; left: up       | list: page or letter; grid: move     | seek (speeds up)         | previous / next      |
-| cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now | slideshow on / off   |
-| circle (B)            | Backspace       | to the rail; up a group      | back (Home from a source root)       | stop; up next: dismiss   | close                |
-| options (start)       | F1              | options for the card         | options menu                         | playback menu            | photo menu           |
-| square (X)            | Space           | search the group again       | next sort key                        |                          |                      |
-| triangle (Y)          | T               |                              | reverse sort order                   | next audio track         | rotate               |
-| L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item | previous / next |
-| L2 / R2               | Home / End      | first / last                 | first / last                         |                          | first / last         |
-| back (select)         | Escape          | to the rail; up a group      | back                                 | stop                     | close                |
+| Controller            | Key             | Home                         | Browsing                             | Playing (full screen)              | Photos               |
+|-----------------------|-----------------|------------------------------|--------------------------------------|------------------------------------|----------------------|
+| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | seek +5 / -5 min                   | caption              |
+| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up)                   | previous / next      |
+| cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now           | slideshow on / off   |
+| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | the menus, playing on; held: stop; up next: dismiss | close |
+| options (start)       | F1              | options for the card or tile | options menu                         | playback menu                      | photo menu           |
+| square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
+| triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
+| L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |
+| L2 / R2               | Home / End      | first / last                 | first / last                         |                                    | first / last         |
+| back (select)         | Escape          | to the tabs; from them, back to full screen* | back                                 | the menus, playing on              | close                |
+|                       | X               | stop*                        | stop*                                | stop                               |                      |
+
+\* While something plays behind the menus.
+
+A media remote's (or keyboard's) play/pause, stop and previous/next keys
+work on playback wherever it is, and its back key is circle. What a TV
+remote connected over HDMI-CEC sends depends on the console; Settings >
+Show input shows it.
 
 Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
 Ctrl+S searches the source.
@@ -304,6 +341,14 @@ the visualizer (`src/visualizer.cpp`) behind the now-playing card. Extra mpv
 options can be given for testing or tuning, and mpv's log made more verbose:
 
     JTPLAY_MPV="hwdec=auto-safe profile=high-quality" JTPLAY_MPV_LOG=v ./jtplay
+
+## Icons
+
+The UI's icons come from [Lucide](https://lucide.dev) (ISC licence, see
+`fonts/LICENSE-lucide.txt`): `fonts/lucide.ttf` holds just the ones in use,
+lowered a little to sit centred on text, and is loaded as a fallback font
+so an icon is a character in any string (`src/icons.h`). A plugin names its
+icon with an emoji, which is shown as the matching icon where there is one.
 
 ## Building
 

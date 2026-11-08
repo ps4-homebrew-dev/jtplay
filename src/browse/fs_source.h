@@ -6,6 +6,7 @@
 #define BROWSE_FS_SOURCE_H
 
 #include "browse/source.h"
+#include "../icons.h"
 
 namespace browse {
 
@@ -15,7 +16,7 @@ public:
 
   const std::string& Name() const override { return name_; }
   const std::string& Detail() const override { return root_; }
-  const char* Icon() const override { return "💾"; }
+  const char* Icon() const override { return icon::kDrive; }
   std::string Key() const override { return "fs:" + root_; }
   Group RailGroup() const override { return Group::Local; }
   std::string RootId() const override { return root_; }

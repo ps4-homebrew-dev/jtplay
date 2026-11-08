@@ -6,6 +6,7 @@
 
 #include "browse/source.h"
 #include "upnp/dlna.h"
+#include "../icons.h"
 
 namespace browse {
 
@@ -15,7 +16,7 @@ public:
 
   const std::string& Name() const override { return server_.friendly_name; }
   const std::string& Detail() const override { return detail_; }
-  const char* Icon() const override { return "🖥"; }
+  const char* Icon() const override { return icon::kServer; }
   std::string Key() const override {
     return "dlna:" + (server_.udn.empty() ? server_.location : server_.udn);
   }
