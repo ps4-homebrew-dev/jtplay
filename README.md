@@ -15,7 +15,8 @@ plugins, in the spirit of Kodi.
 - **UPnP/DLNA servers** on the local network (MiniDLNA, Jellyfin, Plex, ...).
 - **JavaScript plugins** (see below). Bundled: internet radio from
   radio-browser.info (by popularity, country and genre), podcasts (the
-  Apple Podcasts chart; add the shows you follow to Favorites), Sveriges Radio, SVT Play and Pluto TV (free live
+  Apple Podcasts top 50: most popular, of every country it is in and of
+  every genre; add the shows you follow to Favorites), Sveriges Radio, SVT Play and Pluto TV (free live
   channels, films and series; the catalogue is whatever Pluto serves your
   region).
 
@@ -98,7 +99,8 @@ letters; other characters have to match as typed.
 
 **Search**, in the options menu (or Ctrl+S), is for sources that can ask a
 backend for content that is not listed, and is only there for those. The
-podcast plugin searches all of Apple Podcasts, not just its chart, and SVT
+podcast plugin searches all of Apple Podcasts in the country you are in,
+not just its chart, and SVT
 Play searches its whole catalogue (shows, episodes, clips and genres), and
 Pluto TV everything its region can watch (channels, films and series). What the
 backend finds is a folder of its own that sorts, filters, plays and takes

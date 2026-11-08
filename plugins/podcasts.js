@@ -1,12 +1,29 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Podcasts: the Apple Podcasts chart.
+// Podcasts: the Apple Podcasts charts, overall, by country and by genre,
+// laid out like the radio plugin.
 //
 // The tree:
-//   /  or  top           the chart for COUNTRY
-//   feed:<url>           a show's episodes, newest first, from its RSS feed
-//   apple:<id>           a charted show: its feed is looked up, then as above
-//                        (Apple's episode list if the feed cannot be read)
+//   /                    Most popular, By country, By genre
+//   top                  the top CHART_SIZE shows of DEFAULT_COUNTRY
+//   countries            every country Apple Podcasts is in, by name
+//   chart:<cc>           the top CHART_SIZE shows of country <cc>
+//   genres               Apple's podcast genres, by name
+//   genre:<id>           the top CHART_SIZE shows of genre <id>, in
+//                        DEFAULT_COUNTRY (Apple charts genres per store)
+//   apple:<cc>:<id>      a show in <cc>'s store: its feed is looked up, then
+//                        its episodes, newest first, from the feed (Apple's
+//                        episode list if the feed cannot be read)
+//   feed:<url>           a show's episodes straight from its RSS feed
+//
+// A show is looked up in the store of the country it was found in: some are
+// only in that store. "apple:<id>" (a show in the US store) is what earlier
+// versions of this plugin made, and is still understood, so favorites made
+// with them keep working.
+//
+// Apple has no worldwide chart, so Most popular is the chart of
+// DEFAULT_COUNTRY; and nothing like radio-browser's listener counts, so
+// there is no Trending.
 //
 // Shows you follow are kept with jtplay's own favorites ("Add to favorites"
 // in the options menu, on any folder), so there is no list of feeds to edit
@@ -15,19 +32,99 @@
 //
 // Search (options menu) asks Apple for shows in the whole Podcasts
 // catalogue, not just the chart, and lists them like the chart does, so any
-// show can be opened and added to the favorites. It is the same from
-// anywhere in the tree. Narrowing what is listed, like the episodes of a
-// show, is the app's own Filter.
+// show can be opened and added to the favorites. It searches the store of
+// the country it is asked from (inside a country's chart or one of its
+// shows), the US store from anywhere else. Narrowing what is
+// listed, like the episodes of a show, is the app's own Filter.
 //
 // Episodes are long enough to count as audiobooks for the app, so they
 // remember where they were stopped, show up under Continue watching and
 // get a tick when finished, like videos do.
 
-// Which country's chart is shown (two-letter store code).
-const COUNTRY = "us";
-// How many shows to ask the chart for, largest first. Apple refuses a size it
-// does not serve; the next smaller one is then tried.
-const CHART_SIZES = [200, 100, 50];
+// The store a show or a search is in when nothing says otherwise.
+const DEFAULT_COUNTRY = "us";
+// Shows in a country's chart.
+const CHART_SIZE = 50;
+
+// Where Apple Podcasts is available (support.apple.com/HT5085), as [store
+// code, name], by name. QuickJS has no Intl to name a code, hence the names.
+const COUNTRIES = [
+    ["af", "Afghanistan"], ["al", "Albania"], ["dz", "Algeria"],
+    ["ao", "Angola"], ["ai", "Anguilla"], ["ag", "Antigua and Barbuda"],
+    ["ar", "Argentina"], ["am", "Armenia"], ["au", "Australia"],
+    ["at", "Austria"], ["az", "Azerbaijan"], ["bs", "Bahamas"],
+    ["bh", "Bahrain"], ["bb", "Barbados"], ["by", "Belarus"],
+    ["be", "Belgium"], ["bz", "Belize"], ["bj", "Benin"], ["bm", "Bermuda"],
+    ["bt", "Bhutan"], ["bo", "Bolivia"], ["ba", "Bosnia and Herzegovina"],
+    ["bw", "Botswana"], ["br", "Brazil"], ["vg", "British Virgin Islands"],
+    ["bn", "Brunei"], ["bg", "Bulgaria"], ["bf", "Burkina Faso"],
+    ["kh", "Cambodia"], ["cm", "Cameroon"], ["ca", "Canada"],
+    ["cv", "Cape Verde"], ["ky", "Cayman Islands"], ["td", "Chad"],
+    ["cl", "Chile"], ["cn", "China mainland"], ["co", "Colombia"],
+    ["cd", "Congo, Democratic Republic of the"],
+    ["cg", "Congo, Republic of the"], ["cr", "Costa Rica"],
+    ["ci", "Côte d'Ivoire"], ["hr", "Croatia"], ["cy", "Cyprus"],
+    ["cz", "Czechia"], ["dk", "Denmark"], ["dm", "Dominica"],
+    ["do", "Dominican Republic"], ["ec", "Ecuador"], ["eg", "Egypt"],
+    ["sv", "El Salvador"], ["ee", "Estonia"], ["sz", "Eswatini"],
+    ["fj", "Fiji"], ["fi", "Finland"], ["fr", "France"], ["ga", "Gabon"],
+    ["gm", "Gambia"], ["ge", "Georgia"], ["de", "Germany"], ["gh", "Ghana"],
+    ["gr", "Greece"], ["gd", "Grenada"], ["gt", "Guatemala"],
+    ["gw", "Guinea-Bissau"], ["gy", "Guyana"], ["hn", "Honduras"],
+    ["hk", "Hong Kong"], ["hu", "Hungary"], ["is", "Iceland"],
+    ["in", "India"], ["id", "Indonesia"], ["iq", "Iraq"], ["ie", "Ireland"],
+    ["il", "Israel"], ["it", "Italy"], ["jm", "Jamaica"], ["jp", "Japan"],
+    ["jo", "Jordan"], ["kz", "Kazakhstan"], ["ke", "Kenya"],
+    ["xk", "Kosovo"], ["kw", "Kuwait"], ["kg", "Kyrgyzstan"], ["la", "Laos"],
+    ["lv", "Latvia"], ["lb", "Lebanon"], ["lr", "Liberia"], ["ly", "Libya"],
+    ["lt", "Lithuania"], ["lu", "Luxembourg"], ["mo", "Macao"],
+    ["mg", "Madagascar"], ["mw", "Malawi"], ["my", "Malaysia"],
+    ["mv", "Maldives"], ["ml", "Mali"], ["mt", "Malta"],
+    ["mr", "Mauritania"], ["mu", "Mauritius"], ["mx", "Mexico"],
+    ["fm", "Micronesia"], ["md", "Moldova"], ["mn", "Mongolia"],
+    ["me", "Montenegro"], ["ms", "Montserrat"], ["ma", "Morocco"],
+    ["mz", "Mozambique"], ["mm", "Myanmar"], ["na", "Namibia"],
+    ["nr", "Nauru"], ["np", "Nepal"], ["nl", "Netherlands"],
+    ["nz", "New Zealand"], ["ni", "Nicaragua"], ["ne", "Niger"],
+    ["ng", "Nigeria"], ["mk", "North Macedonia"], ["no", "Norway"],
+    ["om", "Oman"], ["pk", "Pakistan"], ["pw", "Palau"], ["pa", "Panama"],
+    ["pg", "Papua New Guinea"], ["py", "Paraguay"], ["pe", "Peru"],
+    ["ph", "Philippines"], ["pl", "Poland"], ["pt", "Portugal"],
+    ["qa", "Qatar"], ["ro", "Romania"], ["ru", "Russia"], ["rw", "Rwanda"],
+    ["st", "São Tomé and Príncipe"], ["sa", "Saudi Arabia"],
+    ["sn", "Senegal"], ["rs", "Serbia"], ["sc", "Seychelles"],
+    ["sl", "Sierra Leone"], ["sg", "Singapore"], ["sk", "Slovakia"],
+    ["si", "Slovenia"], ["sb", "Solomon Islands"], ["za", "South Africa"],
+    ["kr", "South Korea"], ["es", "Spain"], ["lk", "Sri Lanka"],
+    ["kn", "St. Kitts and Nevis"], ["lc", "St. Lucia"],
+    ["vc", "St. Vincent and the Grenadines"], ["sr", "Suriname"],
+    ["se", "Sweden"], ["ch", "Switzerland"], ["tw", "Taiwan"],
+    ["tj", "Tajikistan"], ["tz", "Tanzania"], ["th", "Thailand"],
+    ["to", "Tonga"], ["tt", "Trinidad and Tobago"], ["tn", "Tunisia"],
+    ["tr", "Türkiye"], ["tm", "Turkmenistan"], ["tc", "Turks and Caicos"],
+    ["ug", "Uganda"], ["ua", "Ukraine"], ["ae", "United Arab Emirates"],
+    ["gb", "United Kingdom"], ["us", "United States"], ["uy", "Uruguay"],
+    ["uz", "Uzbekistan"], ["vu", "Vanuatu"], ["ve", "Venezuela"],
+    ["vn", "Vietnam"], ["ye", "Yemen"], ["zm", "Zambia"], ["zw", "Zimbabwe"]
+];
+
+// Apple's top-level podcast genres, as [genre id, name], by name. Each has a
+// chart of its own; the v2 chart feed has no genre filter, so these come
+// from the older store feed (see browseGenre).
+const GENRES = [
+    ["1301", "Arts"], ["1321", "Business"], ["1303", "Comedy"],
+    ["1304", "Education"], ["1483", "Fiction"], ["1511", "Government"],
+    ["1512", "Health & Fitness"], ["1487", "History"],
+    ["1305", "Kids & Family"], ["1502", "Leisure"], ["1310", "Music"],
+    ["1489", "News"], ["1314", "Religion & Spirituality"],
+    ["1533", "Science"], ["1324", "Society & Culture"], ["1545", "Sports"],
+    ["1318", "Technology"], ["1488", "True Crime"], ["1309", "TV & Film"]
+];
+
+function countryName(cc) {
+    const hit = COUNTRIES.find(c => c[0] === cc);
+    return hit ? hit[1] : cc.toUpperCase();
+}
 const MAX_EPISODES = 200;
 // Shows a search lists, at most (Apple's search serves up to 200).
 const SEARCH_LIMIT = 200;
@@ -234,65 +331,117 @@ function showFolder(id, name, description, image) {
     return { id: id, type: "folder", name: name, description: description || "", image: image || "" };
 }
 
-// The chart at the largest size Apple will serve.
-function fetchChart() {
-    let status = 0;
-    for (const size of CHART_SIZES) {
-	const res = http.get("https://rss.applemarketingtools.com/api/v2/" + COUNTRY +
-			     "/podcasts/top/" + size + "/podcasts.json", { timeout: 20 });
-	if (res.ok)
-	    return JSON.parse(res.body);
-	status = res.status;
-	console.warn("podcasts: chart of " + size + ": HTTP " + status);
-    }
-    throw new Error("HTTP " + status + " from the Apple Podcasts chart");
+function browseRoot() {
+    return [
+	showFolder("top", "Most popular",
+		   "Top " + CHART_SIZE + " shows in " + countryName(DEFAULT_COUNTRY)),
+	showFolder("countries", "By country",
+		   "Top " + CHART_SIZE + " shows of " + COUNTRIES.length + " countries"),
+	showFolder("genres", "By genre",
+		   "Top " + CHART_SIZE + " shows of " + GENRES.length + " genres")
+    ];
 }
 
-function browseTop() {
-    return cached("top", 60, () => {
-	const data = fetchChart();
-	const results = (data.feed && data.feed.results) || [];
-	if (!results.length)
-	    throw new Error("the Apple Podcasts chart came back empty");
-	return results.map((r, i) => showFolder(
-	    "apple:" + r.id,
-	    r.name || "(untitled show)",
-	    "#" + (i + 1) + (r.artistName ? "  ·  " + r.artistName : ""),
-	    // The chart only has small art; the same image comes larger by
-	    // asking for it.
-	    String(r.artworkUrl100 || "").replace(/\/\d+x\d+bb\./, "/600x600bb.")));
+function browseGenres() {
+    return GENRES.map(g => showFolder("genre:" + g[0], g[1], "Top " + CHART_SIZE + " shows"));
+}
+
+// The chart's small art comes larger by asking for it.
+function largeArt(url) {
+    return String(url || "").replace(/\/\d+x\d+bb\./, "/600x600bb.");
+}
+
+// A genre's chart, from the store feed (the v2 feed has no genre filter).
+// Its rows are { id: { attributes: { "im:id" } }, "im:name": { label },
+// "im:artist": { label }, "im:image": [{ label }, ...] } -- and a single row
+// rather than a list when the chart has only one.
+function browseGenre(genre) {
+    const cc = DEFAULT_COUNTRY;
+    return cached("genre:" + cc + ":" + genre, 60, () => {
+	const res = http.get("https://itunes.apple.com/" + cc + "/rss/toppodcasts/limit=" +
+			     CHART_SIZE + "/genre=" + encodeURIComponent(genre) + "/json",
+			     { timeout: 20 });
+	if (!res.ok)
+	    throw new Error("HTTP " + res.status + " from the Apple Podcasts genre chart");
+	const feed = JSON.parse(res.body).feed || {};
+	const rows = Array.isArray(feed.entry) ? feed.entry : (feed.entry ? [feed.entry] : []);
+	const label = (v) => (v && v.label) || "";
+	const out = [];
+	rows.forEach(r => {
+	    const id = r && r.id && r.id.attributes && r.id.attributes["im:id"];
+	    if (!id)
+		return;
+	    const images = r["im:image"] || [];
+	    const artist = label(r["im:artist"]);
+	    out.push(showFolder(
+		"apple:" + cc + ":" + id,
+		label(r["im:name"]) || "(untitled show)",
+		"#" + (out.length + 1) + (artist ? "  ·  " + artist : ""),
+		largeArt(label(images[images.length - 1]))));
+	});
+	if (!out.length)
+	    throw new Error("the chart for this genre came back empty");
+	return out;
     });
 }
 
-// Shows matching 'query' in all of Apple Podcasts, as the chart lists them.
-// Not cached: the app keeps the results it is showing, and a refresh should
-// ask again.
-function searchShows(query) {
+function browseCountries() {
+    return COUNTRIES.map(c => showFolder("chart:" + c[0], c[1], "Top " + CHART_SIZE + " shows"));
+}
+
+// A country's chart. Apple has none for some of the smaller stores.
+function browseChart(cc) {
+    return cached("chart:" + cc, 60, () => {
+	const res = http.get("https://rss.applemarketingtools.com/api/v2/" + cc +
+			     "/podcasts/top/" + CHART_SIZE + "/podcasts.json", { timeout: 20 });
+	if (!res.ok) {
+	    console.warn("podcasts: chart of " + cc + ": HTTP " + res.status);
+	    throw new Error(res.status === 404 || res.status === 500
+			    ? "Apple has no podcast chart for " + countryName(cc)
+			    : "HTTP " + res.status + " from the Apple Podcasts chart");
+	}
+	const data = JSON.parse(res.body);
+	const results = (data.feed && data.feed.results) || [];
+	if (!results.length)
+	    throw new Error("the chart for " + countryName(cc) + " came back empty");
+	return results.map((r, i) => showFolder(
+	    "apple:" + cc + ":" + r.id,
+	    r.name || "(untitled show)",
+	    "#" + (i + 1) + (r.artistName ? "  ·  " + r.artistName : ""),
+	    largeArt(r.artworkUrl100)));
+    });
+}
+
+// Shows matching 'query' in all of Apple Podcasts in country <cc>'s store,
+// as the chart lists them. Not cached: the app keeps the results it is
+// showing, and a refresh should ask again.
+function searchShows(query, cc) {
     const data = getJson("https://itunes.apple.com/search?media=podcast&entity=podcast" +
-			 "&country=" + COUNTRY + "&limit=" + SEARCH_LIMIT +
+			 "&country=" + cc + "&limit=" + SEARCH_LIMIT +
 			 "&term=" + encodeURIComponent(query));
     return (data.results || [])
 	.filter(r => r.collectionId)
 	.map(r => showFolder(
-	    "apple:" + r.collectionId,
+	    "apple:" + cc + ":" + r.collectionId,
 	    r.collectionName || r.trackName || "(untitled show)",
 	    [r.artistName, r.primaryGenreName].filter(s => s).join("  ·  "),
 	    String(r.artworkUrl600 || r.artworkUrl100 || "")));
 }
 
-function feedOfApple(id) {
-    return cached("apple:" + id, 24 * 60, () => {
-	const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id));
+function feedOfApple(cc, id) {
+    return cached("apple:" + cc + ":" + id, 24 * 60, () => {
+	const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id) +
+			     "&country=" + cc);
 	const hit = (data.results || []).find(r => r.feedUrl);
 	return hit ? hit.feedUrl : "";
     });
 }
 
 // Apple's own episode list for a show, for when its feed is unusable.
-function appleEpisodes(id) {
-    return cached("apple-episodes:" + id, 15, () => {
+function appleEpisodes(cc, id) {
+    return cached("apple-episodes:" + cc + ":" + id, 15, () => {
 	const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id) +
-			     "&entity=podcastEpisode&limit=" + MAX_EPISODES);
+			     "&country=" + cc + "&entity=podcastEpisode&limit=" + MAX_EPISODES);
 	return (data.results || [])
 	    .filter(r => r.wrapperType === "podcastEpisode" && r.episodeUrl)
 	    .map(r => ({
@@ -308,9 +457,27 @@ function appleEpisodes(id) {
     });
 }
 
-function browseApple(id) {
+// "apple:<cc>:<id>", or "apple:<id>" for a show in the default store (what
+// earlier versions made): [cc, id].
+function parseApple(rest) {
+    const colon = rest.indexOf(":");
+    return colon < 0 ? [DEFAULT_COUNTRY, rest]
+		     : [rest.slice(0, colon), rest.slice(colon + 1)];
+}
+
+// The country a folder belongs to, for searching from it.
+function countryOf(folderId) {
+    const id = String(folderId || "");
+    if (id.startsWith("chart:"))
+	return id.slice(6);
+    if (id.startsWith("apple:"))
+	return parseApple(id.slice(6))[0];
+    return DEFAULT_COUNTRY;
+}
+
+function browseApple(cc, id) {
     let reason = "this show has no public feed";
-    const url = feedOfApple(id);
+    const url = feedOfApple(cc, id);
     if (url) {
 	try {
 	    return readFeed(url).episodes;
@@ -319,7 +486,7 @@ function browseApple(id) {
 	    console.warn("podcasts: " + url + ": " + reason + "; trying Apple's episode list");
 	}
     }
-    const episodes = appleEpisodes(id);
+    const episodes = appleEpisodes(cc, id);
     if (!episodes.length)
 	throw new Error(reason);
     return episodes;
@@ -330,21 +497,32 @@ return {
     discover() {
 	return [{
 	    name: "Podcasts",
-	    detail: "The Apple Podcasts chart",
+	    detail: "Apple Podcasts charts by country and genre",
 	    icon: "🎙",
 	    root: "/",
-	    // The folder on screen does not matter: shows are searched for in
-	    // all of Apple Podcasts.
-	    search(query) {
-		return searchShows(query);
+	    // In the store of the country of the folder on screen.
+	    search(query, folderId) {
+		return searchShows(query, countryOf(folderId));
 	    },
 	    browse(id) {
-		if (id === "/" || id === "top")
-		    return browseTop();
+		if (id === "/")
+		    return browseRoot();
+		if (id === "top")
+		    return browseChart(DEFAULT_COUNTRY);
+		if (id === "countries")
+		    return browseCountries();
+		if (id === "genres")
+		    return browseGenres();
+		if (id.startsWith("chart:"))
+		    return browseChart(id.slice(6));
+		if (id.startsWith("genre:"))
+		    return browseGenre(id.slice(6));
 		if (id.startsWith("feed:"))
 		    return readFeed(id.slice(5)).episodes;
-		if (id.startsWith("apple:"))
-		    return browseApple(id.slice(6));
+		if (id.startsWith("apple:")) {
+		    const show = parseApple(id.slice(6));
+		    return browseApple(show[0], show[1]);
+		}
 		throw new Error("unknown folder " + id);
 	    }
 	}];
