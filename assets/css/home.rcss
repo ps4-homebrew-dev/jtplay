@@ -155,8 +155,8 @@
 	overflow: hidden;
 }
 
-/* A place (a group, a source, Settings), when there is no card to show:
- * its icon, name and what it is, in the banner's space. */
+/* A place with nothing else to show (an empty Home, a group with no
+ * sources): its icon and what it says about itself, in the banner's space. */
 #hero {
 	box-sizing: border-box;
 	display: flex;
@@ -208,15 +208,34 @@
 	color: #8593ab;
 }
 
-/* On a group's page the banner gives way to the grid of its sources;
- * the rows have that much more room, and so does the space after the last
- * (for it to get to the top too, rather than leave the one above it cut). */
-body.compact #feature,
+/* On a group's page there is no banner: the tab says where we are, and
+ * the grid of its sources starts right under it. The rows have that much
+ * more room, and so does the space after the last (for it to get to the
+ * top too, rather than leave the one above it cut). A group with no
+ * sources says so where the grid would be. */
+body.compact #feature {
+	display: none;
+}
 body.compact #hero {
-	height: 300px;
+	height: auto;
+	padding: 48px 0px;
+}
+body.compact .hero-icon {
+	width: 112px;
+	height: 112px;
+	margin-right: 32px;
+	font-size: 60px;
+	line-height: 112px;
+	border-radius: 22px;
+}
+body.compact .hero-title {
+	font-size: 44px;
+}
+body.compact #shelves {
+	padding-top: 12px;
 }
 body.compact .shelves-end {
-	height: 270px;
+	height: 560px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -339,6 +358,17 @@ body.compact .shelves-end {
 	color: #5a6478;
 }
 
+/* A group's search under way, or what went wrong with the last one. */
+.shelf-status {
+	flex: 1;
+	margin-left: 24px;
+	font-size: 20px;
+	color: #8593ab;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* The row of cards scrolls sideways under program control; the padding
  * leaves room for the focused card to grow without being clipped (it
  * grows 10px each way, its border and glow a little more), and the
@@ -403,3 +433,107 @@ body.compact .shelves-end {
 }
 .card.selected .card-title { color: #ffffff; }
 .card.selected .card-sub { color: #aab6cc; }
+
+/* ------------------------------------------------------------------ */
+/* Settings                                                           */
+/* ------------------------------------------------------------------ */
+
+/* The page under the Settings tab: a column of settings, not stretched
+ * across the screen (a label at one edge and its value at the other are
+ * hard to pair from the couch), and beside it what the focused one does. */
+#settings {
+	display: flex;
+	flex-direction: row;
+	flex: 1;
+	overflow: hidden;
+	padding-top: 12px;
+}
+
+#settings-list {
+	flex: 0 0 auto;
+	width: 920px;
+	margin-left: -24px;
+	padding-left: 24px;
+	overflow-y: auto;
+}
+#settings-list scrollbarvertical { width: 0px; }
+
+/* Room after the last row, for it to scroll into view above the floor. */
+.settings-end {
+	height: 48px;
+}
+
+.setting-section {
+	margin: 28px 0px 12px 4px;
+	font-size: 20px;
+	font-weight: bold;
+	letter-spacing: 3px;
+	text-transform: uppercase;
+	color: #5a6478;
+}
+.setting-item:first-child .setting-section {
+	margin-top: 0px;
+}
+#settings.active .setting-section {
+	color: #8593ab;
+}
+
+.setting-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 72px;
+	margin: 0px 0px 6px -24px;
+	padding: 0px 24px;
+	border-radius: 10px;
+	background-color: #ffffff08;
+}
+
+.setting-label {
+	flex: 1;
+	font-size: 28px;
+	color: #c5cee0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.setting-value,
+.setting-count {
+	max-width: 360px;
+	font-size: 25px;
+	color: #8593ab;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Focused: the solid accent, as everywhere. */
+.setting-row.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.setting-row.selected .setting-label { color: #06231d; font-weight: bold; }
+.setting-row.selected .setting-value,
+.setting-row.selected .setting-count { color: #0d3d33; }
+
+/* What the focused setting does, in the room to the right. */
+#setting-about {
+	flex: 0 1 640px;
+	margin-left: 72px;
+	padding: 40px 0px 0px 40px;
+	border-left: 2px #ffffff14;
+}
+
+.about-title {
+	font-size: 34px;
+	font-weight: bold;
+	color: #ffffff;
+}
+
+.about-text {
+	margin-top: 16px;
+	font-size: 26px;
+	line-height: 38px;
+	color: #aab6cc;
+}

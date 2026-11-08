@@ -27,7 +27,7 @@
 			<div id="topbar">
 				<!-- Home: the places, as tabs (src/app_home.cpp); always these five,
 				     a group's sources being the first rows below. -->
-				<div id="tabs" data-if="view == 'home'" data-class-away="home_shelves">
+				<div id="tabs" data-if="view == 'home'" data-class-away="home_shelves || home_settings">
 					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail">
 						<span class="tab-icon">{{r.icon}}</span>
 						<span class="tab-label">{{r.label}}</span>
@@ -86,7 +86,9 @@
 						</div>
 						<div class="feat-desc" data-if="feat_desc != ''">{{feat_desc}}</div>
 					</div>
-					<!-- ...or the place the tabs are on, when there is no card to show. -->
+					<!-- ...or, when there is nothing else to show, what the place is:
+					     Home before the library has anything, a group with no
+					     sources (being looked for, or none found). -->
 					<div id="hero" data-if="feat_title == '' && hero_title != ''">
 						<div class="hero-icon">{{hero_icon}}</div>
 						<div class="hero-text">
@@ -96,7 +98,7 @@
 						</div>
 					</div>
 
-					<div id="shelves" data-class-active="home_shelves">
+					<div id="shelves" data-if="!settings_page" data-class-active="home_shelves">
 						<div class="shelf" data-for="sh, si : shelves"
 						     data-class-current="si == sel_shelf">
 							<!-- (Bindings to sh go on what is inside: on the repeated
@@ -107,6 +109,7 @@
 								<div class="shelf-head" data-if="sh.title != ''">
 									<span class="shelf-title">{{sh.title}}</span>
 									<span class="shelf-count" data-if="sh.count > 0">{{sh.count}}</span>
+									<span class="shelf-status" data-if="sh.sources && group_status != ''">{{group_status}}</span>
 								</div>
 								<div class="cards" data-attr-id="'cards-' + si">
 									<div class="card" data-for="c, ci : sh.cards"
@@ -147,6 +150,29 @@
 							</div>
 						</div>
 						<div class="shelves-end"/>
+					</div>
+
+					<!-- Settings: the page under its tab (src/app_home.cpp). Down from
+					     the tab into the list; left / right change the focused one,
+					     select steps it on (or runs an action); what it does is
+					     beside the list. -->
+					<div id="settings" data-if="settings_page" data-class-active="home_settings">
+						<div id="settings-list">
+							<div class="setting-item" data-for="st, sti : settings">
+								<div class="setting-section" data-if="st.section != ''">{{st.section}}</div>
+								<div class="setting-row" data-attr-id="'setting-' + sti"
+								     data-class-selected="home_settings && sti == sel_setting">
+									<span class="setting-label">{{st.label}}</span>
+									<span class="setting-value" data-if="!st.action">‹  {{st.value}}  ›</span>
+									<span class="setting-count" data-if="st.action && st.value != ''">{{st.value}}</span>
+								</div>
+							</div>
+							<div class="settings-end"/>
+						</div>
+						<div id="setting-about" data-if="home_settings && setting_title != ''">
+							<div class="about-title">{{setting_title}}</div>
+							<div class="about-text">{{setting_about}}</div>
+						</div>
 					</div>
 				</div>
 			</div>

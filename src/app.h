@@ -138,6 +138,23 @@ private:
     std::function<std::string()> value;
     std::function<void(int)> change;
   };
+  // A row of the Settings page: a setting (left / right change it, select
+  // steps it on) or an action (select runs it; 'value' is then what it
+  // would act on, such as how many, and may be empty).
+  struct SettingRow {
+    Rml::String section;  // a heading above the first row of a section
+    Rml::String label;
+    Rml::String value;
+    bool action = false;
+  };
+  struct SettingItem {
+    std::string section;
+    std::string label;
+    std::string about;
+    std::function<std::string()> value;
+    std::function<void(int)> change; // -1 / +1 left / right, 0 select
+    bool action = false;
+  };
 
   bool SetupDataModel(Rml::Context* context, std::string& error);
 
@@ -235,7 +252,13 @@ private:
   void ActivateCard();
   void OpenCard(const browse::Entry& entry, const browse::SourcePtr& shelf_source);
   void HandleKeyHome(Rml::Event& event, int key);
-  void OpenSettings();                // the settings menu, from the rail
+  // Settings: the page under the Settings tab, a list of what can be set
+  // (see BuildSettings), down from the tab as rows are anywhere else.
+  void BuildSettings();
+  void RebuildSettingRows();          // values -> the page
+  void EnterSettings();               // focus from the tab into the list
+  void HandleKeySettings(Rml::Event& event, int key);
+  void ConfirmForgetContinue();       // asks, then empties Continue watching
   void ApplyLanguages();              // preferred languages -> player
   const browse::Entry* SelectedCard() const;
   // The card the banner shows: the focused one, or with the focus on the
@@ -588,6 +611,15 @@ private:
   int sel_shelf_ = 0;
   int sel_card_ = 0;
   bool bind_home_shelves_ = false;     // focus is on the shelves
+  // Settings: the tab is the place (its page shows), and the focus is down
+  // in its list.
+  bool bind_settings_page_ = false;
+  bool bind_home_settings_ = false;
+  std::vector<SettingItem> setting_items_;
+  std::vector<SettingRow> setting_rows_;
+  int sel_setting_ = 0;
+  Rml::String bind_setting_title_;    // the focused one, beside the list
+  Rml::String bind_setting_about_;
   Rml::String bind_hero_icon_;
   Rml::String bind_hero_title_;
   Rml::String bind_hero_detail_;
@@ -600,18 +632,21 @@ private:
   Rml::String bind_feat_desc_;
   Rml::String bind_feat_progress_ = "0%"; // never empty, see EntryRow
   bool bind_feat_live_ = false;  // the banner shows what plays: live time
-  // On a group's page: a shorter banner, so that more rows of its sources
-  // are in view.
+  // On a group's page: no banner, so that the grid of its sources starts
+  // right under the tabs (the tab already says where we are).
   bool bind_home_compact_ = false;
+  // On a group's page with sources: a search under way, or what went wrong
+  // with the last one, beside the count in the head of the grid.
+  Rml::String bind_group_status_;
   std::vector<RailItem> rail_;
   // Per rail group (indexed by browse::Source::Group): searched at least
-  // once, a search under way and what to do when it ends, and how the
-  // last one went ("3 sources found", errors).
+  // once, a search under way and what to do when it ends, and what the
+  // providers had to say about the last one ("" when all went well).
   struct GroupScan {
     bool scanned = false;
     bool running = false;
     std::vector<std::function<void()>> waiting;
-    Rml::String status;
+    Rml::String errors;
   };
   GroupScan scans_[3];
   std::vector<Shelf> shelves_;
@@ -715,5 +750,6 @@ private:
   double info_deadline_ = 0.0;      // watch info bar auto-hide
   bool scroll_entries_pending_ = false;
   bool scroll_menu_pending_ = false;
+  bool scroll_settings_pending_ = false;
   bool scroll_sources_pending_ = false;
 };

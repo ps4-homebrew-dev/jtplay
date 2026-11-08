@@ -33,10 +33,12 @@ there are:
 - **Plugins**: one source per JavaScript plugin source.
 - **Settings**: playback, languages and the screensaver.
 
-Left and right move along the tabs. On a group the banner is lower, and
-the rows begin with the group's sources: a grid of tiles, four to a row
-and as many rows as it takes, headed by how many there are (fifty
-plugins are thirteen rows). Up and down move through it as through any
+Left and right move along the tabs. A group has no banner: right under
+the tabs, the rows begin with the group's sources, a grid of tiles, four
+to a row and as many rows as it takes, headed by how many there are
+(fifty plugins are thirteen rows) and by a search under way or what went
+wrong with the last one. A group with no sources says so where the grid
+would be. Up and down move through it as through any
 rows, keeping the column; select on a tile opens that source. After the
 sources come the group's own Continue watching and Favorites rows.
 Only the local drives are looked for at start-up: network servers and
@@ -45,7 +47,7 @@ searches the group again. A card from a group not searched yet searches
 it first, then opens.
 
 Down moves from the tabs into the rows, and up from the first row back
-to the tabs. The banner shows the card in focus, large, over its artwork
+to the tabs. On Home, the banner shows the card in focus, large, over its artwork
 across the top of the screen -- where it is from, what is left of it, its
 description -- and follows the focus along the rows; the focused row
 sits right under it. Whatever a card has no data for is left out. Select
@@ -182,13 +184,17 @@ skipped.
 
 ## Settings
 
-Settings, the last of the home tabs, has whether the next episode plays by itself,
+Settings, the last of the home tabs, lists the settings right under the
+tab: down from the tab into the list, left and right change the one in
+focus (select steps it on), and what it does is shown beside the list.
+They are grouped as playback, screen, library and diagnostics: whether the
+next episode plays by itself,
 **Show input** (every key and button as it arrives, in a corner of the
 screen and the log, also those nothing reacts to: for finding out what a
 TV remote sends; `JTPLAY_INPUT_LOG=1` turns it on from the start),
 the preferred audio and subtitle language (a matching track is picked when
 a file opens), the screensaver delay, night mode and forgetting Continue
-watching. These and the playback choices
+watching (which asks first). These and the playback choices
 above (repeat, shuffle, night mode, picture, audio delay, subtitle size)
 are kept in `settings.ini` in the cache directory.
 

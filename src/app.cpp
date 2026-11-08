@@ -341,6 +341,13 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("value", &MenuRow::value);
   }
   ctor.RegisterArray<std::vector<MenuRow>>();
+  if (auto row = ctor.RegisterStruct<SettingRow>()) {
+    row.RegisterMember("section", &SettingRow::section);
+    row.RegisterMember("label", &SettingRow::label);
+    row.RegisterMember("value", &SettingRow::value);
+    row.RegisterMember("action", &SettingRow::action);
+  }
+  ctor.RegisterArray<std::vector<SettingRow>>();
   if (auto row = ctor.RegisterStruct<MarkRow>())
     row.RegisterMember("at", &MarkRow::at);
   ctor.RegisterArray<std::vector<MarkRow>>();
@@ -374,6 +381,13 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("feat_progress", &bind_feat_progress_);
   ctor.Bind("feat_live", &bind_feat_live_);
   ctor.Bind("home_compact", &bind_home_compact_);
+  ctor.Bind("group_status", &bind_group_status_);
+  ctor.Bind("settings_page", &bind_settings_page_);
+  ctor.Bind("home_settings", &bind_home_settings_);
+  ctor.Bind("settings", &setting_rows_);
+  ctor.Bind("sel_setting", &sel_setting_);
+  ctor.Bind("setting_title", &bind_setting_title_);
+  ctor.Bind("setting_about", &bind_setting_about_);
 
   ctor.Bind("entries", &entry_rows_);
   ctor.Bind("entry_count", &entry_count_);
@@ -557,6 +571,17 @@ void App::Update() {
   if (scroll_menu_pending_) {
     EnsureRowVisible("menu-rows", sel_menu_, kMenuRowPitch);
     scroll_menu_pending_ = false;
+  }
+  // The Settings page has headings between its rows, so it goes by the row
+  // itself rather than by a pitch.
+  if (scroll_settings_pending_) {
+    scroll_settings_pending_ = false;
+    const std::string id = "setting-" + std::to_string(sel_setting_);
+    if (Rml::Element* row = document_->GetElementById(id))
+      row->ScrollIntoView(Rml::ScrollIntoViewOptions(Rml::ScrollAlignment::Nearest,
+                                                     Rml::ScrollAlignment::Nearest,
+                                                     Rml::ScrollBehavior::Instant,
+                                                     Rml::ScrollParentage::Closest));
   }
   // Focusing a text field is what brings up the system keyboard. It waits
   // until the field is on screen: a data-if only hides its element
