@@ -98,9 +98,15 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
   if (const char* trace = std::getenv("JTPLAY_INPUT_LOG"); trace && *trace && *trace != '0')
     SetInputTrace(true);
   RebuildHome();
-  // Only the local drives up front: they are found at once. Network
-  // servers and plugins are searched for when the rail enters their group.
+  // The local drives and the plugins up front: both are found at once
+  // (a plugin's discover() only describes its sources; nothing is fetched
+  // until one is browsed). Network servers are searched for when the rail
+  // enters their group: that is seconds of listening for answers, and the
+  // searches share one worker, so a plugin search queued behind it would
+  // wait it out -- as it did when the tabs were moved through left to
+  // right, Local network coming before Plugins.
   StartDiscovery(browse::Source::Group::Local);
+  StartDiscovery(browse::Source::Group::Plugin);
   return true;
 }
 

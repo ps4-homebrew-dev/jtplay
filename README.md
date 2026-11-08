@@ -42,8 +42,8 @@ wrong with the last one. A group with no sources says so where the grid
 would be. Up and down move through it as through any
 rows, keeping the column; select on a tile opens that source. After the
 sources come the group's own Continue watching and Favorites rows.
-Only the local drives are looked for at start-up: network servers and
-plugins are searched for the first time their tab is reached, and square
+The local drives and the plugins are looked for at start-up; network
+servers are searched for the first time their tab is reached, and square
 searches the group again. A card from a group not searched yet searches
 it first, then opens.
 
