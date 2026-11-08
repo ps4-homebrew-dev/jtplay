@@ -439,6 +439,11 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	case SDLK_AUDIONEXT:    return Rml::Input::KI_MEDIA_NEXT_TRACK;
 	case SDLK_AUDIOPREV:    return Rml::Input::KI_MEDIA_PREV_TRACK;
 	case SDLK_AC_BACK:      return Rml::Input::KI_BACK;
+	// jtplay: the options button, F1, as a remote's options key (the PS4's
+	// SDL sends HDMI-CEC options / menu as Menu, context menu as
+	// Application) or a keyboard's menu key.
+	case SDLK_MENU:         return Rml::Input::KI_F1;
+	case SDLK_APPLICATION:  return Rml::Input::KI_F1;
 #endif
 	default: break;
 	}

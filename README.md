@@ -335,9 +335,11 @@ options button is the way into everything that is not on the d-pad.
 \* While something plays behind the menus.
 
 A media remote's (or keyboard's) play/pause, stop and previous/next keys
-work on playback wherever it is, and its back key is circle. What a TV
-remote connected over HDMI-CEC sends depends on the console; Settings >
-Show input shows it.
+work on playback wherever it is, and its back key is circle. Its options
+(or menu) key is options, as is a keyboard's menu key; and since not every
+remote has one, nor every TV passes it on, holding OK (Return) for a moment
+is options too. What a TV remote connected over HDMI-CEC sends depends on
+the console and the TV; Settings > Show input shows it.
 
 Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
 Ctrl+S searches the source.

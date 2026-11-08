@@ -42,6 +42,22 @@ Uint32 next_repeat = 0;
 // axis' direction stands for, or KI_UNKNOWN.
 std::map<std::pair<SDL_JoystickID, int>, KeyIdentifier> axis_keys;
 
+// How long OK is held to be the options button (as long as back is held to
+// stop: kHoldStopSec).
+constexpr Uint32 kOkHoldMs = 600;
+
+// The OK press held back (see HoldOk), and since when; or, once it has
+// been held long enough to be F1, the key whose release is still to come
+// and is to be dropped.
+bool ok_pending = false;
+SDL_Event ok_press;
+Uint32 ok_since = 0;
+SDL_Keycode ok_fired = SDLK_UNKNOWN;
+
+bool IsOk(SDL_Keycode sym) {
+  return sym == SDLK_RETURN || sym == SDLK_KP_ENTER;
+}
+
 KeyIdentifier ButtonKey(Uint8 button) {
   switch (button) {
   case SDL_CONTROLLER_BUTTON_A:             return Rml::Input::KI_RETURN;
@@ -186,6 +202,8 @@ void Shutdown() {
   while (!joysticks.empty())
     Close(nullptr, joysticks.begin()->first);
   axis_keys.clear();
+  ok_pending = false;
+  ok_fired = SDLK_UNKNOWN;
   SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 }
 
@@ -227,10 +245,62 @@ bool HandleEvent(Rml::Context* context, const SDL_Event& event) {
   }
 }
 
+Hold HoldOk(const SDL_Event& event, SDL_Event* press) {
+  switch (event.type) {
+  case SDL_KEYDOWN:
+    if (IsOk(event.key.keysym.sym)) {
+      if (event.key.repeat) // the keyboard's own repeats of a held key
+        return ok_pending || ok_fired == event.key.keysym.sym ? Hold::kSwallow : Hold::kPass;
+      // A new press. One still held back (its release lost, or the other
+      // Enter key) is dropped; so is an earlier long press' release.
+      ok_pending = true;
+      ok_press = event;
+      ok_since = SDL_GetTicks();
+      ok_fired = SDLK_UNKNOWN;
+      return Hold::kSwallow;
+    }
+    break;
+  case SDL_KEYUP:
+    if (ok_fired != SDLK_UNKNOWN && event.key.keysym.sym == ok_fired) {
+      ok_fired = SDLK_UNKNOWN; // F1 has been sent for it
+      return Hold::kSwallow;
+    }
+    if (ok_pending && event.key.keysym.sym == ok_press.key.keysym.sym) {
+      ok_pending = false; // let go in time: OK
+      *press = ok_press;
+      return Hold::kReplay;
+    }
+    return Hold::kPass;
+  default:
+    break;
+  }
+
+  // Something else pressed while OK is held back: OK, then that.
+  if (ok_pending &&
+      (event.type == SDL_KEYDOWN || event.type == SDL_CONTROLLERBUTTONDOWN ||
+       event.type == SDL_MOUSEBUTTONDOWN)) {
+    ok_pending = false;
+    *press = ok_press;
+    return Hold::kReplay;
+  }
+  return Hold::kPass;
+}
+
 void Update(Rml::Context* context) {
+  const Uint32 now = SDL_GetTicks();
+
+  // OK held long enough: the options button.
+  if (ok_pending && SDL_TICKS_PASSED(now, ok_since + kOkHoldMs)) {
+    ok_pending = false;
+    ok_fired = ok_press.key.keysym.sym;
+    if (trace)
+      trace("OK held: options (F1)", true);
+    context->ProcessKeyDown(Rml::Input::KI_F1, 0);
+    context->ProcessKeyUp(Rml::Input::KI_F1, 0);
+  }
+
   if (held_key == Rml::Input::KI_UNKNOWN)
     return;
-  const Uint32 now = SDL_GetTicks();
   if (!SDL_TICKS_PASSED(now, next_repeat))
     return;
   next_repeat = now + kRepeatIntervalMs;
