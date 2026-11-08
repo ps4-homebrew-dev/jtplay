@@ -400,6 +400,10 @@
 		<div id="menu-scrim" data-if="menu_open"/>
 		<div id="menu" data-if="menu_open" data-class-dialog="menu_dialog">
 			<div class="menu-title">{{menu_title}}</div>
+			<div class="dialog-meta" data-if="menu_dialog && menu_meta != ''">{{menu_meta}}</div>
+			<div class="dialog-progress" data-if="menu_dialog && menu_meta != ''">
+				<div class="dialog-played" data-style-width="menu_progress"/>
+			</div>
 			<div id="menu-rows">
 				<div class="menu-row" data-for="m : menu"
 				     data-class-selected="it_index == sel_menu">

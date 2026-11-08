@@ -378,9 +378,11 @@
 	align-items: center;
 	height: 72px;
 	margin: 0px 0px 10px 0px;
-	padding: 0px 24px;
+	padding: 0px 24px 0px 28px;
 	background-color: #151d2f;
-	border-left: 4px #4dd6b8;
+	/* The accent as an inset shadow: a border on one side of a rounded box
+	   tapers along its corners into a ragged tip. */
+	box-shadow: #4dd6b8 4px 0px 0px 0px inset;
 	border-radius: 10px;
 }
 

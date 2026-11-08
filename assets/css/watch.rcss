@@ -604,11 +604,12 @@ body.behind #shell {
 	align-items: center;
 	box-sizing: border-box;
 	width: 820px;
-	padding: 24px;
+	padding: 24px 24px 24px 30px;
 	background-color: #0a0e18eb;
-	border-left: 6px #4dd6b8;
+	/* The accent as an inset shadow: a border on one side of a rounded box
+	   tapers along its corners into a ragged tip. */
 	border-radius: 14px;
-	box-shadow: #000000a0 0px 20px 60px 0px;
+	box-shadow: #4dd6b8 6px 0px 0px 0px inset, #000000a0 0px 20px 60px 0px;
 	animation: 0.3s cubic-out upnext-in;
 }
 

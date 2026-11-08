@@ -901,6 +901,7 @@ void App::ConfirmForgetContinue() {
     }});
   menu_items_.push_back({"Cancel", nullptr, [](int) {}});
   Set("menu_title", bind_menu_title_, Rml::String("Forget Continue watching?"));
+  Set("menu_meta", bind_menu_meta_, Rml::String());
   Set("menu_dialog", bind_menu_dialog_, true);
   sel_menu_ = 1; // the safe one: a stray press of select changes nothing
   RebuildMenuRows();

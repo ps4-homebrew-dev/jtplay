@@ -424,6 +424,8 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("menu_open", &bind_menu_open_);
   ctor.Bind("menu_dialog", &bind_menu_dialog_);
   ctor.Bind("menu_title", &bind_menu_title_);
+  ctor.Bind("menu_meta", &bind_menu_meta_);
+  ctor.Bind("menu_progress", &bind_menu_progress_);
   ctor.Bind("menu", &menu_rows_);
   ctor.Bind("sel_menu", &sel_menu_);
 

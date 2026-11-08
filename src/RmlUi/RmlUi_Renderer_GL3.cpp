@@ -2072,8 +2072,16 @@ Rml::LayerHandle RenderInterface_GL3::RenderLayerStack::PushLayer()
 		// All framebuffers should share a single stencil buffer.
 		GLuint shared_depth_stencil = (fb_layers.empty() ? 0 : fb_layers.front().depth_stencil_buffer);
 
+		// jtplay: no more samples than the driver can do, or the framebuffer
+		// is incomplete and nothing is drawn at all.
+		static const int num_samples = [] {
+			GLint max_samples = 0;
+			glGetIntegerv(GL_MAX_SAMPLES, &max_samples);
+			return Rml::Math::Clamp(RMLUI_NUM_MSAA_SAMPLES, 0, int(max_samples));
+		}();
+
 		fb_layers.push_back(Gfx::FramebufferData{});
-		Gfx::CreateFramebuffer(fb_layers.back(), width, height, RMLUI_NUM_MSAA_SAMPLES, Gfx::FramebufferAttachment::DepthStencil,
+		Gfx::CreateFramebuffer(fb_layers.back(), width, height, num_samples, Gfx::FramebufferAttachment::DepthStencil,
 			shared_depth_stencil);
 	}
 

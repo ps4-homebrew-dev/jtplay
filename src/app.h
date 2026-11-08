@@ -600,6 +600,10 @@ private:
   bool bind_menu_open_ = false;
   bool bind_menu_dialog_ = false;  // centered dialog rather than side blade
   Rml::String bind_menu_title_;
+  // Under a dialog's title: "7:42 of 14:48 · 7:06 left" and how far that
+  // is, for the resume dialog; "" for none.
+  Rml::String bind_menu_meta_;
+  Rml::String bind_menu_progress_ = "0%"; // data-style-width; never empty
   std::vector<MenuRow> menu_rows_;
   int sel_menu_ = 0;
   std::vector<MenuItem> menu_items_;

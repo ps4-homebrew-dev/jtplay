@@ -45,6 +45,10 @@ add_executable(jtplay
 )
 
 target_compile_options(jtplay PRIVATE -Wall -Werror)
+# Antialiasing of the UI's edges (rounded corners, curves): the renderer's
+# default of 2 samples leaves them visibly stepped. Clamped to what the
+# driver supports (RmlUi_Renderer_GL3.cpp).
+target_compile_definitions(jtplay PRIVATE RMLUI_NUM_MSAA_SAMPLES=4)
 target_include_directories(jtplay PRIVATE ${QUICKJS_INCLUDE_DIR} src)
 
 target_link_libraries(jtplay PRIVATE

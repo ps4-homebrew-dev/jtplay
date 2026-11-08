@@ -721,6 +721,7 @@ void App::OpenMenu() {
 
 void App::CloseMenu() {
   Set("menu_open", bind_menu_open_, false);
+  Set("menu_meta", bind_menu_meta_, Rml::String());
   menu_items_.clear();
 }
 

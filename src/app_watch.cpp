@@ -143,6 +143,15 @@ void App::PlayEntry(const browse::Entry& entry) {
     menu_items_.push_back({"Play from beginning", nullptr,
       [this, entry](int) { Launch(entry, 0); }});
     Set("menu_title", bind_menu_title_, DisplayName(entry));
+    // Where it was left, of how long, when the length is known.
+    if (p.duration > at) {
+      Set("menu_meta", bind_menu_meta_,
+          Rml::String(FormatTime(at * 1000000) + " of " + FormatTime(p.duration * 1000000) +
+                      "  ·  " + FormatTime((p.duration - at) * 1000000) + " left"));
+      Set("menu_progress", bind_menu_progress_, Percent(at, p.duration));
+    } else {
+      Set("menu_meta", bind_menu_meta_, Rml::String());
+    }
     Set("menu_dialog", bind_menu_dialog_, true);
     sel_menu_ = 0;
     RebuildMenuRows();

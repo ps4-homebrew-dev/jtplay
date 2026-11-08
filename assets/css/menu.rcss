@@ -95,20 +95,24 @@
 /* Dialog                                                             */
 /* ------------------------------------------------------------------ */
 
+/* In the now-playing card's style: glass over what it interrupts, one
+ * border all around. (A border on one side of a rounded box tapers along
+ * its corners into a ragged sliver.) */
 #menu.dialog {
 	left: 50%;
 	top: 50%;
 	bottom: auto;
 	width: 760px;
 	margin-left: -380px;
-	margin-top: -200px;
-	padding: 44px 48px 36px 48px;
+	margin-top: -210px;
+	padding: 40px 48px 32px 48px;
 	border-right-width: 0px;
-	border-top: 4px #4dd6b8;
-	border-radius: 18px;
+	border: 1px #ffffff1f;
+	border-radius: 24px;
 	decorator: none;
-	background-color: #151d2f;
-	box-shadow: #000000c0 0px 30px 80px 0px;
+	background-color: #10172acc;
+	backdrop-filter: blur(28px);
+	box-shadow: #000000a0 0px 24px 70px 0px;
 	animation: 0.2s cubic-out dialog-in;
 }
 
@@ -125,6 +129,32 @@
 
 #menu.dialog .menu-row {
 	justify-content: center;
+	border-radius: 14px;
+}
+
+/* Resume: where it was left, as text and as a bar like the player's. */
+.dialog-meta {
+	margin: -18px 0px 0px 0px;
+	font-size: 22px;
+	color: #8593ab;
+	text-align: center;
+}
+
+.dialog-progress {
+	position: relative;
+	height: 6px;
+	margin: 22px 0px 30px 0px;
+	background-color: #ffffff1f;
+	border-radius: 3px;
+}
+
+.dialog-played {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	height: 6px;
+	background-color: #4dd6b8;
+	border-radius: 3px;
 }
 
 #menu.dialog .menu-label {
@@ -165,10 +195,11 @@
 	margin-top: -130px;
 	box-sizing: border-box;
 	padding: 44px 48px 48px 48px;
-	border-top: 4px #4dd6b8;
-	border-radius: 18px;
-	background-color: #151d2f;
-	box-shadow: #000000c0 0px 30px 80px 0px;
+	border: 1px #ffffff1f;
+	border-radius: 24px;
+	background-color: #10172acc;
+	backdrop-filter: blur(28px);
+	box-shadow: #000000a0 0px 24px 70px 0px;
 	animation: 0.2s cubic-out dialog-in;
 }
 
