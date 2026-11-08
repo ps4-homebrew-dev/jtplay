@@ -54,7 +54,7 @@
  * text and the tabs sit, and fading into the background above the rows. */
 body.home.featured #backdrop {
 	opacity: 1;
-	bottom: 280px;
+	bottom: 410px;
 }
 body.home.featured #backdrop-shade {
 	decorator: linear-gradient(90deg, #0b1020 0%, #0b1020e6 24%, #0b102080 50%, #0b102000 76%),

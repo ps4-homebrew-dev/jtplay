@@ -79,14 +79,16 @@
 /* ------------------------------------------------------------------ */
 
 /* The card in focus, large; its artwork is the backdrop (layout.rcss).
- * Anchored to the bottom of its space, so it sits on the rows whatever
- * it has to say. */
+ * As high as its fullest content (eyebrow, title, meta, progress, three
+ * lines of description) and no more, so nothing is left empty under the
+ * tabs; anchored to the bottom of that, so it sits on the rows whatever
+ * it has to say, and the rows stay put as the focus moves. */
 #feature {
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
 	justify-content: flex-end;
-	height: 470px;
+	height: 340px;
 	width: 1040px;
 	padding-bottom: 30px;
 }
@@ -156,25 +158,26 @@
 }
 
 /* A place with nothing else to show (an empty Home, a group with no
- * sources): its icon and what it says about itself, in the banner's space. */
+ * sources): its icon and what it says about itself, right under the tabs,
+ * where the rows would begin. */
 #hero {
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	height: 470px;
+	padding: 48px 0px;
 }
 
 .hero-icon {
-	width: 150px;
-	height: 150px;
-	margin-right: 40px;
-	font-size: 84px;
-	line-height: 150px;
+	width: 112px;
+	height: 112px;
+	margin-right: 32px;
+	font-size: 60px;
+	line-height: 112px;
 	text-align: center;
 	color: #4dd6b8;
 	background-color: #4dd6b81a;
-	border-radius: 28px;
+	border-radius: 22px;
 }
 
 .hero-text {
@@ -185,7 +188,7 @@
 }
 
 .hero-title {
-	font-size: 64px;
+	font-size: 44px;
 	font-weight: bold;
 	color: #ffffff;
 	white-space: nowrap;
@@ -215,21 +218,6 @@
  * sources says so where the grid would be. */
 body.compact #feature {
 	display: none;
-}
-body.compact #hero {
-	height: auto;
-	padding: 48px 0px;
-}
-body.compact .hero-icon {
-	width: 112px;
-	height: 112px;
-	margin-right: 32px;
-	font-size: 60px;
-	line-height: 112px;
-	border-radius: 22px;
-}
-body.compact .hero-title {
-	font-size: 44px;
 }
 body.compact #shelves {
 	padding-top: 12px;
@@ -331,7 +319,7 @@ body.compact .shelves-end {
 /* The rows scroll so that the focused one is at the top (src/app.cpp);
  * room after the last, so that it can get there too. */
 .shelves-end {
-	height: 100px;
+	height: 240px;
 }
 
 .shelf-head {
