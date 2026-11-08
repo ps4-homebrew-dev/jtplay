@@ -379,3 +379,14 @@ For the PS4, with the ps4-homebrew-dev SDK, the same CMakeLists.txt builds
     source $PS4_HOMEBREW_SDK/toolchain/orbis.sh
     cmake -S . -B build-ps4 -DCMAKE_TOOLCHAIN_FILE=$PS4_HOMEBREW_SDK/toolchain/orbis.cmake
     cmake --build build-ps4
+
+The package is a non-game application (param.sfo category `gdc`), which a
+PS5 treats as a media app: that is what gets the remote's play, pause,
+stop, previous / next and seek keys to jtplay there, as a game they stay
+with the system. Its cache directory, with the artwork, `settings.ini` and
+`library.xml`, is in the title's download data, `/download0` (512 MiB),
+which SDL2main sets up (it needs the SDL port's
+`0006-ps4-SDL2main-the-XDG-base-directories-in-download0` patch; without
+it, it is `common_temp`, which all homebrew shares). Versions built as a
+game kept it in `/temp0` instead, which a non-game cannot reach: favorites,
+resume points and settings start over.

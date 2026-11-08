@@ -73,10 +73,18 @@ if(ORBIS)
 
     file(COPY ${CMAKE_SYSROOT}/usr/etc/ca-bundle.crt DESTINATION ${CMAKE_CURRENT_SOURCE_DIR})
 
+    # A non-game application ("gdc"), which a PS5 running it as a PS4 app
+    # treats as a media app: only that gets the remote's media keys there.
+    # A non-game has no /temp0 (temporary data, games only), so it asks for
+    # download data instead, mounted at /download0, where SDL2main puts the
+    # XDG base directories (the cache, settings and library: see README).
+    # Its size is in MiB.
     orbis_add_pkg(jtplay
         TITLE jtplay
         TITLE_ID BREW04327
         CONTENT_ID IV0000-BREW04327_00-JTPLAY0000000000
+        CATEGORY gdc
+        DOWNLOAD_DATA_SIZE 512
         ASSETS sce_sys assets fonts plugins ca-bundle.crt
         MODULES libEGL.so.1 libGL.so.1 libgallium-${EGL_VERSION}.so libvulkan.so.1
     )
