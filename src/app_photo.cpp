@@ -206,6 +206,7 @@ void App::UpdatePhotos(double now) {
         const int back = 1 - bind_photo_front_;
         const char* art = back ? "photo_art1" : "photo_art0";
         const char* anim = back ? "photo_anim1" : "photo_anim0";
+        TrackTexture(path);
         // "contain": the whole picture, letterboxed, never cropped.
         Set(art, bind_photo_art_[back],
             Rml::String("image(\"" + path + "\" contain)"));

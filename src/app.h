@@ -21,6 +21,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <RmlUi/Core.h>
@@ -483,6 +484,12 @@ private:
   std::string ArtUri(const browse::Entry& entry) const;
   void UpdateBackdrop();          // fanart behind home/browse
   void RefreshImageBindings();     // re-resolve detail/now-playing artwork
+  // RmlUi keeps every image it has loaded as a texture until told to let
+  // it go, whether anything still shows it or not. Every path handed to
+  // the UI is noted here, and the ones nothing refers to any more are
+  // released (see app.cpp).
+  void TrackTexture(const std::string& path);
+  void ReleaseUnusedTextures(double now);
 
   // Data model bound state (main thread only).
   Rml::DataModelHandle model_;
@@ -729,6 +736,10 @@ private:
   std::set<std::string> image_inflight_;
   bool image_refresh_pending_ = false;
   bool art_scan_pending_ = false;     // UpdateVisibleArt() has work
+  // Image paths given to the UI that may be loaded as textures, with how
+  // many sweeps in a row found nothing referring to them.
+  std::unordered_map<std::string, int> textures_;
+  double textures_swept_at_ = 0.0;
   std::thread art_thread_;
   std::mutex art_mutex_;
   std::condition_variable art_cv_;

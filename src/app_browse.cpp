@@ -818,6 +818,16 @@ void App::UpdateVisibleArt() {
     first = std::max(0, first);
     last = std::min((int)level->entries.size(), last);
     bool changed = false;
+    // Rows well away from the selection give their artwork back, so a long
+    // scroll through a big library does not keep every cover it passed as
+    // a texture. Coming back finds them in the cache on disk.
+    const int keep = view_mode_ == ViewMode::Grid ? 4 * kGridColumns : 16;
+    for (int i = 0; i < (int)entry_rows_.size(); i++) {
+      if ((i < first - keep || i >= last + keep) && entry_rows_[i].art != "none") {
+        entry_rows_[i].art = "none";
+        changed = true;
+      }
+    }
     // Outwards from the selection, so it is asked for last (= fetched first).
     for (int i = last - 1; i >= first; i--) {
       EntryRow& row = entry_rows_[i];

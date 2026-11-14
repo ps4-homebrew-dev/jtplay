@@ -528,6 +528,7 @@ void App::Update() {
   UpdateScreensaver(now);
   UpdatePhotos(now);
   UpdateSleepTimer(now);
+  ReleaseUnusedTextures(now);
 
   if (image_refresh_pending_) {
     image_refresh_pending_ = false;
@@ -832,6 +833,7 @@ std::string App::ImagePathFor(const std::string& uri, bool thumb) {
     thumb ? artcache::LookupThumb(uri, path) : artcache::LookupScreen(uri, path);
   switch (status) {
   case artcache::Status::Ready:
+    TrackTexture(path);
     return path;
   case artcache::Status::Failed:
     return {};
@@ -856,6 +858,81 @@ std::string App::ImagePathFor(const std::string& uri, bool thumb) {
   }
   art_cv_.notify_one();
   return {};
+}
+
+// ---------------------------------------------------------------------------
+// Textures
+// ---------------------------------------------------------------------------
+//
+// RmlUi's texture database keeps an image loaded for as long as the
+// process runs: a decorator or <img> that stops using it does not free it.
+// Every cover scrolled past and every photo of a slideshow would stay in
+// video memory until the app ran out. So every path handed to the UI is
+// noted, and a sweep now and then releases the ones that no binding refers
+// to any more. Releasing one that is still drawn is harmless (RmlUi loads
+// it again on the next draw), but a path must be found unused on two
+// sweeps in a row first: a binding that was just changed may still be
+// drawn with its old image once before the data model catches up, and a
+// texture released then would be loaded again behind the sweep's back.
+
+namespace {
+
+constexpr double kTextureSweepSec = 1.0;
+
+// The path inside an image() decorator; "" for "none" and anything else.
+std::string DecoratorPath(const std::string& decorator) {
+  const std::string prefix = "image(\"";
+  if (decorator.compare(0, prefix.size(), prefix) != 0)
+    return {};
+  const size_t end = decorator.find('"', prefix.size());
+  return end == std::string::npos ? std::string()
+                                  : decorator.substr(prefix.size(), end - prefix.size());
+}
+
+} // namespace
+
+void App::TrackTexture(const std::string& path) {
+  if (!path.empty())
+    textures_[path] = 0;
+}
+
+void App::ReleaseUnusedTextures(double now) {
+  if (textures_.empty())
+    return;
+  if (now - textures_swept_at_ < kTextureSweepSec)
+    return;
+  textures_swept_at_ = now;
+
+  // Everything the UI can be showing right now.
+  std::set<std::string> live;
+  auto add = [&live](const std::string& path) {
+    if (!path.empty())
+      live.insert(path);
+  };
+  add(DecoratorPath(bind_backdrop_));
+  add(DecoratorPath(bind_detail_cover_));
+  add(bind_detail_image_);
+  add(bind_watch_image_);
+  add(DecoratorPath(bind_upnext_art_));
+  for (const Rml::String& art : bind_photo_art_)
+    add(DecoratorPath(art));
+  for (const EntryRow& row : entry_rows_)
+    add(DecoratorPath(row.art));
+  for (const ShelfRow& shelf : shelf_rows_)
+    for (const CardRow& card : shelf.cards)
+      add(DecoratorPath(card.art));
+
+  for (auto it = textures_.begin(); it != textures_.end();) {
+    if (live.count(it->first)) {
+      it->second = 0;
+      ++it;
+    } else if (++it->second >= 2) {
+      Rml::ReleaseTexture(it->first);
+      it = textures_.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 void App::ArtworkMain() {
