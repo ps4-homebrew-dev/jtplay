@@ -13,15 +13,16 @@
 //                                      browsing: reverse the order
 //   L1 / R1               PageUp/Down  page, previous/next item (repeats)
 //   L2 / R2               Home / End   first / last row
-//   options / start       F1           options menu
+//   options / start       Menu         options menu
 //   back / select         Escape       back; in full screen: the menus,
 //                                      playing on (not on a PS4: the
 //                                      system keeps SHARE)
 //
-// A remote's options key, and a keyboard's menu key, are F1 as well (see
-// RmlSDL::ConvertKey). Holding OK / Return is F1 too, for the remotes that
-// have no options key or whose TV does not pass it on over HDMI-CEC: see
-// HoldOk().
+// A remote's options and disc menu keys, and a keyboard's menu key and F10,
+// are options as well (see RmlSDL::ConvertKey). Holding OK / Return is
+// options too, for the remotes that have no options key or whose TV does
+// not pass it on over HDMI-CEC: see HoldOk(). (Not F1: that is what a
+// remote's subtitle key arrives as.)
 //
 // The PS4's SDL port turns the DualShock 4 into an SDL game controller, so
 // the same code serves the console and any pad SDL knows on a PC.
@@ -47,6 +48,11 @@ namespace gamepad {
 inline constexpr Rml::Input::KeyIdentifier kKeyRewind = Rml::Input::KI_BROWSER_BACK;
 inline constexpr Rml::Input::KeyIdentifier kKeyFastForward = Rml::Input::KI_BROWSER_FORWARD;
 
+// The options button, whatever it comes from: a pad's options / start, a
+// held OK, a remote's options, menu or disc menu key, a keyboard's menu key
+// or F10. RmlUi's name for the menu key.
+inline constexpr Rml::Input::KeyIdentifier kKeyOptions = Rml::Input::KI_APPS;
+
 // Opens the game controller subsystem and the pads already connected.
 // Call after SDL_Init(). Failure only means there will be no pads.
 void Initialize();
@@ -57,13 +63,13 @@ void Shutdown();
 bool HandleEvent(Rml::Context* context, const SDL_Event& event);
 
 // Once per frame, after the events: repeats the held direction, and turns
-// an OK held long enough into F1.
+// an OK held long enough into options (kKeyOptions).
 void Update(Rml::Context* context);
 
 // The long press of OK (Return or keypad Enter: a remote's OK arrives as
 // Return). Its press is held back until it is clear which it is: let go
-// within kOkHoldMs, it was OK after all; held that long, Update() sends F1
-// (the options button) and the press and its release go nowhere. Any other
+// within kOkHoldMs, it was OK after all; held that long, Update() sends
+// kKeyOptions (the options button) and the press and its release go nowhere. Any other
 // press while OK is held back also makes it OK, delivered first.
 //
 // Feed every event before handling it. What to do with it:

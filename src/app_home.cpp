@@ -26,6 +26,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "gamepad.h"
 #include "icons.h"
 
 using namespace appdetail;
@@ -654,7 +655,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
       StartDiscovery(group); // search the group again
       break;
     }
-    case Rml::Input::KI_F1:    OpenMenu(); break;
+    case gamepad::kKeyOptions: OpenMenu(); break;
     case Rml::Input::KI_RETURN:
     case Rml::Input::KI_NUMPADENTER:
       ActivateRail();
@@ -724,7 +725,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
   }
   case Rml::Input::KI_HOME:  select(sel_shelf_, 0); break;
   case Rml::Input::KI_END:   select(sel_shelf_, cards - 1); break;
-  case Rml::Input::KI_F1:    OpenMenu(); break;
+  case gamepad::kKeyOptions: OpenMenu(); break;
   case Rml::Input::KI_RETURN:
   case Rml::Input::KI_NUMPADENTER:
     ActivateCard();
@@ -948,7 +949,7 @@ void App::HandleKeySettings(Rml::Event& event, int key) {
   case Rml::Input::KI_ESCAPE:
     Set("home_settings", bind_home_settings_, false);
     break;
-  case Rml::Input::KI_F1:
+  case gamepad::kKeyOptions:
     OpenMenu(); // what plays, if anything
     break;
   default:

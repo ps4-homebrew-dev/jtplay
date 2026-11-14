@@ -88,6 +88,10 @@ public:
 		}
 
 		Rml::TextureHandle texture_handle = RenderInterface_GL3::GenerateTexture({pixels, pixels_byte_size}, texture_dimensions);
+		// jtplay (from tvhp): images from files (covers, fanart, photos) are
+		// often drawn far smaller than they are; font atlases and the like
+		// don't come this way.
+		GenerateMipmaps(texture_handle);
 
 		DestroySurface(surface);
 

@@ -550,16 +550,21 @@ void App::CycleAudioTrack(int direction) {
 }
 
 // Subtitles cycle through "off" and every track.
-void App::CycleSubtitleTrack(int direction) {
+// 'toast': say what it picked (a remote's subtitle key; the menu shows it).
+void App::CycleSubtitleTrack(int direction, bool toast) {
   std::vector<SubtitleTrackInfo> choices = player_->SubtitleTracks();
-  if (choices.empty())
+  if (choices.empty()) {
+    if (toast)
+      ShowToast("No subtitles");
     return;
+  }
   SubtitleTrackInfo off;
   off.stream_index = -1;
   off.label = "Off";
   choices.insert(choices.begin(), off);
   const size_t next = NextTrack(choices, player_->CurrentSubtitleStream(), direction);
-  player_->SelectSubtitleTrack(choices[next].stream_index);
+  if (player_->SelectSubtitleTrack(choices[next].stream_index) && toast)
+    ShowToast("Subtitles: " + choices[next].label);
 }
 
 void App::OpenWatchMenu() {
@@ -957,7 +962,7 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     SetFullscreen(false);
     break;
 
-  case Rml::Input::KI_F1:    // playback menu
+  case gamepad::kKeyOptions: // playback menu
     ShowWatchInfo(kWatchInfoSec);
     OpenWatchMenu();
     break;
@@ -1055,6 +1060,11 @@ bool App::HandleMediaKey(int key) {
   }
   case Rml::Input::KI_F2:    // a remote's audio key: the next audio track
     CycleAudioTrack(+1);
+    if (bind_fullscreen_)
+      ShowWatchInfo(kWatchInfoSec);
+    return true;
+  case Rml::Input::KI_F1:    // a remote's subtitle key: the next subtitle track
+    CycleSubtitleTrack(+1, true);
     if (bind_fullscreen_)
       ShowWatchInfo(kWatchInfoSec);
     return true;

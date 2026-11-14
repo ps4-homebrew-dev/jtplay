@@ -1303,6 +1303,16 @@ Rml::TextureHandle RenderInterface_GL3::GenerateTexture(Rml::Span<const Rml::byt
 	return (Rml::TextureHandle)texture_id;
 }
 
+void RenderInterface_GL3::GenerateMipmaps(Rml::TextureHandle texture_handle)
+{
+	if (!texture_handle)
+		return;
+	glBindTexture(GL_TEXTURE_2D, (GLuint)texture_handle);
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void RenderInterface_GL3::DrawFullscreenQuad()
 {
 	RenderGeometry(fullscreen_quad_geometry, {}, RenderInterface_GL3::TexturePostprocess);

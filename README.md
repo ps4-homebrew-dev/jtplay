@@ -324,7 +324,7 @@ options button is the way into everything that is not on the d-pad.
 | d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up)                   | previous / next      |
 | cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now           | slideshow on / off   |
 | circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | the menus, playing on; held: stop; up next: dismiss | close |
-| options (start)       | F1              | options for the card or tile | options menu                         | playback menu                      | photo menu           |
+| options (start)       | Menu, F10       | options for the card or tile | options menu                         | playback menu                      | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |
@@ -336,12 +336,12 @@ options button is the way into everything that is not on the d-pad.
 
 A media remote's (or keyboard's) play/pause, pause, stop, previous/next,
 rewind / fast forward (as left / right in full screen, 10 s steps behind the
-menus) and audio (the next audio track) keys work on playback wherever it
-is; its display key shows or hides the bar in full screen, and its back key
-is circle. Its options
-(or menu) key is options, as is a keyboard's menu key; and since not every
-remote has one, nor every TV passes it on, holding OK (Return) for a moment
-is options too. What a TV remote connected over HDMI-CEC sends depends on
+menus), audio (the next audio track) and subtitle (the next subtitle track,
+F1 on a keyboard) keys work on playback wherever it is; its display key
+shows or hides the bar in full screen, and its back key is circle. Its
+options (or menu) and disc menu keys are options, as are a keyboard's menu
+key and F10; and since not every remote has one, nor every TV passes it
+on, holding OK (Return) for a moment is options too. What a TV remote connected over HDMI-CEC sends depends on
 the console and the TV; Settings > Show input shows it.
 
 Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and

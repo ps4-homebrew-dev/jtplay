@@ -414,7 +414,12 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	case SDLK_F7:           return Rml::Input::KI_F7;
 	case SDLK_F8:           return Rml::Input::KI_F8;
 	case SDLK_F9:           return Rml::Input::KI_F9;
+#if SDL_MAJOR_VERSION == 2
+	// jtplay: a remote's disc menu key, and a keyboard's F10: options.
+	case SDLK_F10:          return gamepad::kKeyOptions;
+#else
 	case SDLK_F10:          return Rml::Input::KI_F10;
+#endif
 	case SDLK_F11:          return Rml::Input::KI_F11;
 	case SDLK_F12:          return Rml::Input::KI_F12;
 	case SDLK_F13:          return Rml::Input::KI_F13;
@@ -442,11 +447,12 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	case SDLK_AUDIONEXT:    return Rml::Input::KI_MEDIA_NEXT_TRACK;
 	case SDLK_AUDIOPREV:    return Rml::Input::KI_MEDIA_PREV_TRACK;
 	case SDLK_AC_BACK:      return Rml::Input::KI_BACK;
-	// jtplay: the options button, F1, as a remote's options key (the PS4's
-	// SDL sends HDMI-CEC options / menu as Menu, context menu as
-	// Application) or a keyboard's menu key.
-	case SDLK_MENU:         return Rml::Input::KI_F1;
-	case SDLK_APPLICATION:  return Rml::Input::KI_F1;
+	// jtplay: the options button (gamepad::kKeyOptions) as a remote's
+	// options key (the PS4's SDL sends HDMI-CEC options / menu as Menu,
+	// context menu as Application) or a keyboard's menu key. Its disc menu
+	// key, F10, is options too (see below).
+	case SDLK_MENU:         return gamepad::kKeyOptions;
+	case SDLK_APPLICATION:  return gamepad::kKeyOptions;
 	// jtplay: a remote's rewind and fast forward, which RmlUi has no keys
 	// for. (Its pause key is SDLK_PAUSE, above; its audio and display keys
 	// arrive as F2 and F4.)

@@ -15,6 +15,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "gamepad.h"
 #include "artcache.h"
 #include "icons.h"
 
@@ -319,7 +320,7 @@ void App::HandleKeyPhoto(Rml::Event& event, int key) {
   case Rml::Input::KI_T: // triangle: turn the picture
     RotatePhoto();
     break;
-  case Rml::Input::KI_F1:
+  case gamepad::kKeyOptions:
     OpenPhotoMenu();
     break;
   case Rml::Input::KI_BACK:

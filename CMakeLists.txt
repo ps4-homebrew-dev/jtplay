@@ -15,6 +15,7 @@ pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 pkg_check_modules(SDL2_IMAGE REQUIRED IMPORTED_TARGET SDL2_image)
 pkg_check_modules(TINYXML2 REQUIRED IMPORTED_TARGET tinyxml2)
 pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
+pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl)
 find_path(QUICKJS_INCLUDE_DIR NAMES quickjs.h PATH_SUFFIXES quickjs)
 find_library(QUICKJS_LIBRARY NAMES quickjs PATH_SUFFIXES quickjs)
 
@@ -60,6 +61,7 @@ target_link_libraries(jtplay PRIVATE
     PkgConfig::SDL2_IMAGE
     PkgConfig::TINYXML2
     PkgConfig::CURL
+    PkgConfig::OPENSSL
     Threads::Threads
     ${QUICKJS_LIBRARY}
     ${ORBIS_LIBRARIES}

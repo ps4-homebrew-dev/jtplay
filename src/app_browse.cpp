@@ -11,6 +11,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "gamepad.h"
 #include "browse/natural_sort.h"
 #include "icons.h"
 
@@ -438,7 +439,7 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
   case Rml::Input::KI_END:   MoveSelection(+entry_count_); break;
   case Rml::Input::KI_SPACE: CycleSortMode(+1); break;
   case Rml::Input::KI_T:     SetSort(sort_mode_, !sort_desc_); break;
-  case Rml::Input::KI_F1:    OpenMenu(); break;
+  case gamepad::kKeyOptions: OpenMenu(); break;
   case Rml::Input::KI_RETURN:
   case Rml::Input::KI_NUMPADENTER:
     ActivateSelection();
@@ -590,7 +591,7 @@ std::string App::EntryMeta(const browse::Entry& e) const {
 }
 
 // ---------------------------------------------------------------------------
-// Options menu (the options button, or F1)
+// Options menu (the options button: gamepad::kKeyOptions)
 // ---------------------------------------------------------------------------
 
 // The actions for one entry, Kodi's context menu style: shared by the
@@ -776,7 +777,7 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
   }
   case Rml::Input::KI_BACK:
   case Rml::Input::KI_ESCAPE:
-  case Rml::Input::KI_F1:
+  case gamepad::kKeyOptions:
     CloseMenu();
     break;
   default:

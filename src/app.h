@@ -360,7 +360,7 @@ private:
   // than whatever is being browsed now.
   void Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue = false);
   void OpenWatchMenu();
-  void CycleSubtitleTrack(int direction);
+  void CycleSubtitleTrack(int direction, bool toast = false);
   // Abandons an in-flight PlayEntry: the result that eventually arrives is
   // discarded (and the stream torn down again if it did open).
   void CancelLaunch();

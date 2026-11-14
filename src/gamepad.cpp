@@ -47,7 +47,7 @@ std::map<std::pair<SDL_JoystickID, int>, KeyIdentifier> axis_keys;
 constexpr Uint32 kOkHoldMs = 600;
 
 // The OK press held back (see HoldOk), and since when; or, once it has
-// been held long enough to be F1, the key whose release is still to come
+// been held long enough to be options, the key whose release is still to come
 // and is to be dropped.
 bool ok_pending = false;
 SDL_Event ok_press;
@@ -64,7 +64,7 @@ KeyIdentifier ButtonKey(Uint8 button) {
   case SDL_CONTROLLER_BUTTON_B:             return Rml::Input::KI_BACK;
   case SDL_CONTROLLER_BUTTON_X:             return Rml::Input::KI_SPACE;
   case SDL_CONTROLLER_BUTTON_Y:             return Rml::Input::KI_T;
-  case SDL_CONTROLLER_BUTTON_START:         return Rml::Input::KI_F1;
+  case SDL_CONTROLLER_BUTTON_START:         return kKeyOptions;
   case SDL_CONTROLLER_BUTTON_BACK:          return Rml::Input::KI_ESCAPE;
   case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  return Rml::Input::KI_PRIOR;
   case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return Rml::Input::KI_NEXT;
@@ -262,7 +262,7 @@ Hold HoldOk(const SDL_Event& event, SDL_Event* press) {
     break;
   case SDL_KEYUP:
     if (ok_fired != SDLK_UNKNOWN && event.key.keysym.sym == ok_fired) {
-      ok_fired = SDLK_UNKNOWN; // F1 has been sent for it
+      ok_fired = SDLK_UNKNOWN; // options has been sent for it
       return Hold::kSwallow;
     }
     if (ok_pending && event.key.keysym.sym == ok_press.key.keysym.sym) {
@@ -294,9 +294,9 @@ void Update(Rml::Context* context) {
     ok_pending = false;
     ok_fired = ok_press.key.keysym.sym;
     if (trace)
-      trace("OK held: options (F1)", true);
-    context->ProcessKeyDown(Rml::Input::KI_F1, 0);
-    context->ProcessKeyUp(Rml::Input::KI_F1, 0);
+      trace("OK held: options", true);
+    context->ProcessKeyDown(kKeyOptions, 0);
+    context->ProcessKeyUp(kKeyOptions, 0);
   }
 
   if (held_key == Rml::Input::KI_UNKNOWN)

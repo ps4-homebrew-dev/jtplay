@@ -81,6 +81,12 @@ public:
 	const Rml::Matrix4f& GetTransform() const;
 	void ResetProgram();
 
+	// jtplay (from tvhp): adds mipmaps to a texture from GenerateTexture(),
+	// so that an image drawn much smaller than its pixel size (a cover in a
+	// grid tile, a photo's thumbnail) is filtered smoothly instead of
+	// skipping most of its pixels.
+	void GenerateMipmaps(Rml::TextureHandle texture_handle);
+
 private:
 	void UseProgram(ProgramId program_id);
 	int GetUniformLocation(UniformId uniform_id) const;

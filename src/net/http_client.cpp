@@ -2,9 +2,17 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <mutex>
 
+#include <strings.h>
+
+#include <openssl/ssl.h>
+#include <openssl/x509_vfy.h>
+
+#include "net/clock.h"
 #include "net/http_client.h"
 
 namespace net {
@@ -101,6 +109,42 @@ namespace net {
 
     std::once_flag g_curl_init;
 
+    // Certificates are judged by the servers' clock (net/clock.h): by a
+    // console clock days off, valid ones look expired or not valid yet.
+    CURLcode OnSslContext(CURL*, void* ssl_ctx, void*) {
+      const int64_t skew = netclock::skew.load();
+      if (skew < -netclock::kToleranceSec || skew > netclock::kToleranceSec)
+	X509_VERIFY_PARAM_set_time(SSL_CTX_get0_param((SSL_CTX*)ssl_ctx),
+				   (time_t)netclock::Now());
+      return CURLE_OK;
+    }
+
+    bool IsHttps(const std::string& url) {
+      return url.size() > 8 && ::strncasecmp(url.c_str(), "https://", 8) == 0;
+    }
+
+    // Goes by a response's Date header, when there is one. Returns whether
+    // that changed the clock.
+    bool LearnSkew(const std::map<std::string, std::string>& headers) {
+      const auto date = headers.find("date");
+      if (date == headers.end())
+	return false;
+      const time_t server = ::curl_getdate(date->second.c_str(), nullptr);
+      if (server <= 0)
+	return false;
+      int64_t skew = (int64_t)server - (int64_t)std::time(nullptr);
+      if (skew >= -netclock::kToleranceSec && skew <= netclock::kToleranceSec)
+	skew = 0;
+      const int64_t was = netclock::skew.exchange(skew);
+      if (skew != 0 && (was - skew > netclock::kToleranceSec ||
+			skew - was > netclock::kToleranceSec))
+	std::fprintf(stderr, "http: this clock is %lld s %s the servers'; "
+		     "checking certificates by theirs\n",
+		     (long long)(skew < 0 ? -skew : skew),
+		     skew > 0 ? "behind" : "ahead of");
+      return was != skew;
+    }
+
   } // namespace
 
   HttpClient::HttpClient() {
@@ -113,8 +157,43 @@ namespace net {
       ::curl_easy_cleanup(curl_);
   }
 
+  // A certificate turned down only for its dates may be the console's
+  // clock's fault, not the server's. If the server's own Date header (read
+  // without checking the certificate: it is used for nothing else) says the
+  // clock is off, the request is tried again by the server's time.
   bool HttpClient::Perform(const Request& req, Response& res,
 			   std::string& error) {
+    bool dates = false;
+    if (PerformOnce(req, res, error, &dates))
+      return true;
+    if (!dates || !LearnServerTime(req.url))
+      return false;
+    res = Response{};
+    error.clear();
+    return PerformOnce(req, res, error, nullptr);
+  }
+
+  bool HttpClient::LearnServerTime(const std::string& url) {
+    ::curl_easy_reset(curl_);
+    std::map<std::string, std::string> headers;
+    ::curl_easy_setopt(curl_, CURLOPT_URL, url.c_str());
+    ::curl_easy_setopt(curl_, CURLOPT_NOBODY, 1L);
+    ::curl_easy_setopt(curl_, CURLOPT_HEADERFUNCTION, WriteHeader);
+    ::curl_easy_setopt(curl_, CURLOPT_HEADERDATA, &headers);
+    ::curl_easy_setopt(curl_, CURLOPT_USERAGENT, "jtplay");
+    ::curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 0L);
+    ::curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 0L);
+    ::curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, kConnectTimeoutMs);
+    ::curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L);
+    // Whatever was cached was opened without checking anything.
+    ::curl_easy_setopt(curl_, CURLOPT_FORBID_REUSE, 1L);
+    ::curl_easy_setopt(curl_, CURLOPT_FRESH_CONNECT, 1L);
+    ::curl_easy_perform(curl_);
+    return LearnSkew(headers);
+  }
+
+  bool HttpClient::PerformOnce(const Request& req, Response& res,
+			       std::string& error, bool* dates) {
     if (!curl_) {
       error = "http: curl unavailable";
       return false;
@@ -162,6 +241,9 @@ namespace net {
 #if LIBCURL_VERSION_NUM >= 0x075000
     ::curl_easy_setopt(curl_, CURLOPT_MAXLIFETIME_CONN, 300L);
 #endif
+
+    // OpenSSL only; others say CURLE_NOT_BUILT_IN and check by the console.
+    ::curl_easy_setopt(curl_, CURLOPT_SSL_CTX_FUNCTION, OnSslContext);
 
     // Neither a plugin nor an <img src> has any business opening file:// or
     // scp:// URLs.
@@ -222,6 +304,12 @@ namespace net {
       else
 	error = std::string("http: ") +
 	  (message[0] ? message : ::curl_easy_strerror(code));
+      if (dates && code == CURLE_PEER_FAILED_VERIFICATION) {
+	long verify = 0;
+	::curl_easy_getinfo(curl_, CURLINFO_SSL_VERIFYRESULT, &verify);
+	*dates = verify == X509_V_ERR_CERT_NOT_YET_VALID ||
+	  verify == X509_V_ERR_CERT_HAS_EXPIRED;
+      }
       return false;
     }
 
@@ -231,6 +319,9 @@ namespace net {
     res.url = final_url ? final_url : req.url;
     res.body = std::move(sink.data);
     res.truncated = cut;
+    // A certificate that checked out vouches for its server's clock.
+    if (IsHttps(res.url))
+      LearnSkew(res.headers);
     return true;
   }
 

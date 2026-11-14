@@ -68,6 +68,13 @@ public:
   bool Perform(const Request& req, Response& res, std::string& error);
 
 private:
+  // One try. 'dates' (if given) is set when it failed only because the
+  // certificate's dates did not fit this console's clock.
+  bool PerformOnce(const Request& req, Response& res, std::string& error, bool* dates);
+  // Sets net/clock.h's skew from the server's Date header. Returns whether
+  // it changed.
+  bool LearnServerTime(const std::string& url);
+
   CURL* curl_ = nullptr;
 };
 

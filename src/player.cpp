@@ -323,6 +323,9 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
     {"hwdec", "no", false},
     // Cover art is shown by the UI, from the server's metadata.
     {"audio-display", "no", false},
+    // A subtitle language picked by hand means subtitles on, even where the
+    // sound is in that language too.
+    {"subs-with-matching-audio", "yes", true},
     {"network-timeout", "30", false},
     // HLS and DASH: the highest-bitrate variant, for the whole stream (there
     // is no switching between video tracks; see player.h).
