@@ -85,6 +85,8 @@ if(ORBIS)
         CONTENT_ID IV0000-BREW04327_00-JTPLAY0000000000
         CATEGORY gdc
         DOWNLOAD_DATA_SIZE 512
+        # 0x2 | 0x10000 (7 CPU mode) | 0x800000 (PS4 Pro mode)
+        ATTRIBUTE 8454146
         ASSETS sce_sys assets fonts plugins ca-bundle.crt
         MODULES libEGL.so.1 libGL.so.1 libgallium-${EGL_VERSION}.so libvulkan.so.1
     )
