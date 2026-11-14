@@ -122,7 +122,7 @@ public:
   bool CanSearch(const std::string& folder_id) const override;
   bool Search(const std::string& folder_id, const std::string& query,
               browse::Listing& out, std::string& error) override;
-  bool Resolve(const browse::Entry& entry, std::string& uri, std::string& error) override;
+  bool Resolve(const browse::Entry& entry, browse::Playable& out, std::string& error) override;
 
   // Main thread: recomputes the subtitle ("12 items").
   void UpdateDetail();

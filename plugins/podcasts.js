@@ -5,12 +5,12 @@
 //
 // The tree:
 //   /                    Most popular, By country, By genre
-//   top                  the top CHART_SIZE shows of DEFAULT_COUNTRY
+//   top                  the top CHART_SIZE shows of the home country
 //   countries            every country Apple Podcasts is in, by name
 //   chart:<cc>           the top CHART_SIZE shows of country <cc>
 //   genres               Apple's podcast genres, by name
 //   genre:<id>           the top CHART_SIZE shows of genre <id>, in
-//                        DEFAULT_COUNTRY (Apple charts genres per store)
+//                        the home country (Apple charts genres per store)
 //   apple:<cc>:<id>      a show in <cc>'s store: its feed is looked up, then
 //                        its episodes, newest first, from the feed (Apple's
 //                        episode list if the feed cannot be read)
@@ -22,7 +22,7 @@
 // with them keep working.
 //
 // Apple has no worldwide chart, so Most popular is the chart of
-// DEFAULT_COUNTRY; and nothing like radio-browser's listener counts, so
+// the home country; and nothing like radio-browser's listener counts, so
 // there is no Trending.
 //
 // Shows you follow are kept with jtplay's own favorites ("Add to favorites"
@@ -34,15 +34,15 @@
 // catalogue, not just the chart, and lists them like the chart does, so any
 // show can be opened and added to the favorites. It searches the store of
 // the country it is asked from (inside a country's chart or one of its
-// shows), the US store from anywhere else. Narrowing what is
+// shows), the home country's from anywhere else. Narrowing what is
 // listed, like the episodes of a show, is the app's own Filter.
 //
 // Episodes are long enough to count as audiobooks for the app, so they
 // remember where they were stopped, show up under Continue watching and
 // get a tick when finished, like videos do.
 
-// The store a show or a search is in when nothing says otherwise.
-const DEFAULT_COUNTRY = "us";
+// The store "apple:<id>" folders of earlier versions are in (see above).
+const LEGACY_COUNTRY = "us";
 // Shows in a country's chart.
 const CHART_SIZE = 50;
 
@@ -121,6 +121,15 @@ const GENRES = [
     ["1318", "Technology"], ["1488", "True Crime"], ["1309", "TV & Film"]
 ];
 
+// The home country: whose chart Most popular is, whose store the genres are
+// charted in and searches from the top go to. The Country setting (the
+// Settings page lists it under Podcasts), the United States until one is
+// picked.
+function homeCountry() {
+    const cc = settings.get("country");
+    return COUNTRIES.some(c => c[0] === cc) ? cc : "us";
+}
+
 function countryName(cc) {
     const hit = COUNTRIES.find(c => c[0] === cc);
     return hit ? hit[1] : cc.toUpperCase();
@@ -138,7 +147,7 @@ const cache = {};
 function cached(key, ttl_min, produce) {
     const hit = cache[key];
     if (hit && Date.now() - hit.time < ttl_min * 60 * 1000)
-	return hit.value;
+        return hit.value;
     const value = produce();
     cache[key] = { time: Date.now(), value: value };
     return value;
@@ -147,7 +156,7 @@ function cached(key, ttl_min, produce) {
 function getText(url, options) {
     const res = http.get(url, options || { timeout: 20 });
     if (!res.ok)
-	throw new Error("HTTP " + res.status + " from " + url);
+        throw new Error("HTTP " + res.status + " from " + url);
     return res.body;
 }
 
@@ -160,12 +169,12 @@ function getJson(url) {
 // refusing it. Uncompressed, so a byte range is a range of the text.
 function getFeedText(url) {
     return getText(url, {
-	timeout: 20,
-	maxBytes: FEED_BYTES,
-	headers: {
-	    "Range": "bytes=0-" + (FEED_BYTES - 1),
-	    "Accept-Encoding": "identity"
-	}
+        timeout: 20,
+        maxBytes: FEED_BYTES,
+        headers: {
+            "Range": "bytes=0-" + (FEED_BYTES - 1),
+            "Accept-Encoding": "identity"
+        }
     });
 }
 
@@ -180,17 +189,17 @@ const NAMED = {
 
 function codePoint(n) {
     return n > 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)
-	? String.fromCodePoint(n) : "\ufffd";
+        ? String.fromCodePoint(n) : "\ufffd";
 }
 
 // One pass, so "&amp;lt;" stays "&lt;".
 function decodeEntities(s) {
     return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+\d*);/gi, (m, e) => {
-	if (e[0] === "#")
-	    return codePoint(e[1] === "x" || e[1] === "X"
-			     ? parseInt(e.slice(2), 16) : Number(e.slice(1)));
-	const v = NAMED[e.toLowerCase()];
-	return v === undefined ? m : v;
+        if (e[0] === "#")
+            return codePoint(e[1] === "x" || e[1] === "X"
+                             ? parseInt(e.slice(2), 16) : Number(e.slice(1)));
+        const v = NAMED[e.toLowerCase()];
+        return v === undefined ? m : v;
     });
 }
 
@@ -201,13 +210,13 @@ const unwrapCdata = s => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
 // <itunes:summary>) all removed: plain, single-spaced text.
 function plainText(s) {
     return stripTags(decodeEntities(stripTags(unwrapCdata(s))))
-	.replace(/\s+/g, " ").trim();
+        .replace(/\s+/g, " ").trim();
 }
 
 const tagRes = {};
 function tagRe(tag) {
     return tagRes[tag] || (tagRes[tag] =
-	new RegExp("<" + tag + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + tag + ">", "i"));
+        new RegExp("<" + tag + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + tag + ">", "i"));
 }
 
 // Text of the first <tag> in 'xml', or "".
@@ -221,25 +230,25 @@ const attrRes = {};
 function tagAttr(xml, tag, attr) {
     const key = tag + " " + attr;
     const re = attrRes[key] || (attrRes[key] =
-	new RegExp("<" + tag + "\\s[^>]*?\\b" + attr + "\\s*=\\s*([\"'])(.*?)\\1", "i"));
+        new RegExp("<" + tag + "\\s[^>]*?\\b" + attr + "\\s*=\\s*([\"'])(.*?)\\1", "i"));
     const m = re.exec(xml);
     return m ? decodeEntities(m[2]).trim() : "";
 }
 
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-		 jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+                 jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
 
 // RFC 822 dates ("Tue, 10 Jun 2025 04:00:00 +0000") -> ms since the epoch,
 // by hand: not every JavaScript engine's Date.parse takes them.
 function parseDate(s) {
     const m = /(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4}|[A-Z]{1,4})?/.exec(s || "");
     if (!m || !(m[2].toLowerCase() in MONTHS))
-	return 0;
+        return 0;
     let t = Date.UTC(+m[3], MONTHS[m[2].toLowerCase()], +m[1], +m[4], +m[5], +(m[6] || 0));
     const zone = m[7] || "";
     if (/^[+-]\d{4}$/.test(zone)) {
-	const minutes = (+zone.slice(1, 3)) * 60 + (+zone.slice(3, 5));
-	t -= (zone[0] === "-" ? -1 : 1) * minutes * 60 * 1000;
+        const minutes = (+zone.slice(1, 3)) * 60 + (+zone.slice(3, 5));
+        t -= (zone[0] === "-" ? -1 : 1) * minutes * 60 * 1000;
     }
     return t;
 }
@@ -247,10 +256,10 @@ function parseDate(s) {
 // "1:02:03", "62:03" or "3723" -> seconds.
 function parseDuration(s) {
     if (!s)
-	return 0;
+        return 0;
     const parts = String(s).trim().split(":").map(Number);
     if (parts.some(isNaN))
-	return 0;
+        return 0;
     return Math.round(parts.reduce((total, p) => total * 60 + p, 0));
 }
 
@@ -262,34 +271,34 @@ function clip(s, n) {
 // indexOf rather than a regex over the whole feed: it allocates nothing.
 function nextItem(xml, from) {
     for (;;) {
-	const i = xml.indexOf("<item", from);
-	if (i < 0)
-	    return -1;
-	const c = xml[i + 5];
-	if (c === ">" || c === " " || c === "\n" || c === "\r" || c === "\t")
-	    return i;
-	from = i + 5;
+        const i = xml.indexOf("<item", from);
+        if (i < 0)
+            return -1;
+        const c = xml[i + 5];
+        if (c === ">" || c === " " || c === "\n" || c === "\r" || c === "\t")
+            return i;
+        from = i + 5;
     }
 }
 
 function parseEpisode(item, showImage) {
     const uri = tagAttr(item, "enclosure", "url");
     if (!uri)
-	return null;
+        return null;
     const type = tagAttr(item, "enclosure", "type");
     const length = Number(tagAttr(item, "enclosure", "length"));
     const summary = tagText(item, "itunes:summary") ||
-	  tagText(item, "description") || tagText(item, "content:encoded");
+          tagText(item, "description") || tagText(item, "content:encoded");
     return {
-	id: tagText(item, "guid") || uri,
-	type: /^video\//i.test(type) ? "video" : "audio",
-	name: tagText(item, "title") || "(untitled episode)",
-	description: clip(summary, 600),
-	image: tagAttr(item, "itunes:image", "href") || showImage,
-	uri: uri,
-	date: parseDate(tagText(item, "pubDate")),
-	duration: parseDuration(tagText(item, "itunes:duration")),
-	size: length > 0 ? length : -1
+        id: tagText(item, "guid") || uri,
+        type: /^video\//i.test(type) ? "video" : "audio",
+        name: tagText(item, "title") || "(untitled episode)",
+        description: clip(summary, 600),
+        image: tagAttr(item, "itunes:image", "href") || showImage,
+        uri: uri,
+        date: parseDate(tagText(item, "pubDate")),
+        duration: parseDuration(tagText(item, "itunes:duration")),
+        size: length > 0 ? length : -1
     };
 }
 
@@ -300,24 +309,24 @@ function parseFeed(xml) {
     const rssImage = /<image>[\s\S]*?<\/image>/i.exec(head);
     // The channel's own <title>, not the one inside <image>.
     const show = {
-	title: tagText(head.replace(/<image>[\s\S]*?<\/image>/gi, ""), "title"),
-	image: tagAttr(head, "itunes:image", "href") ||
-	    (rssImage ? tagText(rssImage[0], "url") : ""),
-	episodes: []
+        title: tagText(head.replace(/<image>[\s\S]*?<\/image>/gi, ""), "title"),
+        image: tagAttr(head, "itunes:image", "href") ||
+            (rssImage ? tagText(rssImage[0], "url") : ""),
+        episodes: []
     };
     // A feed cut short ends mid-item; that last item has no </item> and is
     // left out.
     while (pos >= 0 && show.episodes.length < MAX_EPISODES) {
-	const end = xml.indexOf("</item>", pos);
-	if (end < 0)
-	    break;
-	const ep = parseEpisode(xml.slice(pos, end), show.image);
-	if (ep)
-	    show.episodes.push(ep);
-	pos = nextItem(xml, end + 7);
+        const end = xml.indexOf("</item>", pos);
+        if (end < 0)
+            break;
+        const ep = parseEpisode(xml.slice(pos, end), show.image);
+        if (ep)
+            show.episodes.push(ep);
+        pos = nextItem(xml, end + 7);
     }
     if (!show.episodes.length && !/<rss[\s>]/i.test(head))
-	throw new Error("not a podcast feed");
+        throw new Error("not a podcast feed");
     // Most feeds are newest first already; serial shows are not.
     show.episodes.sort((a, b) => b.date - a.date);
     return show;
@@ -333,12 +342,12 @@ function showFolder(id, name, description, image) {
 
 function browseRoot() {
     return [
-	showFolder("top", "Most popular",
-		   "Top " + CHART_SIZE + " shows in " + countryName(DEFAULT_COUNTRY)),
-	showFolder("countries", "By country",
-		   "Top " + CHART_SIZE + " shows of " + COUNTRIES.length + " countries"),
-	showFolder("genres", "By genre",
-		   "Top " + CHART_SIZE + " shows of " + GENRES.length + " genres")
+        showFolder("top", "Most popular",
+                   "Top " + CHART_SIZE + " shows in " + countryName(homeCountry())),
+        showFolder("countries", "By country",
+                   "Top " + CHART_SIZE + " shows of " + COUNTRIES.length + " countries"),
+        showFolder("genres", "By genre",
+                   "Top " + CHART_SIZE + " shows of " + GENRES.length + " genres")
     ];
 }
 
@@ -356,32 +365,32 @@ function largeArt(url) {
 // "im:artist": { label }, "im:image": [{ label }, ...] } -- and a single row
 // rather than a list when the chart has only one.
 function browseGenre(genre) {
-    const cc = DEFAULT_COUNTRY;
+    const cc = homeCountry();
     return cached("genre:" + cc + ":" + genre, 60, () => {
-	const res = http.get("https://itunes.apple.com/" + cc + "/rss/toppodcasts/limit=" +
-			     CHART_SIZE + "/genre=" + encodeURIComponent(genre) + "/json",
-			     { timeout: 20 });
-	if (!res.ok)
-	    throw new Error("HTTP " + res.status + " from the Apple Podcasts genre chart");
-	const feed = JSON.parse(res.body).feed || {};
-	const rows = Array.isArray(feed.entry) ? feed.entry : (feed.entry ? [feed.entry] : []);
-	const label = (v) => (v && v.label) || "";
-	const out = [];
-	rows.forEach(r => {
-	    const id = r && r.id && r.id.attributes && r.id.attributes["im:id"];
-	    if (!id)
-		return;
-	    const images = r["im:image"] || [];
-	    const artist = label(r["im:artist"]);
-	    out.push(showFolder(
-		"apple:" + cc + ":" + id,
-		label(r["im:name"]) || "(untitled show)",
-		"#" + (out.length + 1) + (artist ? "  ·  " + artist : ""),
-		largeArt(label(images[images.length - 1]))));
-	});
-	if (!out.length)
-	    throw new Error("the chart for this genre came back empty");
-	return out;
+        const res = http.get("https://itunes.apple.com/" + cc + "/rss/toppodcasts/limit=" +
+                             CHART_SIZE + "/genre=" + encodeURIComponent(genre) + "/json",
+                             { timeout: 20 });
+        if (!res.ok)
+            throw new Error("HTTP " + res.status + " from the Apple Podcasts genre chart");
+        const feed = JSON.parse(res.body).feed || {};
+        const rows = Array.isArray(feed.entry) ? feed.entry : (feed.entry ? [feed.entry] : []);
+        const label = (v) => (v && v.label) || "";
+        const out = [];
+        rows.forEach(r => {
+            const id = r && r.id && r.id.attributes && r.id.attributes["im:id"];
+            if (!id)
+                return;
+            const images = r["im:image"] || [];
+            const artist = label(r["im:artist"]);
+            out.push(showFolder(
+                "apple:" + cc + ":" + id,
+                label(r["im:name"]) || "(untitled show)",
+                "#" + (out.length + 1) + (artist ? "  ·  " + artist : ""),
+                largeArt(label(images[images.length - 1]))));
+        });
+        if (!out.length)
+            throw new Error("the chart for this genre came back empty");
+        return out;
     });
 }
 
@@ -392,23 +401,23 @@ function browseCountries() {
 // A country's chart. Apple has none for some of the smaller stores.
 function browseChart(cc) {
     return cached("chart:" + cc, 60, () => {
-	const res = http.get("https://rss.applemarketingtools.com/api/v2/" + cc +
-			     "/podcasts/top/" + CHART_SIZE + "/podcasts.json", { timeout: 20 });
-	if (!res.ok) {
-	    console.warn("podcasts: chart of " + cc + ": HTTP " + res.status);
-	    throw new Error(res.status === 404 || res.status === 500
-			    ? "Apple has no podcast chart for " + countryName(cc)
-			    : "HTTP " + res.status + " from the Apple Podcasts chart");
-	}
-	const data = JSON.parse(res.body);
-	const results = (data.feed && data.feed.results) || [];
-	if (!results.length)
-	    throw new Error("the chart for " + countryName(cc) + " came back empty");
-	return results.map((r, i) => showFolder(
-	    "apple:" + cc + ":" + r.id,
-	    r.name || "(untitled show)",
-	    "#" + (i + 1) + (r.artistName ? "  ·  " + r.artistName : ""),
-	    largeArt(r.artworkUrl100)));
+        const res = http.get("https://rss.applemarketingtools.com/api/v2/" + cc +
+                             "/podcasts/top/" + CHART_SIZE + "/podcasts.json", { timeout: 20 });
+        if (!res.ok) {
+            console.warn("podcasts: chart of " + cc + ": HTTP " + res.status);
+            throw new Error(res.status === 404 || res.status === 500
+                            ? "Apple has no podcast chart for " + countryName(cc)
+                            : "HTTP " + res.status + " from the Apple Podcasts chart");
+        }
+        const data = JSON.parse(res.body);
+        const results = (data.feed && data.feed.results) || [];
+        if (!results.length)
+            throw new Error("the chart for " + countryName(cc) + " came back empty");
+        return results.map((r, i) => showFolder(
+            "apple:" + cc + ":" + r.id,
+            r.name || "(untitled show)",
+            "#" + (i + 1) + (r.artistName ? "  ·  " + r.artistName : ""),
+            largeArt(r.artworkUrl100)));
     });
 }
 
@@ -417,43 +426,43 @@ function browseChart(cc) {
 // showing, and a refresh should ask again.
 function searchShows(query, cc) {
     const data = getJson("https://itunes.apple.com/search?media=podcast&entity=podcast" +
-			 "&country=" + cc + "&limit=" + SEARCH_LIMIT +
-			 "&term=" + encodeURIComponent(query));
+                         "&country=" + cc + "&limit=" + SEARCH_LIMIT +
+                         "&term=" + encodeURIComponent(query));
     return (data.results || [])
-	.filter(r => r.collectionId)
-	.map(r => showFolder(
-	    "apple:" + cc + ":" + r.collectionId,
-	    r.collectionName || r.trackName || "(untitled show)",
-	    [r.artistName, r.primaryGenreName].filter(s => s).join("  ·  "),
-	    String(r.artworkUrl600 || r.artworkUrl100 || "")));
+        .filter(r => r.collectionId)
+        .map(r => showFolder(
+            "apple:" + cc + ":" + r.collectionId,
+            r.collectionName || r.trackName || "(untitled show)",
+            [r.artistName, r.primaryGenreName].filter(s => s).join("  ·  "),
+            String(r.artworkUrl600 || r.artworkUrl100 || "")));
 }
 
 function feedOfApple(cc, id) {
     return cached("apple:" + cc + ":" + id, 24 * 60, () => {
-	const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id) +
-			     "&country=" + cc);
-	const hit = (data.results || []).find(r => r.feedUrl);
-	return hit ? hit.feedUrl : "";
+        const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id) +
+                             "&country=" + cc);
+        const hit = (data.results || []).find(r => r.feedUrl);
+        return hit ? hit.feedUrl : "";
     });
 }
 
 // Apple's own episode list for a show, for when its feed is unusable.
 function appleEpisodes(cc, id) {
     return cached("apple-episodes:" + cc + ":" + id, 15, () => {
-	const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id) +
-			     "&country=" + cc + "&entity=podcastEpisode&limit=" + MAX_EPISODES);
-	return (data.results || [])
-	    .filter(r => r.wrapperType === "podcastEpisode" && r.episodeUrl)
-	    .map(r => ({
-		id: r.episodeGuid || r.episodeUrl,
-		type: /video/i.test(r.episodeContentType || "") ? "video" : "audio",
-		name: r.trackName || "(untitled episode)",
-		description: clip(plainText(r.description || r.shortDescription || ""), 600),
-		image: r.artworkUrl600 || r.artworkUrl160 || "",
-		uri: r.episodeUrl,
-		date: r.releaseDate ? Date.parse(r.releaseDate) || 0 : 0,
-		duration: r.trackTimeMillis > 0 ? Math.round(r.trackTimeMillis / 1000) : 0
-	    }));
+        const data = getJson("https://itunes.apple.com/lookup?id=" + encodeURIComponent(id) +
+                             "&country=" + cc + "&entity=podcastEpisode&limit=" + MAX_EPISODES);
+        return (data.results || [])
+            .filter(r => r.wrapperType === "podcastEpisode" && r.episodeUrl)
+            .map(r => ({
+                id: r.episodeGuid || r.episodeUrl,
+                type: /video/i.test(r.episodeContentType || "") ? "video" : "audio",
+                name: r.trackName || "(untitled episode)",
+                description: clip(plainText(r.description || r.shortDescription || ""), 600),
+                image: r.artworkUrl600 || r.artworkUrl160 || "",
+                uri: r.episodeUrl,
+                date: r.releaseDate ? Date.parse(r.releaseDate) || 0 : 0,
+                duration: r.trackTimeMillis > 0 ? Math.round(r.trackTimeMillis / 1000) : 0
+            }));
     });
 }
 
@@ -461,70 +470,78 @@ function appleEpisodes(cc, id) {
 // earlier versions made): [cc, id].
 function parseApple(rest) {
     const colon = rest.indexOf(":");
-    return colon < 0 ? [DEFAULT_COUNTRY, rest]
-		     : [rest.slice(0, colon), rest.slice(colon + 1)];
+    return colon < 0 ? [LEGACY_COUNTRY, rest]
+                     : [rest.slice(0, colon), rest.slice(colon + 1)];
 }
 
 // The country a folder belongs to, for searching from it.
 function countryOf(folderId) {
     const id = String(folderId || "");
     if (id.startsWith("chart:"))
-	return id.slice(6);
+        return id.slice(6);
     if (id.startsWith("apple:"))
-	return parseApple(id.slice(6))[0];
-    return DEFAULT_COUNTRY;
+        return parseApple(id.slice(6))[0];
+    return homeCountry();
 }
 
 function browseApple(cc, id) {
     let reason = "this show has no public feed";
     const url = feedOfApple(cc, id);
     if (url) {
-	try {
-	    return readFeed(url).episodes;
-	} catch (e) {
-	    reason = e.message;
-	    console.warn("podcasts: " + url + ": " + reason + "; trying Apple's episode list");
-	}
+        try {
+            return readFeed(url).episodes;
+        } catch (e) {
+            reason = e.message;
+            console.warn("podcasts: " + url + ": " + reason + "; trying Apple's episode list");
+        }
     }
     const episodes = appleEpisodes(cc, id);
     if (!episodes.length)
-	throw new Error(reason);
+        throw new Error(reason);
     return episodes;
 }
 
 return {
     name: "Podcasts",
+    settings: [{
+        key: "country",
+        label: "Country",
+        about: "Whose chart Most popular shows, and whose store the genre " +
+               "charts and searches come from. By country has the others.",
+        options: COUNTRIES.map(c => ({ value: c[0], label: c[1] })),
+        default: "us"
+    }],
     discover() {
-	return [{
-	    name: "Podcasts",
-	    detail: "Apple Podcasts charts by country and genre",
-	    icon: "🎙",
-	    root: "/",
-	    // In the store of the country of the folder on screen.
-	    search(query, folderId) {
-		return searchShows(query, countryOf(folderId));
-	    },
-	    browse(id) {
-		if (id === "/")
-		    return browseRoot();
-		if (id === "top")
-		    return browseChart(DEFAULT_COUNTRY);
-		if (id === "countries")
-		    return browseCountries();
-		if (id === "genres")
-		    return browseGenres();
-		if (id.startsWith("chart:"))
-		    return browseChart(id.slice(6));
-		if (id.startsWith("genre:"))
-		    return browseGenre(id.slice(6));
-		if (id.startsWith("feed:"))
-		    return readFeed(id.slice(5)).episodes;
-		if (id.startsWith("apple:")) {
-		    const show = parseApple(id.slice(6));
-		    return browseApple(show[0], show[1]);
-		}
-		throw new Error("unknown folder " + id);
-	    }
-	}];
+        return [{
+            name: "Podcasts",
+            detail: "Apple Podcasts charts by country and genre",
+            icon: "🎙",
+            root: "/",
+            // In the store of the country of the folder on screen.
+            search(query, folderId) {
+                return searchShows(query, countryOf(folderId));
+            },
+            browse(id) {
+                if (id === "/")
+                    return browseRoot();
+                if (id === "top")
+                    return browseChart(homeCountry());
+                if (id === "countries")
+                    return browseCountries();
+                if (id === "genres")
+                    return browseGenres();
+                if (id.startsWith("chart:"))
+                    return browseChart(id.slice(6));
+                if (id.startsWith("genre:"))
+                    return browseGenre(id.slice(6));
+                if (id.startsWith("feed:"))
+                    return readFeed(id.slice(5)).episodes;
+                if (id.startsWith("apple:")) {
+                    const show = parseApple(id.slice(6));
+                    return browseApple(show[0], show[1]);
+                }
+                throw new Error("unknown folder " + id);
+            }
+        }];
     }
 };

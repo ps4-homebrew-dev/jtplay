@@ -11,6 +11,10 @@
 //   tags                   the 60 biggest genres
 //   tag:jazz               that genre's stations
 //
+// Search (options menu) looks stations up by name: among a country's
+// stations from inside that country, among a genre's from inside that
+// genre, and among all of them from anywhere else.
+//
 // Playback goes through resolve(), which asks the directory for the stream
 // URL; that request is also how radio-browser counts listeners, which is
 // what "Trending" is made of.
@@ -34,16 +38,16 @@ function api(path) {
     const order = server ? [server].concat(SERVERS.filter(s => s !== server)) : SERVERS;
     let last = null;
     for (const base of order) {
-	try {
-	    const res = http.get(base + path, { headers: HEADERS, timeout: 15 });
-	    if (res.ok) {
-		server = base;
-		return JSON.parse(res.body);
-	    }
-	    last = new Error("HTTP " + res.status);
-	} catch (e) {
-	    last = e;
-	}
+        try {
+            const res = http.get(base + path, { headers: HEADERS, timeout: 15 });
+            if (res.ok) {
+                server = base;
+                return JSON.parse(res.body);
+            }
+            last = new Error("HTTP " + res.status);
+        } catch (e) {
+            last = e;
+        }
     }
     throw last || new Error("radio-browser.info is unreachable");
 }
@@ -53,7 +57,7 @@ const cache = {};
 function cached(key, produce) {
     const hit = cache[key];
     if (hit && Date.now() - hit.time < 5 * 60 * 1000)
-	return hit.value;
+        return hit.value;
     const value = produce();
     cache[key] = { time: Date.now(), value: value };
     return value;
@@ -66,102 +70,118 @@ function folder(id, name, description, image) {
 // "rock, classic rock,80s" -> "Rock · Classic rock · 80s"
 function prettyTags(tags) {
     return String(tags || "").split(",").map(t => t.trim()).filter(t => t)
-	.slice(0, 4).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(" · ");
+        .slice(0, 4).map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(" · ");
 }
 
 function station(s) {
     const facts = [];
     if (s.country)
-	facts.push(s.country);
+        facts.push(s.country);
     const tags = prettyTags(s.tags);
     if (tags)
-	facts.push(tags);
+        facts.push(tags);
     if (s.codec)
-	facts.push(s.codec + (s.bitrate ? " " + s.bitrate + " kbps" : ""));
+        facts.push(s.codec + (s.bitrate ? " " + s.bitrate + " kbps" : ""));
     return {
-	id: s.stationuuid,
-	type: "audio",
-	name: String(s.name || "").trim() || "(unnamed station)",
-	description: facts.join("  ·  "),
-	image: s.favicon || "",
-	uri: s.url_resolved || s.url
+        id: s.stationuuid,
+        type: "audio",
+        name: String(s.name || "").trim() || "(unnamed station)",
+        description: facts.join("  ·  "),
+        image: s.favicon || "",
+        uri: s.url_resolved || s.url
     };
 }
 
 function stations(path) {
     const sep = path.indexOf("?") < 0 ? "?" : "&";
     return cached(path, () =>
-	api(path + sep + "hidebroken=true&limit=" + LIMIT).map(station));
+        api(path + sep + "hidebroken=true&limit=" + LIMIT).map(station));
 }
 
 function browseRoot() {
     return [
-	folder("top:votes", "Most popular", "The best voted stations everywhere"),
-	folder("top:clicks", "Trending", "What people are listening to right now"),
-	folder("countries", "By country", "Stations from every country"),
-	folder("tags", "By genre", "Jazz, news, classical, ...")
+        folder("top:votes", "Most popular", "The best voted stations everywhere"),
+        folder("top:clicks", "Trending", "What people are listening to right now"),
+        folder("countries", "By country", "Stations from every country"),
+        folder("tags", "By genre", "Jazz, news, classical, ...")
     ];
 }
 
 function browseCountries() {
     return cached("countries", () =>
-	api("/json/countries?order=stationcount&reverse=true&hidebroken=true")
-	    .filter(c => c.stationcount >= 5 && c.iso_3166_1)
-	    .map(c => folder("country:" + c.iso_3166_1,
-			     c.name,
-			     c.stationcount + " stations")));
+        api("/json/countries?order=stationcount&reverse=true&hidebroken=true")
+            .filter(c => c.stationcount >= 5 && c.iso_3166_1)
+            .map(c => folder("country:" + c.iso_3166_1,
+                             c.name,
+                             c.stationcount + " stations")));
 }
 
 function browseTags() {
     return cached("tags", () =>
-	api("/json/tags?order=stationcount&reverse=true&hidebroken=true&limit=60")
-	    .filter(t => t.name)
-	    .map(t => folder("tag:" + t.name,
-			     t.name.charAt(0).toUpperCase() + t.name.slice(1),
-			     t.stationcount + " stations")));
+        api("/json/tags?order=stationcount&reverse=true&hidebroken=true&limit=60")
+            .filter(t => t.name)
+            .map(t => folder("tag:" + t.name,
+                             t.name.charAt(0).toUpperCase() + t.name.slice(1),
+                             t.stationcount + " stations")));
+}
+
+// Stations whose name has 'query' in it, the best voted first; within the
+// country or genre of the folder the search was started from, if any.
+function searchStations(query, folderId) {
+    const params = { name: query, order: "votes", reverse: "true",
+                     hidebroken: "true", limit: LIMIT };
+    const id = String(folderId || "");
+    if (id.startsWith("country:"))
+        params.countrycode = id.slice(8);
+    else if (id.startsWith("tag:"))
+        params.tag = id.slice(4);
+    return api("/json/stations/search?" + util.query(params)).map(station);
 }
 
 return {
     name: "Radio",
     discover() {
-	return [{
-	    name: "Internet Radio",
-	    detail: "50 000 stations from radio-browser.info",
-	    icon: "📻",
-	    root: "/",
-	    browse(id) {
-		if (id === "/")
-		    return browseRoot();
-		if (id === "top:votes")
-		    return stations("/json/stations/topvote/" + LIMIT);
-		if (id === "top:clicks")
-		    return stations("/json/stations/topclick/" + LIMIT);
-		if (id === "countries")
-		    return browseCountries();
-		if (id === "tags")
-		    return browseTags();
-		if (id.startsWith("country:"))
-		    return stations("/json/stations/bycountrycodeexact/" +
-				    encodeURIComponent(id.slice(8)) + "?order=votes&reverse=true");
-		if (id.startsWith("tag:"))
-		    return stations("/json/stations/bytagexact/" +
-				    encodeURIComponent(id.slice(4)) + "?order=votes&reverse=true");
-		throw new Error("unknown folder " + id);
-	    },
-	    // Counts the listen and hands back the current stream URL; the one
-	    // from the listing is the fallback if the directory is down.
-	    resolve(id, entry) {
-		try {
-		    const r = api("/json/url/" + encodeURIComponent(id));
-		    if (r && r.url)
-			return r.url;
-		} catch (e) {
-		    console.warn("radio: " + e.message);
-		}
-		if (entry && entry.uri)
-		    return entry.uri;
-		throw new Error("this station has no stream");
-	    }
-	}];
+        return [{
+            name: "Internet Radio",
+            detail: "50 000 stations from radio-browser.info",
+            icon: "📻",
+            root: "/",
+            browse(id) {
+                if (id === "/")
+                    return browseRoot();
+                if (id === "top:votes")
+                    return stations("/json/stations/topvote/" + LIMIT);
+                if (id === "top:clicks")
+                    return stations("/json/stations/topclick/" + LIMIT);
+                if (id === "countries")
+                    return browseCountries();
+                if (id === "tags")
+                    return browseTags();
+                if (id.startsWith("country:"))
+                    return stations("/json/stations/bycountrycodeexact/" +
+                                    encodeURIComponent(id.slice(8)) + "?order=votes&reverse=true");
+                if (id.startsWith("tag:"))
+                    return stations("/json/stations/bytagexact/" +
+                                    encodeURIComponent(id.slice(4)) + "?order=votes&reverse=true");
+                throw new Error("unknown folder " + id);
+            },
+            search(query, folderId) {
+                return searchStations(query, folderId);
+            },
+            // Counts the listen and hands back the current stream URL; the one
+            // from the listing is the fallback if the directory is down.
+            resolve(id, entry) {
+                try {
+                    const r = api("/json/url/" + encodeURIComponent(id));
+                    if (r && r.url)
+                        return r.url;
+                } catch (e) {
+                    console.warn("radio: " + e.message);
+                }
+                if (entry && entry.uri)
+                    return entry.uri;
+                throw new Error("this station has no stream");
+            }
+        }];
     }
 };

@@ -26,6 +26,7 @@
 
 #include "app.h"
 #include "app_internal.h"
+#include "browse/js_source.h"
 #include "gamepad.h"
 #include "icons.h"
 
@@ -41,7 +42,7 @@ std::string Plural(size_t n, const char* one, const char* many) {
 
 void App::GoHome() {
   CancelForegroundLaunch();
-  browse_request_++; // invalidate any browse that is still in flight
+  AbandonBrowse(); // any browse that is still in flight
   path_.clear();
   current_source_.reset();
   view_ = View::Home;
@@ -118,8 +119,7 @@ void App::StartDiscovery(browse::Source::Group group,
     if (p->RailGroup() == group)
       providers.push_back(p.get());
 
-  busy_ops_++;
-  PostTask([this, group, providers] {
+  PostTask(Lane::Discovery, [this, group, providers] {
     std::vector<browse::SourcePtr> sources;
     std::string errors;
     for (browse::Provider* p : providers) {
@@ -127,7 +127,7 @@ void App::StartDiscovery(browse::Source::Group group,
       if (!p->Discover(sources, error) && !error.empty()) {
         if (!errors.empty())
           errors += "; ";
-        errors += std::string(p->Name()) + ": " + error;
+        errors += *p->Name() ? std::string(p->Name()) + ": " + error : error;
       }
     }
 
@@ -141,6 +141,14 @@ void App::StartDiscovery(browse::Source::Group group,
           discovered_.push_back(std::move(s));
       registry_.Set(discovered_);
 
+      // The plugins may have been loaded (or loaded afresh) by this: what
+      // they want on the Settings page is known only now.
+      if (group == browse::Source::Group::Plugin) {
+        setting_items_.clear();
+        if (bind_settings_page_)
+          RebuildSettingRows();
+      }
+
       GroupScan& scan = scans_[(int)group];
       scan.errors = errors;
       scan.scanned = true;
@@ -153,7 +161,6 @@ void App::StartDiscovery(browse::Source::Group group,
       for (const std::function<void()>& then : waiting)
         then();
     });
-    busy_ops_--;
   });
 }
 
@@ -797,6 +804,12 @@ void App::BuildSettings() {
   auto step = [](int index, int d, int count) {
     return (index + (d < 0 ? count - 1 : 1)) % count;
   };
+  auto language_names = [] {
+    std::vector<std::string> names;
+    for (int i = 0; i < kLanguageCount; i++)
+      names.push_back(kLanguages[i].name);
+    return names;
+  };
 
   setting_items_.push_back({"Playback", "Next episode",
     "When an episode ends, the next one in its folder starts by itself, "
@@ -807,19 +820,31 @@ void App::BuildSettings() {
     "The audio track to pick when a file has several. Default leaves it "
     "to the file.",
     [this] { return std::string(kLanguages[LanguageIndex(audio_lang_)].name); },
-    [this, step](int d) {
-      audio_lang_ = kLanguages[step(LanguageIndex(audio_lang_), d, kLanguageCount)].code;
-      ApplyLanguages();
-      SaveSettings();
+    [this, step, language_names](int d) {
+      auto choose = [this](int i) {
+        audio_lang_ = kLanguages[i].code;
+        ApplyLanguages();
+        SaveSettings();
+      };
+      if (d == 0)
+        OpenChoiceMenu("Audio language", language_names(), LanguageIndex(audio_lang_), choose);
+      else
+        choose(step(LanguageIndex(audio_lang_), d, kLanguageCount));
     }});
   setting_items_.push_back({"", "Subtitle language",
     "Subtitles in this language are turned on when a file has them. "
     "Default leaves it to the file.",
     [this] { return std::string(kLanguages[LanguageIndex(sub_lang_)].name); },
-    [this, step](int d) {
-      sub_lang_ = kLanguages[step(LanguageIndex(sub_lang_), d, kLanguageCount)].code;
-      ApplyLanguages();
-      SaveSettings();
+    [this, step, language_names](int d) {
+      auto choose = [this](int i) {
+        sub_lang_ = kLanguages[i].code;
+        ApplyLanguages();
+        SaveSettings();
+      };
+      if (d == 0)
+        OpenChoiceMenu("Subtitle language", language_names(), LanguageIndex(sub_lang_), choose);
+      else
+        choose(step(LanguageIndex(sub_lang_), d, kLanguageCount));
     }});
   setting_items_.push_back({"", "Night mode",
     "Evens out the volume: quiet dialogue is lifted and loud effects are "
@@ -853,6 +878,44 @@ void App::BuildSettings() {
       return n ? std::to_string(n) + (n == 1 ? " item" : " items") : std::string("Empty");
     },
     [this](int) { ConfirmForgetContinue(); }, true});
+  // What the plugins ask for (a provider's 'settings', see docs/plugins.md):
+  // a section each, under the plugin's name. The values live in
+  // plugin_settings_, where the scripts read them.
+  if (js_provider_) {
+    for (const browse::JsPluginPtr& plugin : js_provider_->Plugins()) {
+      bool first = true;
+      for (const browse::PluginSetting& spec : plugin->Settings()) {
+        const std::string id = plugin->Id();
+        auto index = [this, id, spec] {
+          const std::string value = plugin_settings_->Get(id, spec.key, spec.fallback);
+          for (size_t i = 0; i < spec.options.size(); i++)
+            if (spec.options[i].first == value)
+              return (int)i;
+          return 0;
+        };
+        setting_items_.push_back({first ? plugin->ProviderName() : std::string(), spec.label,
+          spec.about,
+          [spec, index] { return spec.options[index()].second; },
+          [this, id, spec, index, step](int d) {
+            auto choose = [this, id, spec](int i) {
+              plugin_settings_->Set(id, spec.key, spec.options[i].first);
+              SaveSettings();
+            };
+            // Select on a long list of choices (every country there is)
+            // lists them, rather than stepping to the next.
+            if (d == 0 && spec.options.size() > kChoiceMenuFrom) {
+              std::vector<std::string> labels;
+              for (const auto& option : spec.options)
+                labels.push_back(option.second);
+              OpenChoiceMenu(spec.label, labels, index(), choose);
+              return;
+            }
+            choose(step(index(), d, (int)spec.options.size()));
+          }});
+        first = false;
+      }
+    }
+  }
   // For finding out what a remote's buttons arrive as; not remembered.
   setting_items_.push_back({"Diagnostics", "Show input",
     "Shows every button press as a notification, with what it arrives as. "
@@ -907,6 +970,23 @@ void App::ConfirmForgetContinue() {
   sel_menu_ = 1; // the safe one: a stray press of select changes nothing
   RebuildMenuRows();
   Set("menu_open", bind_menu_open_, true);
+}
+
+void App::OpenChoiceMenu(const std::string& title, const std::vector<std::string>& choices,
+                         int current, std::function<void(int)> pick) {
+  menu_items_.clear();
+  for (size_t i = 0; i < choices.size(); i++)
+    menu_items_.push_back({choices[i], nullptr, [this, pick, i](int) {
+      pick((int)i);
+      RebuildSettingRows();
+    }});
+  Set("menu_title", bind_menu_title_, Rml::String(title));
+  Set("menu_meta", bind_menu_meta_, Rml::String());
+  Set("menu_dialog", bind_menu_dialog_, false);
+  sel_menu_ = std::clamp(current, 0, std::max(0, (int)choices.size() - 1));
+  RebuildMenuRows();
+  Set("menu_open", bind_menu_open_, true);
+  scroll_menu_pending_ = true;
 }
 
 void App::HandleKeySettings(Rml::Event& event, int key) {

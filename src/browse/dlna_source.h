@@ -25,7 +25,7 @@ public:
   std::string RootId() const override { return "0"; } // ContentDirectory root
 
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
-  bool Resolve(const Entry& entry, std::string& uri, std::string& error) override;
+  bool Resolve(const Entry& entry, Playable& out, std::string& error) override;
 
 private:
   upnp::MediaServer server_;

@@ -2,8 +2,9 @@
 //
 // Application shell, structured after ps5-payload-dev/tvhp: all RmlUi access
 // happens on the main thread; anything that touches the network or the disk
-// (discovery, browsing, opening a stream) runs on a single worker thread
-// whose results are polled once per frame in Update().
+// (discovery, browsing, opening a stream) runs on a worker thread, one per
+// kind of work (see Lane), whose results are polled once per frame in
+// Update().
 //
 // The app itself is source-agnostic: it browses browse::Source objects that
 // browse::Providers discover (DLNA servers, local directories, ...).
@@ -26,10 +27,17 @@
 
 #include <RmlUi/Core.h>
 
+#include "browse/plugin_settings.h"
 #include "browse/source.h"
 #include "library.h"
+#include "net/cancel.h"
 #include "player.h"
+#include "util/worker.h"
 #include "visualizer.h"
+
+namespace browse {
+class JsProvider;
+}
 
 class App : public Rml::EventListener {
 public:
@@ -39,7 +47,10 @@ public:
   struct Options {
     std::string assets_dir = "assets";   // directory containing main.rml
     std::string cache_dir;             // artwork cache; "" = XDG default
-    std::string plugins_dir;           // JS plugin scripts; "" = none
+    std::string plugins_dir;           // bundled JS plugin scripts; "" = none
+    // The user's own plugin scripts, looked at after the bundled ones (a
+    // file of the same name replaces the bundled one); "" = none.
+    std::string user_plugins_dir;
     std::string fonts_dir;             // also used for subtitles
   };
 
@@ -83,6 +94,10 @@ private:
     // What the list is narrowed to (see OpenFilter); 'entries' holds only
     // the entries of 'raw' that match it. "" = all of them.
     std::string filter;
+    // Not empty: the folder could not be listed, and this is why. The level
+    // is on the stack all the same, so the screen says where the trouble
+    // is, select tries again and back leaves the usual way.
+    std::string error;
   };
 
   // Rows exposed to the RmlUi data model.
@@ -121,6 +136,7 @@ private:
     bool folder = false;
     bool favorite = false;
     bool watched = false;
+    bool playing = false; // the item in the player right now
   };
   struct PropRow {      // one "label: value" line in the info panel
     Rml::String label;
@@ -159,16 +175,39 @@ private:
 
   bool SetupDataModel(Rml::Context* context, std::string& error);
 
-  // --- Worker ------------------------------------------------------------
-  // Tasks run strictly in order on one background thread; that thread is
-  // the only one allowed to call Source::Browse()/Provider::Discover() or
-  // player_->Open()/Stop(). A task hands its result back with Reply(),
-  // whose callback runs on the main thread in the next Update() -- the
-  // only place the UI and the data model are touched.
-  void PostTask(std::function<void()> task);
+  // --- Workers -----------------------------------------------------------
+  // Blocking work runs on background threads, one per lane; within a lane,
+  // tasks run strictly in the order they were posted. The lanes keep one
+  // kind of waiting from holding up another: a search for servers does not
+  // delay a folder, and neither delays stopping what plays.
+  //
+  //   Discovery  Provider::Discover()
+  //   Browse     Source::Browse() and Search()
+  //   Playback   Source::Resolve(), then player_->Open(); player_->Stop()
+  //              (the only lane that may call those two)
+  //
+  // A task hands its result back with Reply(), whose callback runs on the
+  // main thread in the next Update() -- the only place the UI and the data
+  // model are touched. With 'busy', the task counts towards the activity
+  // indicator in the top bar from the moment it is posted.
+  enum class Lane { Discovery, Browse, Playback, Count };
+  void PostTask(Lane lane, std::function<void()> task, bool busy = true);
   void Reply(std::function<void()> apply);
-  void WorkerMain();
   void RunReplies();
+
+  // The browse (or search) the browse view is waiting for. Starting a new
+  // one, or walking away, gives up on the one in flight: its result is
+  // dropped when it arrives (the ticket no longer matches), and the token
+  // tells the lane to stop waiting for it (see net/cancel.h).
+  struct BrowseTicket {
+    uint32_t id = 0;
+    net::CancelToken cancel;
+  };
+  BrowseTicket NewBrowseRequest();
+  void AbandonBrowse();
+  // The result of the request 'ticket' was for has arrived (and is the one
+  // being waited for).
+  void BrowseArrived();
 
   // Assigns a bound value and marks it dirty, but only if it changed.
   template <typename T, typename U>
@@ -260,6 +299,11 @@ private:
   void EnterSettings();               // focus from the tab into the list
   void HandleKeySettings(Rml::Event& event, int key);
   void ConfirmForgetContinue();       // asks, then empties Continue watching
+  // A setting with more choices than anyone wants to step through one by
+  // one: the menu lists them all, on the current one, and 'pick' is called
+  // with the index of the one chosen.
+  void OpenChoiceMenu(const std::string& title, const std::vector<std::string>& choices,
+                      int current, std::function<void(int)> pick);
   void ApplyLanguages();              // preferred languages -> player
   const browse::Entry* SelectedCard() const;
   // The card the banner shows: the focused one, or with the focus on the
@@ -509,6 +553,15 @@ private:
   Rml::String bind_detail_description_;
   std::vector<PropRow> detail_props_;
   bool bind_busy_ = false;         // a browse/discovery is in flight
+  // The browse view's own account of waiting: a listing is on its way
+  // (said in place of the list while that is empty), or the focused row is
+  // being opened (a folder being listed, an item being started) and has
+  // been for long enough to say so; and what went wrong with the folder on
+  // screen.
+  bool bind_browse_loading_ = false;
+  bool bind_browse_slow_ = false;   // ... and has been for a moment
+  bool bind_row_busy_ = false;
+  Rml::String bind_browse_error_;
   // Phase of an in-flight launch ("Opening stream..."), or "" when idle.
   // The browse view's own feedback is the topbar busy indicator, which
   // keeps running because the shell is not hidden until the player is up.
@@ -530,6 +583,9 @@ private:
   bool bind_watch_seekable_ = false;
   Rml::String bind_watch_name_;
   Rml::String bind_watch_description_;
+  // What the stream says is on (Player::StreamTitle), when that is more
+  // than the name already says: the song on a radio station.
+  Rml::String bind_watch_stream_title_;
   Rml::String bind_watch_pos_;     // "12:34"
   Rml::String bind_watch_dur_;     // "45:00", "" for live streams
   Rml::String bind_watch_ends_;    // "Ends at 21:40", "" when unknown
@@ -670,6 +726,13 @@ private:
 
   // Backing data (main thread).
   std::vector<std::unique_ptr<browse::Provider>> providers_;
+  // The plugins' provider (one of providers_), for what only plugins have:
+  // settings of their own. Null without a plugin directory.
+  browse::JsProvider* js_provider_ = nullptr;
+  // What the user chose for those; shared with the plugins, which read it
+  // from their worker threads.
+  std::shared_ptr<browse::PluginSettings> plugin_settings_ =
+    std::make_shared<browse::PluginSettings>();
   browse::SourcePtr current_source_;   // source being browsed, or null
   std::vector<BrowseLevel> path_;      // root first
   browse::Entry playing_;              // item in the player right now
@@ -720,11 +783,7 @@ private:
   View view_ = View::Home;
 
   // Worker plumbing: jobs going out, results coming back.
-  std::thread worker_;
-  std::mutex tasks_mutex_;
-  std::condition_variable tasks_cv_;
-  std::deque<std::function<void()>> tasks_;
-  std::atomic<bool> worker_running_{false};
+  util::Worker lanes_[(int)Lane::Count];
   std::mutex replies_mutex_;
   std::deque<std::function<void()>> replies_;
 
@@ -746,6 +805,9 @@ private:
   std::deque<std::pair<std::string, bool>> art_queue_; // (uri, thumb)
   bool art_running_ = false;          // guarded by art_mutex_
   uint32_t browse_request_ = 0;     // id of the browse we are waiting for
+  net::CancelToken browse_cancel_;  // ... and the way to give up on it
+  bool browse_pending_ = false;     // ... while it has not arrived
+  double browse_started_at_ = 0.0;
   std::atomic<int> busy_ops_{0};
 
   // In-flight PlayEntry. The worker moves through the phases; the main
@@ -755,6 +817,7 @@ private:
   std::atomic<int> launch_phase_{kLaunchIdle};
   uint32_t launch_seq_ = 0;         // ever-increasing ticket source
   uint32_t launch_request_ = 0;     // ticket we are waiting for; 0 = idle
+  net::CancelToken launch_cancel_;  // gives up on its resolve()
   browse::Entry launch_entry_;      // item being opened
   // Direction of a next/previous (or auto-advance) launch, so an item that
   // fails to open is skipped the same way; 0 for an explicit choice.

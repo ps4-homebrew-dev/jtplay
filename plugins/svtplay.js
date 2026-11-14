@@ -25,21 +25,21 @@ const SEARCH_UA = "svtplaywebb-render-prod-client";
 // instead of being looked up by name.
 const OP = {
     CHANNELS:  ["ChannelsQuery",
-		"210be4b72f03223b990f031d9a2e3501ff9284f8d2c66b01b255a807775f0b19"],
+                "210be4b72f03223b990f031d9a2e3501ff9284f8d2c66b01b255a807775f0b19"],
     PROGRAMS:  ["ProgramsListing",
-		"17252e11da632f5c0d1b924b32be9191f6854723a0f50fb2adb35f72bb670efa"],
+                "17252e11da632f5c0d1b924b32be9191f6854723a0f50fb2adb35f72bb670efa"],
     GENRES:    ["MainGenres",
-		"65b3d9bccd1adf175d2ad6b1aaa482bb36f382f7bad6c555750f33322bc2b489"],
+                "65b3d9bccd1adf175d2ad6b1aaa482bb36f382f7bad6c555750f33322bc2b489"],
     CATEGORY:  ["CategoryPageQuery",
-		"00be06320342614f4b186e9c7710c29a7fc235a1936bde08a6ab0f427131bfaf"],
+                "00be06320342614f4b186e9c7710c29a7fc235a1936bde08a6ab0f427131bfaf"],
     GRID:      ["GridPage",
-		"a8248fc130da34208aba94c4d5cc7bd44187b5f36476d8d05e03724321aafb40"],
+                "a8248fc130da34208aba94c4d5cc7bd44187b5f36476d8d05e03724321aafb40"],
     GRID_LIVE: ["GridPage",
-		"1e2d15ff7ffa578d33ebf1287d3f7af7fd47125552b564e96fd277a744345a69"],
+                "1e2d15ff7ffa578d33ebf1287d3f7af7fd47125552b564e96fd277a744345a69"],
     DETAILS:   ["DetailsPageQuery",
-		"e240d515657bbb54f33cf158cea581f6303b8f01f3022ea3f9419fbe3a5614b0"],
+                "e240d515657bbb54f33cf158cea581f6303b8f01f3022ea3f9419fbe3a5614b0"],
     VIDEO_ID:  ["DetailsPageQuery",
-		"5be42eb4028ed8f2680ce2302f6887df3fed2dcb6f61ac091ff5a37a3d0bf477"]
+                "5be42eb4028ed8f2680ce2302f6887df3fed2dcb6f61ac091ff5a37a3d0bf477"]
 };
 
 // The searches svtplay.se makes, tried in order: [operation, variables for
@@ -50,7 +50,7 @@ const SEARCH = [
     [["SearchPage",
       "665488250690ac83cac858021011cee4d5b22cff046e74d7ab65b72384dfe09e"],
      (q) => ({abTestVariants: [], kidsFilter: false, onlyKidsContent: false,
-	      query: q, searchClickHistory: []})],
+              query: q, searchClickHistory: []})],
     [["AutoCompleteSearch",
       "8989b62115022fda8a6129d0f512b94f4d2de3bf2110415647c09c4316ce4a91"],
      (q) => ({querystring: q, searchClickHistory: []})]
@@ -92,7 +92,7 @@ function cached(key, produce) {
     const hit = cache[key];
     const now = Date.now();
     if (hit && now - hit.time < CACHE_TTL_MS) {
-	return hit.value;
+        return hit.value;
     }
     const value = produce();
     cache[key] = {time: now, value: value};
@@ -104,32 +104,32 @@ function query(op, variables, endpoint) {
     const api = endpoint ? endpoint[0] : QUERY_API;
     const ua = endpoint ? endpoint[1] : CLIENT_UA;
     const extensions = {
-	persistedQuery: {version: 1, sha256Hash: op[1]}
+        persistedQuery: {version: 1, sha256Hash: op[1]}
     };
     const url = api +
-	  "?ua=" + ua +
-	  "&operationName=" + op[0] +
-	  "&variables=" + encodeURIComponent(JSON.stringify(variables || {})) +
-	  "&extensions=" + encodeURIComponent(JSON.stringify(extensions));
+          "?ua=" + ua +
+          "&operationName=" + op[0] +
+          "&variables=" + encodeURIComponent(JSON.stringify(variables || {})) +
+          "&extensions=" + encodeURIComponent(JSON.stringify(extensions));
 
     // The search server is asked as the site asks it, from its origin.
     const headers = {Accept: "application/json"};
     if (endpoint) {
-	headers.Origin = "https://www.svtplay.se";
-	headers.Referer = "https://www.svtplay.se/";
+        headers.Origin = "https://www.svtplay.se";
+        headers.Referer = "https://www.svtplay.se/";
     }
     const res = http.get(url, {headers: headers});
     if (!res.ok) {
-	throw new Error(op[0] + ": HTTP " + res.status);
+        throw new Error(op[0] + ": HTTP " + res.status);
     }
 
     const json = JSON.parse(res.body);
     if (json.errors && json.errors.length) {
-	// A stale hash lands here as "PersistedQueryNotFound".
-	throw new Error(op[0] + ": " + json.errors[0].message);
+        // A stale hash lands here as "PersistedQueryNotFound".
+        throw new Error(op[0] + ": " + json.errors[0].message);
     }
     if (!json.data) {
-	throw new Error(op[0] + ": no data in response");
+        throw new Error(op[0] + ": no data in response");
     }
     return json.data;
 }
@@ -137,40 +137,40 @@ function query(op, variables, endpoint) {
 // Descriptions and search headings arrive with markup in them now and then.
 function text(s) {
     if (!s) {
-	return "";
+        return "";
     }
     return String(s)
-	.replace(/<[^>]*>/g, "")
-	.replace(/&amp;/g, "&")
-	.replace(/&quot;/g, '"')
-	.replace(/&#39;/g, "'")
-	.replace(/&lt;/g, "<")
-	.replace(/&gt;/g, ">")
-	.replace(/\s+/g, " ")
-	.trim();
+        .replace(/<[^>]*>/g, "")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 // Artwork is addressed by an id and the timestamp of its last change; the
 // service scales on the fly, so ask for something a TV can use.
 function imageUrl(img, width) {
     if (!img || !img.id) {
-	return "";
+        return "";
     }
     return IMAGE_API + "/wide/" + (width || 720) + "/" + img.id + "/" +
-	(img.changed || 0) + "?quality=70";
+        (img.changed || 0) + "?quality=70";
 }
 
 // Picks the best artwork an object carries, whatever shape it came in.
 function pickImage(obj, fallback) {
     const images = obj && obj.images;
     if (images) {
-	const img = images.wide || images.cleanWide || images.landscape;
-	if (img) {
-	    return imageUrl(img);
-	}
+        const img = images.wide || images.cleanWide || images.landscape;
+        if (img) {
+            return imageUrl(img);
+        }
     }
     if (obj && obj.image) {
-	return imageUrl(obj.image);
+        return imageUrl(obj.image);
     }
     return fallback || "";
 }
@@ -198,7 +198,7 @@ function isVideo(typename) {
 function videoId(item) {
     const svtId = item.videoSvtId || item.svtId;
     if (svtId) {
-	return "video:" + svtId;
+        return "video:" + svtId;
     }
     const path = item.urls && item.urls.svtplay;
     return path ? "path:" + path : "";
@@ -208,7 +208,7 @@ function videoId(item) {
 // out) into an entry. Returns null for anything unplayable or unbrowsable.
 function toEntry(node, parentImage) {
     if (!node) {
-	return null;
+        return null;
     }
 
     // A Teaser wraps the real object and adds the display strings the site
@@ -216,64 +216,64 @@ function toEntry(node, parentImage) {
     const teaser = node.__typename === "Teaser" ? node : null;
     const item = teaser ? teaser.item : (node.item || node);
     if (!item) {
-	return null;
+        return null;
     }
 
     const typename = item.__typename;
     let name = text(teaser ? teaser.heading : "") || text(item.name);
     if (!name) {
-	return null;
+        return null;
     }
 
     // Episodes are listed under their show, so the heading alone ("Avsnitt
     // 3") is ambiguous once it turns up in a genre or a live row.
     const sub = teaser ? text(teaser.subHeading) : "";
     if (sub && sub !== name && !NOISE.test(sub)) {
-	name = name + " - " + sub;
+        name = name + " - " + sub;
     }
 
     const description =
-	  text(teaser ? teaser.description : "") ||
-	  text(item.longDescription) ||
-	  text(item.description);
+          text(teaser ? teaser.description : "") ||
+          text(item.longDescription) ||
+          text(item.description);
     const image = pickImage(teaser, "") || pickImage(item, parentImage);
 
     if (isShow(typename)) {
-	const path = item.urls && item.urls.svtplay;
-	if (!path) {
-	    return null;
-	}
-	return {
-	    id: "show:" + path,
-	    type: "folder",
-	    name: name,
-	    description: description,
-	    image: image
-	};
+        const path = item.urls && item.urls.svtplay;
+        if (!path) {
+            return null;
+        }
+        return {
+            id: "show:" + path,
+            type: "folder",
+            name: name,
+            description: description,
+            image: image
+        };
     }
 
     if (isVideo(typename)) {
-	const id = videoId(item);
-	if (!id) {
-	    return null;
-	}
-	return {
-	    id: id,
-	    type: "video",
-	    name: name,
-	    description: description,
-	    image: image
-	};
+        const id = videoId(item);
+        if (!id) {
+            return null;
+        }
+        return {
+            id: id,
+            type: "video",
+            name: name,
+            description: description,
+            image: image
+        };
     }
 
     if (typename === "Genre") {
-	return {
-	    id: "genre:" + item.id,
-	    type: "folder",
-	    name: name,
-	    description: description,
-	    image: image
-	};
+        return {
+            id: "genre:" + item.id,
+            type: "folder",
+            name: name,
+            description: description,
+            image: image
+        };
     }
 
     console.log("skipping unsupported type: " + typename);
@@ -283,10 +283,10 @@ function toEntry(node, parentImage) {
 function toEntries(nodes, parentImage) {
     const out = [];
     (nodes || []).forEach((node) => {
-	const entry = toEntry(node, parentImage);
-	if (entry) {
-	    out.push(entry);
-	}
+        const entry = toEntry(node, parentImage);
+        if (entry) {
+            out.push(entry);
+        }
     });
     return out;
 }
@@ -296,16 +296,16 @@ function fetchChannels() {
     const channels = (res.channels && res.channels.channels) || [];
 
     return channels.map((ch) => {
-	const running = ch.running || {};
-	return {
-	    id: "video:" + ch.id,
-	    type: "video",
-	    name: ch.name,
-	    description: running.name
-		? text(running.name) + " - " + text(running.description)
-		: "Live",
-	    image: pickImage(running, "")
-	};
+        const running = ch.running || {};
+        return {
+            id: "video:" + ch.id,
+            type: "video",
+            name: ch.name,
+            description: running.name
+                ? text(running.name) + " - " + text(running.description)
+                : "Live",
+            image: pickImage(running, "")
+        };
     });
 }
 
@@ -313,8 +313,8 @@ function fetchChannels() {
 function fetchSelection(selectionId) {
     const op = selectionId === "live_start" ? OP.GRID_LIVE : OP.GRID;
     const res = query(op, {
-	selectionId: selectionId,
-	includeFullOppetArkiv: true
+        selectionId: selectionId,
+        includeFullOppetArkiv: true
     });
     const selection = res.selectionById || {};
     return toEntries(selection.items);
@@ -324,18 +324,18 @@ function fetchSelection(selectionId) {
 // so that a folder holds tens of entries rather than a thousand.
 function allPrograms() {
     return cached("programs", () => {
-	const res = query(OP.PROGRAMS);
-	const selections = (res.programAtillO && res.programAtillO.selections) || [];
-	const entries = [];
-	selections.forEach((selection) => {
-	    toEntries(selection.items).forEach((entry) => entries.push(entry));
-	});
-	entries.sort((a, b) => {
-	    const ka = sortKey(a.name);
-	    const kb = sortKey(b.name);
-	    return ka < kb ? -1 : (ka > kb ? 1 : 0);
-	});
-	return entries;
+        const res = query(OP.PROGRAMS);
+        const selections = (res.programAtillO && res.programAtillO.selections) || [];
+        const entries = [];
+        selections.forEach((selection) => {
+            toEntries(selection.items).forEach((entry) => entries.push(entry));
+        });
+        entries.sort((a, b) => {
+            const ka = sortKey(a.name);
+            const kb = sortKey(b.name);
+            return ka < kb ? -1 : (ka > kb ? 1 : 0);
+        });
+        return entries;
     });
 }
 
@@ -350,26 +350,26 @@ function fetchProgramLetters() {
     const seen = {};
     const letters = [];
     allPrograms().forEach((entry) => {
-	const letter = programLetter(entry.name);
-	if (!seen[letter]) {
-	    seen[letter] = 0;
-	    letters.push(letter);
-	}
-	seen[letter]++;
+        const letter = programLetter(entry.name);
+        if (!seen[letter]) {
+            seen[letter] = 0;
+            letters.push(letter);
+        }
+        seen[letter]++;
     });
 
     // "#" sorts before "A" by code point but belongs last.
     letters.sort((a, b) => {
-	if (a === "#") return 1;
-	if (b === "#") return -1;
-	return sortKey(a) < sortKey(b) ? -1 : 1;
+        if (a === "#") return 1;
+        if (b === "#") return -1;
+        return sortKey(a) < sortKey(b) ? -1 : 1;
     });
 
     return letters.map((letter) => ({
-	id: "programs:" + letter,
-	type: "folder",
-	name: letter === "#" ? "0-9 och övrigt" : letter,
-	description: seen[letter] + " program"
+        id: "programs:" + letter,
+        type: "folder",
+        name: letter === "#" ? "0-9 och övrigt" : letter,
+        description: seen[letter] + " program"
     }));
 }
 
@@ -381,19 +381,19 @@ function fetchGenres() {
     const res = query(OP.GENRES);
     const genres = (res.genresInMain && res.genresInMain.genres) || [];
     return genres.map((g) => ({
-	id: "genre:" + g.id,
-	type: "folder",
-	name: g.name,
-	description: "",
-	image: pickImage(g, "")
+        id: "genre:" + g.id,
+        type: "folder",
+        name: g.name,
+        description: "",
+        image: pickImage(g, "")
     }));
 }
 
 function fetchGenre(id) {
     const res = query(OP.CATEGORY, {
-	id: id,
-	tab: "all",
-	includeFullOppetArkiv: true
+        id: id,
+        tab: "all",
+        includeFullOppetArkiv: true
     });
 
     const page = res.categoryPage || {};
@@ -401,32 +401,32 @@ function fetchGenre(id) {
     let items = [];
 
     tabs.forEach((tab) => {
-	(tab.selections || []).forEach((selection) => {
-	    // Every tab carries a few themed rows; "all" is the full listing
-	    // and the only one that is not a subset of it.
-	    if (selection.selectionType === "all" || selection.id === "all") {
-		items = items.concat(selection.items || []);
-	    }
-	});
+        (tab.selections || []).forEach((selection) => {
+            // Every tab carries a few themed rows; "all" is the full listing
+            // and the only one that is not a subset of it.
+            if (selection.selectionType === "all" || selection.id === "all") {
+                items = items.concat(selection.items || []);
+            }
+        });
     });
 
     // Older documents only expose the rows, in which case take them all and
     // let the id dedup below sort out the overlap.
     if (!items.length) {
-	tabs.forEach((tab) => {
-	    (tab.selections || []).forEach((selection) => {
-		items = items.concat(selection.items || []);
-	    });
-	});
+        tabs.forEach((tab) => {
+            (tab.selections || []).forEach((selection) => {
+                items = items.concat(selection.items || []);
+            });
+        });
     }
 
     const seen = {};
     return toEntries(items).filter((entry) => {
-	if (seen[entry.id]) {
-	    return false;
-	}
-	seen[entry.id] = true;
-	return true;
+        if (seen[entry.id]) {
+            return false;
+        }
+        seen[entry.id] = true;
+        return true;
     });
 }
 
@@ -434,41 +434,41 @@ function fetchGenre(id) {
 // 'folderId' picks one of those groups once the user has opened it.
 function fetchShow(path, folderId) {
     const res = cached("show:" + path, () => query(OP.DETAILS, {
-	path: path,
-	includeFullOppetArkiv: true
+        path: path,
+        includeFullOppetArkiv: true
     }));
 
     const page = res.detailsPageByPath;
     if (!page) {
-	throw new Error("no such show: " + path);
+        throw new Error("no such show: " + path);
     }
 
     const showImage = pickImage(page, "");
     const groups = (page.associatedContent || []).filter((group) => {
-	// "upcoming" is unplayable and "related" is a different show.
-	return group.id !== "upcoming" && group.id !== "related" &&
-	    (group.items || []).length > 0;
+        // "upcoming" is unplayable and "related" is a different show.
+        return group.id !== "upcoming" && group.id !== "related" &&
+            (group.items || []).length > 0;
     });
 
     if (folderId) {
-	const group = groups.filter((g) => g.id === folderId)[0];
-	if (!group) {
-	    throw new Error("no such section: " + folderId);
-	}
-	return toEntries(group.items, showImage);
+        const group = groups.filter((g) => g.id === folderId)[0];
+        if (!group) {
+            throw new Error("no such section: " + folderId);
+        }
+        return toEntries(group.items, showImage);
     }
 
     // One group is not worth a folder of its own; show the episodes.
     if (groups.length === 1) {
-	return toEntries(groups[0].items, showImage);
+        return toEntries(groups[0].items, showImage);
     }
 
     return groups.map((group) => ({
-	id: "show:" + path + "|" + group.id,
-	type: "folder",
-	name: text(group.name) || group.id.replace(/-/g, " "),
-	description: group.items.length + " videor",
-	image: showImage
+        id: "show:" + path + "|" + group.id,
+        type: "folder",
+        name: text(group.name) || group.id.replace(/-/g, " "),
+        description: group.items.length + " videor",
+        image: showImage
     }));
 }
 
@@ -477,31 +477,31 @@ function fetchShow(path, folderId) {
 // text() takes out.
 function searchHitToEntry(hit) {
     if (!hit) {
-	return null;
+        return null;
     }
     const teaser = hit.teaser;
     if (teaser && teaser.item) {
-	// Whatever the teaser is called this year, it is read as a Teaser.
-	return toEntry({
-	    __typename: "Teaser",
-	    heading: teaser.heading,
-	    subHeading: teaser.subHeading,
-	    description: teaser.description,
-	    images: teaser.images,
-	    image: teaser.image,
-	    item: teaser.item
-	});
+        // Whatever the teaser is called this year, it is read as a Teaser.
+        return toEntry({
+            __typename: "Teaser",
+            heading: teaser.heading,
+            subHeading: teaser.subHeading,
+            description: teaser.description,
+            images: teaser.images,
+            image: teaser.image,
+            item: teaser.item
+        });
     }
     const category = hit.categoryTeaser;
     if (category && category.id) {
-	const name = text(category.heading || category.name);
-	return name ? {
-	    id: "genre:" + category.id,
-	    type: "folder",
-	    name: name,
-	    description: "Kategori",
-	    image: pickImage(category, "")
-	} : null;
+        const name = text(category.heading || category.name);
+        return name ? {
+            id: "genre:" + category.id,
+            type: "folder",
+            name: name,
+            description: "Kategori",
+            image: pickImage(category, "")
+        } : null;
     }
     return null;
 }
@@ -513,31 +513,31 @@ function searchHitToEntry(hit) {
 function search(q) {
     q = String(q || "").trim();
     if (!q) {
-	return [];
+        return [];
     }
     let firstError = null;
     for (let i = 0; i < SEARCH.length; i++) {
-	const op = SEARCH[i][0];
-	let res;
-	try {
-	    res = query(op, SEARCH[i][1](q), [SEARCH_API, SEARCH_UA]);
-	} catch (e) {
-	    console.warn("search: " + e.message);
-	    firstError = firstError || e;
-	    continue;
-	}
-	const page = res.searchPage || {};
-	const hits = (page.flat && page.flat.hits) || [];
-	const seen = {};
-	const out = [];
-	hits.forEach((hit) => {
-	    const entry = searchHitToEntry(hit);
-	    if (entry && !seen[entry.id]) {
-		seen[entry.id] = true;
-		out.push(entry);
-	    }
-	});
-	return out;
+        const op = SEARCH[i][0];
+        let res;
+        try {
+            res = query(op, SEARCH[i][1](q), [SEARCH_API, SEARCH_UA]);
+        } catch (e) {
+            console.warn("search: " + e.message);
+            firstError = firstError || e;
+            continue;
+        }
+        const page = res.searchPage || {};
+        const hits = (page.flat && page.flat.hits) || [];
+        const seen = {};
+        const out = [];
+        hits.forEach((hit) => {
+            const entry = searchHitToEntry(hit);
+            if (entry && !seen[entry.id]) {
+                seen[entry.id] = true;
+                out.push(entry);
+            }
+        });
+        return out;
     }
     throw firstError;
 }
@@ -546,13 +546,13 @@ function search(q) {
 // listings that give a path and no id.
 function svtIdForPath(path) {
     return cached("svtid:" + path, () => {
-	const res = query(OP.VIDEO_ID, {path: path});
-	const page = res.detailsPageByPath;
-	const svtId = page && page.video && page.video.svtId;
-	if (!svtId) {
-	    throw new Error("no video on " + path);
-	}
-	return svtId;
+        const res = query(OP.VIDEO_ID, {path: path});
+        const page = res.detailsPageByPath;
+        const svtId = page && page.video && page.video.svtId;
+        if (!svtId) {
+            throw new Error("no video on " + path);
+        }
+        return svtId;
     });
 }
 
@@ -560,37 +560,37 @@ function svtIdForPath(path) {
 // that redirects to one; the latter is what live channels use.
 function referenceUrl(ref) {
     if (ref.resolve) {
-	const res = http.get(ref.resolve, {headers: {Accept: "application/json"}});
-	if (res.ok) {
-	    const location = JSON.parse(res.body).location;
-	    if (location) {
-		return location;
-	    }
-	}
-	console.warn("could not resolve " + ref.format + ", using its url");
+        const res = http.get(ref.resolve, {headers: {Accept: "application/json"}});
+        if (res.ok) {
+            const location = JSON.parse(res.body).location;
+            if (location) {
+                return location;
+            }
+        }
+        console.warn("could not resolve " + ref.format + ", using its url");
     }
     return ref.url || "";
 }
 
 function resolveStream(svtId) {
     const res = http.get(VIDEO_API + svtId, {
-	headers: {Accept: "application/json"},
-	timeout: 20
+        headers: {Accept: "application/json"},
+        timeout: 20
     });
     if (!res.ok) {
-	// 403 is what a geo blocked title abroad looks like.
-	throw new Error(res.status === 403
-			? "not available from here"
-			: "video API: HTTP " + res.status);
+        // 403 is what a geo blocked title abroad looks like.
+        throw new Error(res.status === 403
+                        ? "not available from here"
+                        : "video API: HTTP " + res.status);
     }
 
     const video = JSON.parse(res.body);
     let refs = video.videoReferences || [];
     if (!refs.length && video.variants && video.variants.default) {
-	refs = video.variants.default.videoReferences || [];
+        refs = video.variants.default.videoReferences || [];
     }
     if (!refs.length) {
-	throw new Error("nothing to play in " + svtId);
+        throw new Error("nothing to play in " + svtId);
     }
 
     const drm = video.rights && video.rights.drmCopyProtection;
@@ -600,36 +600,36 @@ function resolveStream(svtId) {
     let best = null;
     let bestRank = FORMATS.length;
     refs.forEach((ref) => {
-	const format = String(ref.format || ref.playerType || "").toLowerCase();
-	if (drm && format.indexOf("dash") === 0) {
-	    return;
-	}
-	const rank = FORMATS.indexOf(format);
-	if (rank >= 0 && rank < bestRank) {
-	    best = ref;
-	    bestRank = rank;
-	}
+        const format = String(ref.format || ref.playerType || "").toLowerCase();
+        if (drm && format.indexOf("dash") === 0) {
+            return;
+        }
+        const rank = FORMATS.indexOf(format);
+        if (rank >= 0 && rank < bestRank) {
+            best = ref;
+            bestRank = rank;
+        }
     });
 
     if (!best) {
-	// SVT renames formats now and then, so before giving up take anything
-	// that looks like an HLS manifest.
-	best = refs.filter((ref) => {
-	    const format = String(ref.format || "").toLowerCase();
-	    return String(ref.url || "").indexOf(".m3u8") > 0 &&
-		!(drm && format.indexOf("dash") === 0);
-	})[0];
+        // SVT renames formats now and then, so before giving up take anything
+        // that looks like an HLS manifest.
+        best = refs.filter((ref) => {
+            const format = String(ref.format || "").toLowerCase();
+            return String(ref.url || "").indexOf(".m3u8") > 0 &&
+                !(drm && format.indexOf("dash") === 0);
+        })[0];
     }
 
     if (!best) {
-	throw new Error(drm
-			? "copy protected"
-			: "no supported stream format for " + svtId);
+        throw new Error(drm
+                        ? "copy protected"
+                        : "no supported stream format for " + svtId);
     }
 
     const url = referenceUrl(best);
     if (!url) {
-	throw new Error("empty stream url for " + svtId);
+        throw new Error("empty stream url for " + svtId);
     }
     console.log("playing " + best.format + ": " + url);
     return url;
@@ -639,87 +639,87 @@ return {
     name: "SVT Play",
 
     discover() {
-	return [{
-	    name: "SVT Play",
-	    detail: "TV from Swedish public service",
-	    icon: "📺",
-	    root: "",
+        return [{
+            name: "SVT Play",
+            detail: "TV from Swedish public service",
+            icon: "📺",
+            root: "",
 
-	    browse(id) {
-		if (!id) {
-		    const rows = START_ROWS.map((row) => ({
-			id: row[0],
-			type: "folder",
-			name: row[1],
-			description: row[2]
-		    }));
-		    return [{
-			id: "channels",
-			type: "folder",
-			name: "Kanaler",
-			description: "Direktsändning"
-		    }].concat(rows, [{
-			id: "programs",
-			type: "folder",
-			name: "Program A-Ö",
-			description: "Hela utbudet"
-		    }, {
-			id: "genres",
-			type: "folder",
-			name: "Genrer",
-			description: "Bläddra efter kategori"
-		    }]);
-		}
+            browse(id) {
+                if (!id) {
+                    const rows = START_ROWS.map((row) => ({
+                        id: row[0],
+                        type: "folder",
+                        name: row[1],
+                        description: row[2]
+                    }));
+                    return [{
+                        id: "channels",
+                        type: "folder",
+                        name: "Kanaler",
+                        description: "Direktsändning"
+                    }].concat(rows, [{
+                        id: "programs",
+                        type: "folder",
+                        name: "Program A-Ö",
+                        description: "Hela utbudet"
+                    }, {
+                        id: "genres",
+                        type: "folder",
+                        name: "Genrer",
+                        description: "Bläddra efter kategori"
+                    }]);
+                }
 
-		if (id === "channels") {
-		    return fetchChannels();
-		}
-		if (id === "programs") {
-		    return fetchProgramLetters();
-		}
-		if (id === "genres") {
-		    return fetchGenres();
-		}
+                if (id === "channels") {
+                    return fetchChannels();
+                }
+                if (id === "programs") {
+                    return fetchProgramLetters();
+                }
+                if (id === "genres") {
+                    return fetchGenres();
+                }
 
-		const row = START_ROWS.filter((r) => r[0] === id)[0];
-		if (row) {
-		    return fetchSelection(row[3]);
-		}
+                const row = START_ROWS.filter((r) => r[0] === id)[0];
+                if (row) {
+                    return fetchSelection(row[3]);
+                }
 
-		if (id.indexOf("programs:") === 0) {
-		    return fetchProgramsByLetter(id.substring("programs:".length));
-		}
+                if (id.indexOf("programs:") === 0) {
+                    return fetchProgramsByLetter(id.substring("programs:".length));
+                }
 
-		if (id.indexOf("genre:") === 0) {
-		    return fetchGenre(id.substring("genre:".length));
-		}
+                if (id.indexOf("genre:") === 0) {
+                    return fetchGenre(id.substring("genre:".length));
+                }
 
-		if (id.indexOf("show:") === 0) {
-		    const rest = id.substring("show:".length);
-		    const bar = rest.indexOf("|");
-		    return bar < 0
-			? fetchShow(rest)
-			: fetchShow(rest.substring(0, bar), rest.substring(bar + 1));
-		}
+                if (id.indexOf("show:") === 0) {
+                    const rest = id.substring("show:".length);
+                    const bar = rest.indexOf("|");
+                    return bar < 0
+                        ? fetchShow(rest)
+                        : fetchShow(rest.substring(0, bar), rest.substring(bar + 1));
+                }
 
-		console.warn("cannot browse " + id);
-		return [];
-	    },
+                console.warn("cannot browse " + id);
+                return [];
+            },
 
-	    // The folder on screen does not matter: SVT searches everything.
-	    search(q) {
-		return search(q);
-	    },
+            // The folder on screen does not matter: SVT searches everything.
+            search(q) {
+                return search(q);
+            },
 
-	    resolve(id) {
-		if (id.indexOf("video:") === 0) {
-		    return resolveStream(id.substring("video:".length));
-		}
-		if (id.indexOf("path:") === 0) {
-		    return resolveStream(svtIdForPath(id.substring("path:".length)));
-		}
-		return resolveStream(id);
-	    }
-	}];
+            resolve(id) {
+                if (id.indexOf("video:") === 0) {
+                    return resolveStream(id.substring("video:".length));
+                }
+                if (id.indexOf("path:") === 0) {
+                    return resolveStream(svtIdForPath(id.substring("path:".length)));
+                }
+                return resolveStream(id);
+            }
+        }];
     }
 };

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(jtplay)
+project(jtplay VERSION 1.1.0 LANGUAGES C CXX)
+
+option(JTPLAY_WERROR "Treat compiler warnings as errors" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +20,21 @@ pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl)
 find_path(QUICKJS_INCLUDE_DIR NAMES quickjs.h PATH_SUFFIXES quickjs)
 find_library(QUICKJS_LIBRARY NAMES quickjs PATH_SUFFIXES quickjs)
+if(NOT QUICKJS_INCLUDE_DIR OR NOT QUICKJS_LIBRARY)
+    message(FATAL_ERROR
+        "QuickJS not found (quickjs.h and libquickjs.a, each in a directory "
+        "'quickjs' under include/ and lib/). See Building in README.md.")
+endif()
+
+# The JavaScript plugin host, on its own: what the app and the headless
+# plugin runner (and through it the tests) share.
+set(JTPLAY_PLUGIN_HOST_SOURCES
+    src/browse/js_http.cpp
+    src/browse/js_plugin.cpp
+    src/browse/js_source.cpp
+    src/net/http_client.cpp
+    src/plugin_cli.cpp
+)
 
 add_executable(jtplay
     src/main.cpp
@@ -34,9 +51,7 @@ add_executable(jtplay
     src/visualizer.cpp
     src/browse/dlna_source.cpp
     src/browse/fs_source.cpp
-    src/browse/js_http.cpp
-    src/browse/js_source.cpp
-    src/net/http_client.cpp
+    ${JTPLAY_PLUGIN_HOST_SOURCES}
     src/upnp/http.cpp
     src/upnp/ssdp.cpp
     src/upnp/dlna.cpp
@@ -45,7 +60,11 @@ add_executable(jtplay
     src/RmlUi/RmlUi_Platform_SDL.cpp
 )
 
-target_compile_options(jtplay PRIVATE -Wall -Werror)
+target_compile_options(jtplay PRIVATE -Wall)
+if(JTPLAY_WERROR)
+    target_compile_options(jtplay PRIVATE -Werror)
+endif()
+target_compile_definitions(jtplay PRIVATE JTPLAY_VERSION="${PROJECT_VERSION}")
 # Antialiasing of the UI's edges (rounded corners, curves): the renderer's
 # default of 2 samples leaves them visibly stepped. Clamped to what the
 # driver supports (RmlUi_Renderer_GL3.cpp).
@@ -67,6 +86,34 @@ target_link_libraries(jtplay PRIVATE
     ${ORBIS_LIBRARIES}
     m
 )
+
+# jtplay-plugin: the plugin runner as a program of its own ("jtplay --plugin"
+# without the window, the player and their libraries), and the tests that
+# run the plugin host through it against a local server. Not for the
+# console: there is nowhere to run them.
+if(NOT ORBIS)
+    add_executable(jtplay-plugin ${JTPLAY_PLUGIN_HOST_SOURCES})
+    target_compile_options(jtplay-plugin PRIVATE -Wall)
+    if(JTPLAY_WERROR)
+        target_compile_options(jtplay-plugin PRIVATE -Werror)
+    endif()
+    target_compile_definitions(jtplay-plugin PRIVATE
+        JTPLAY_PLUGIN_TOOL JTPLAY_VERSION="${PROJECT_VERSION}")
+    target_include_directories(jtplay-plugin PRIVATE ${QUICKJS_INCLUDE_DIR} src)
+    target_link_libraries(jtplay-plugin PRIVATE
+        PkgConfig::TINYXML2 PkgConfig::CURL PkgConfig::OPENSSL
+        Threads::Threads ${QUICKJS_LIBRARY} m)
+
+    include(CTest)
+    if(BUILD_TESTING)
+        find_package(Python3 COMPONENTS Interpreter)
+        if(Python3_FOUND)
+            add_test(NAME plugin-host
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/run.py
+                        $<TARGET_FILE:jtplay-plugin> ${CMAKE_CURRENT_SOURCE_DIR})
+        endif()
+    endif()
+endif()
 
 if(ORBIS)
     pkg_check_modules(EGL REQUIRED egl)

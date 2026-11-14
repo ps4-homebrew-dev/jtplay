@@ -1,0 +1,36 @@
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# C++: two spaces, no tabs (see .clang-format).
+[*.{cpp,h}]
+indent_style = space
+indent_size = 2
+
+# Plugins: four spaces.
+[*.js]
+indent_style = space
+indent_size = 4
+
+# The UI's documents and style sheets: tabs.
+[*.{rml,rcss}]
+indent_style = tab
+
+[{CMakeLists.txt,*.cmake}]
+indent_style = space
+indent_size = 4
+
+[*.yml]
+indent_style = space
+indent_size = 2
+
+# Vendored from RmlUi; left as upstream has them.
+[src/RmlUi/**]
+indent_style = unset
+indent_size = unset
+trim_trailing_whitespace = unset

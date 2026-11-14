@@ -353,6 +353,17 @@ body.behind #shell {
 	text-overflow: ellipsis;
 }
 
+.np-song {
+	max-width: 624px;
+	margin-top: 8px;
+	font-size: 26px;
+	color: #4dd6b8;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .np-track {
 	margin-top: 14px;
 	padding: 3px 12px;

@@ -177,6 +177,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
   launch_entry_ = entry;
   launch_direction_ = 0; // PlayNeighbor() sets it after this returns
   launch_request_ = ++launch_seq_;
+  launch_cancel_ = net::MakeCancelToken();
   launch_phase_ = kLaunchResolving;
   launch_visible_at_ = Now() + kLaunchFeedbackSec;
   launch_from_queue_ = from_queue;
@@ -208,20 +209,33 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
   // here, as late as possible, and both steps may block on the network.
   const browse::Entry item = entry;
   const uint32_t request = launch_request_;
-  busy_ops_++;
-  PostTask([this, item, source, request, start_seconds, ref, identified] {
+  const net::CancelToken cancel = launch_cancel_;
+  PostTask(Lane::Playback, [this, item, source, request, cancel, start_seconds, ref, identified] {
     std::string error;
-    std::string uri = item.uri;
+    browse::Playable playable;
+    playable.uri = item.uri;
     bool ok;
     if (source) {
       launch_phase_ = kLaunchResolving;
-      ok = source->Resolve(item, uri, error);
+      net::CancelScope scope(cancel);
+      ok = !net::Cancelled() && source->Resolve(item, playable, error);
     } else {
-      ok = !uri.empty();
+      ok = !playable.uri.empty();
+    }
+    // Given up on while resolving: the player is left as it is, with
+    // whatever it plays (opening would have stopped that first).
+    if (ok && cancel->load()) {
+      ok = false;
+      error = net::kCancelledError;
     }
     if (ok) {
       launch_phase_ = kLaunchOpening;
-      ok = player_->Open(uri, error, start_seconds);
+      Player::Media media;
+      media.url = playable.uri;
+      media.headers = playable.headers;
+      for (const browse::Playable::Subtitle& sub : playable.subtitles)
+        media.subtitles.push_back({sub.uri, sub.language, sub.title});
+      ok = player_->Open(media, error, start_seconds);
     } else if (error.empty()) {
       error = "this item has nothing to play";
     }
@@ -231,7 +245,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
         // Abandoned while it was opening (back, or another item started).
         // If it did open, take it down again rather than showing it.
         if (ok)
-          PostTask([this] { player_->Stop(); });
+          PostTask(Lane::Playback, [this] { player_->Stop(); }, false);
         // Cancelled outright, from the menus over something playing, after
         // the player had let that go to open this one: nothing plays now.
         if (!launch_request_ && bind_watching_ && (ok || !player_->IsPlaying()))
@@ -278,7 +292,6 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
           ShowToast("Resumed at " + FormatTime(start_seconds * 1000000), icon::kResume);
       }
     });
-    busy_ops_--;
   });
 }
 
@@ -288,7 +301,9 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
 void App::CancelLaunch() {
   if (!launch_request_)
     return;
-  // Frees the worker from a slow open rather than letting it run on.
+  // Frees the lane from a slow resolve or open rather than letting it run on.
+  net::Cancel(launch_cancel_);
+  launch_cancel_.reset();
   player_->AbortOpen();
   launch_request_ = 0;
   launch_phase_ = kLaunchIdle;
@@ -339,8 +354,10 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
   // Home's row of what is playing: there, or now this.
   if (view_ == View::Home)
     RebuildShelves();
-  if (view_ == View::Browse)
-    RebuildDetail(); // its status: now playing
+  if (view_ == View::Browse) {
+    RebuildEntryRows(); // the mark on the row of what plays
+    RebuildDetail();    // its status: now playing
+  }
 }
 
 void App::ExitWatch() {
@@ -393,7 +410,7 @@ void App::StopPlayback() {
   if (bind_watching_)
     RecordProgress(true);
   ExitWatch();
-  PostTask([this] { player_->Stop(); });
+  PostTask(Lane::Playback, [this] { player_->Stop(); }, false);
 }
 
 void App::ShowWatchInfo(double seconds) {
@@ -442,6 +459,15 @@ void App::UpdateWatchOverlay() {
   // track switch.
   Set("watch_vtrack", bind_watch_vtrack_, player_->CurrentVideoLabel());
   Set("watch_atrack", bind_watch_atrack_, player_->CurrentAudioLabel());
+
+  // The song a station says is on, or a file's own tags; not when that is
+  // what the title already reads.
+  {
+    Rml::String title = player_->StreamTitle();
+    if (title == bind_watch_name_ || title == playing_.name)
+      title.clear();
+    Set("watch_stream_title", bind_watch_stream_title_, title);
+  }
 
   // What plays after this one, for the "Up next" line.
   Rml::String next;

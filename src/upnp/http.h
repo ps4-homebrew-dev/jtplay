@@ -42,9 +42,8 @@ using Headers = std::vector<std::pair<std::string, std::string>>;
 // One blocking request. Returns false on transport errors (DNS, connect,
 // timeout) with a reason in 'error'; an HTTP error status is a successful
 // request, reported in response.status. Blocking; worker thread only.
-bool HttpRequest(const char* method, const std::string& url,
-                 const Headers& headers, const std::string& body,
-                 HttpResponse& response, std::string& error);
+bool HttpRequest(const char* method, const std::string& url, const Headers& headers,
+                 const std::string& body, HttpResponse& response, std::string& error);
 
 inline bool HttpGet(const std::string& url, HttpResponse& r, std::string& e) {
   return HttpRequest("GET", url, {}, {}, r, e);

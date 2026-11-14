@@ -13,6 +13,8 @@
 #include <initializer_list>
 #include <utility>
 
+#include <strings.h>
+
 #include <SDL.h>
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
@@ -88,15 +90,35 @@ std::string ResolveUrl(const std::string& base, const std::string& ref) {
             ? path.substr(0, dir_end + 1) : path + "/") + ref;
 }
 
+// Whether 'language' ("sv", "swe", "sv-SE") is one of the comma separated
+// codes of 'list' ("swe,sv,sve"), as mpv's slang has them.
+bool LanguageListed(const std::string& list, const std::string& language) {
+  std::string code = language.substr(0, language.find_first_of("-_"));
+  std::transform(code.begin(), code.end(), code.begin(),
+                 [](unsigned char c) { return (char)std::tolower(c); });
+  if (code.empty())
+    return false;
+  size_t at = 0;
+  while (at <= list.size()) {
+    const size_t end = std::min(list.find(',', at), list.size());
+    if (list.compare(at, end - at, code) == 0)
+      return true;
+    at = end + 1;
+  }
+  return false;
+}
+
 // Whether the HLS or DASH stream at 'url' is live (a playlist that keeps
 // growing) rather than on demand. Looks at the manifest itself: an HLS
 // media playlist is on demand once it has #EXT-X-ENDLIST (a master playlist
 // says nothing, so its first variant is asked), a DASH manifest is live when
 // its type is "dynamic". Anything that cannot be fetched or read counts as
 // live, which is what every adaptive stream was taken for before.
-bool IsLiveStream(const std::string& url) {
+bool IsLiveStream(const std::string& url,
+                  const std::vector<std::pair<std::string, std::string>>& headers) {
   net::HttpClient http;
   net::HttpClient::Request req;
+  req.headers = headers; // what lets the player in lets this in
   req.stall_timeout_ms = 4000;
   req.deadline_ms = 5000;
   req.max_bytes = 4u << 20; // a long title, short segments, signed URLs
@@ -175,6 +197,7 @@ enum : uint64_t {
   kPropSpeed,
   kPropChapterList,
   kPropChapter,
+  kPropMetadata,
 };
 
 const mpv_node* MapGet(const mpv_node* map, const char* key) {
@@ -386,7 +409,8 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
   // The read-ahead files and on-demand streams get, JTPLAY_MPV included;
   // Open() shortens it for live streams and puts this back for the rest.
   for (auto [name, into] : {std::pair{"cache-secs", &cache_secs_},
-                            std::pair{"demuxer-readahead-secs", &readahead_secs_}}) {
+                            std::pair{"demuxer-readahead-secs", &readahead_secs_},
+                            std::pair{"user-agent", &default_user_agent_}}) {
     if (char* value = mpv_get_property_string(mpv_, name)) {
       *into = value;
       mpv_free(value);
@@ -424,6 +448,7 @@ bool Player::Initialize(std::string& error, const std::string& fonts_dir) {
   mpv_observe_property(mpv_, kPropSpeed, "speed", MPV_FORMAT_DOUBLE);
   mpv_observe_property(mpv_, kPropChapterList, "chapter-list", MPV_FORMAT_NODE);
   mpv_observe_property(mpv_, kPropChapter, "chapter", MPV_FORMAT_INT64);
+  mpv_observe_property(mpv_, kPropMetadata, "metadata", MPV_FORMAT_NODE);
 
   quitting_ = false;
   event_thread_ = std::thread(&Player::EventThread, this);
@@ -466,6 +491,7 @@ void Player::ResetFileState() {
   {
     std::lock_guard<std::mutex> lock(tracks_mutex_);
     chapters_.clear();
+    stream_title_.clear();
     video_tracks_.clear();
     audio_tracks_.clear();
     sub_tracks_.clear();
@@ -478,13 +504,45 @@ void Player::ResetFileState() {
 // Opening and stopping (app worker thread)
 // ---------------------------------------------------------------------------
 
-bool Player::Open(const std::string& url, std::string& error, int64_t start_seconds) {
+bool Player::Open(const Media& media, std::string& error, int64_t start_seconds) {
   if (!mpv_) {
     error = "the player is not available";
     return false;
   }
+  const std::string& url = media.url;
 
   Stop();
+
+  // The request headers the stream wants, for this file only. mpv has
+  // options of their own for two of them (and would send those twice
+  // otherwise); the rest go as a list.
+  {
+    std::string user_agent = default_user_agent_;
+    std::string referrer;
+    std::vector<std::string> fields;
+    for (const auto& header : media.headers) {
+      if (!::strcasecmp(header.first.c_str(), "User-Agent"))
+        user_agent = header.second;
+      else if (!::strcasecmp(header.first.c_str(), "Referer"))
+        referrer = header.second;
+      else
+        fields.push_back(header.first + ": " + header.second);
+    }
+    mpv_set_property_string(mpv_, "user-agent", user_agent.c_str());
+    mpv_set_property_string(mpv_, "referrer", referrer.c_str());
+    std::vector<mpv_node> values(fields.size());
+    for (size_t i = 0; i < fields.size(); i++) {
+      values[i].format = MPV_FORMAT_STRING;
+      values[i].u.string = const_cast<char*>(fields[i].c_str());
+    }
+    mpv_node_list list = {};
+    list.num = (int)values.size();
+    list.values = values.data();
+    mpv_node node = {};
+    node.format = MPV_FORMAT_NODE_ARRAY;
+    node.u.list = &list;
+    mpv_set_property(mpv_, "http-header-fields", MPV_FORMAT_NODE, &node);
+  }
 
   // Whatever the last file left set is undone before the next one starts.
   mpv_set_property_string(mpv_, "pause", "no");
@@ -501,7 +559,7 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   const bool adaptive = clips || IsAdaptivePlaylist(url);
   mpv_set_property_string(mpv_, "stream-lavf-o",
                           adaptive ? "" : kReconnectOptions);
-  const bool live = adaptive && !clips && IsLiveStream(url);
+  const bool live = adaptive && !clips && IsLiveStream(url, media.headers);
   // A live stream reads only a little ahead, so an audio switch is quick;
   // see kLiveReadaheadSecs.
   //
@@ -535,6 +593,7 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
     // Together, so an AbortOpen() sees either no open or this one.
     opening_ = true;
     abort_open_ = false;
+    redirect_from_ = redirect_to_ = -1;
     end_error_.clear();
     last_log_error_.clear();
   }
@@ -561,6 +620,10 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
     // command is the one.
     if (id < 0 && started_count_ > starts_before)
       id = started_id_;
+    // What was opened turned out to be a playlist (a station's .pls or
+    // .m3u): its first entry is the one to wait for instead.
+    if (id >= 0 && redirect_from_ == id && redirect_to_ >= 0)
+      id = redirect_to_;
     return id >= 0 && (loaded_id_ == id || ended_id_ == id);
   });
 
@@ -597,6 +660,31 @@ bool Player::Open(const std::string& url, std::string& error, int64_t start_seco
   if (mpv_get_property(mpv_, "chapter-list", MPV_FORMAT_NODE, &chapters) >= 0) {
     UpdateChapters(&chapters);
     mpv_free_node_contents(&chapters);
+  }
+
+  // Subtitles that come beside the stream: added without waiting for them
+  // (a slow or missing file must not hold up the picture). mpv picks among
+  // the tracks inside a file when it opens it, which is before these
+  // exist, so the preferred language is applied here: the first one in it
+  // is switched on, unless the file had one of its own.
+  std::string preferred;
+  {
+    std::lock_guard<std::mutex> lock(tracks_mutex_);
+    preferred = sub_languages_;
+  }
+  bool selected = sub_id_ >= 0;
+  for (const Media::Subtitle& sub : media.subtitles) {
+    if (sub.url.empty())
+      continue;
+    const std::string title = !sub.title.empty() ? sub.title : sub.language;
+    const bool select = !selected && LanguageListed(preferred, sub.language);
+    selected = selected || select;
+    const char* add[] = {"sub-add", sub.url.c_str(), select ? "select" : "auto", title.c_str(),
+                         sub.language.c_str(), nullptr};
+    // Without a language, the trailing arguments are left off.
+    if (sub.language.empty())
+      add[title.empty() ? 3 : 4] = nullptr;
+    mpv_command_async(mpv_, 0, add);
   }
 
   // Nothing to look at: draw the sound instead.
@@ -708,6 +796,14 @@ void Player::EventThread() {
     case MPV_EVENT_END_FILE: {
       const auto* end = static_cast<const mpv_event_end_file*>(event->data);
       std::lock_guard<std::mutex> lock(mutex_);
+      // A playlist is "over" the moment it has been read: the entries it
+      // held take its place, and are what plays.
+      if (end->reason == MPV_END_FILE_REASON_REDIRECT && end->playlist_insert_id > 0) {
+        redirect_from_ = end->playlist_entry_id;
+        redirect_to_ = end->playlist_insert_id;
+        cv_.notify_all();
+        break;
+      }
       ended_id_ = end->playlist_entry_id;
       if (end->reason != MPV_END_FILE_REASON_STOP && end->reason != MPV_END_FILE_REASON_REDIRECT)
         std::fprintf(stderr, "mpv: entry %lld ended (%s)\n", (long long)end->playlist_entry_id,
@@ -771,6 +867,10 @@ void Player::EventThread() {
       case kPropChapter:
         chapter_ = (int)PropertyInt(prop, -1);
         break;
+      case kPropMetadata:
+        if (prop->format == MPV_FORMAT_NODE && prop->data)
+          UpdateMetadata(static_cast<const mpv_node*>(prop->data));
+        break;
       }
       break;
     }
@@ -785,6 +885,39 @@ void Player::EventThread() {
       break;
     }
   }
+}
+
+// The file's (or the station's) tags, as mpv's "metadata" map; key case
+// varies with the container. A station's ICY title is what is on air and
+// wins; otherwise a file's artist and title.
+void Player::UpdateMetadata(const mpv_node* map) {
+  std::string icy, title, artist;
+  if (map && map->format == MPV_FORMAT_NODE_MAP && map->u.list) {
+    for (int i = 0; i < map->u.list->num; i++) {
+      const char* key = map->u.list->keys[i];
+      const std::string value = NodeString(&map->u.list->values[i]);
+      if (!::strcasecmp(key, "icy-title"))
+        icy = value;
+      else if (!::strcasecmp(key, "title"))
+        title = value;
+      else if (!::strcasecmp(key, "artist"))
+        artist = value;
+    }
+  }
+  std::string text = !icy.empty() ? icy
+                     : !artist.empty() && !title.empty() ? artist + " \u2013 " + title
+                     : title;
+  // Stations pad theirs, and some send only a separator between songs.
+  const size_t begin = text.find_first_not_of(" \t\r\n-");
+  const size_t end = text.find_last_not_of(" \t\r\n-");
+  text = begin == std::string::npos ? std::string() : text.substr(begin, end - begin + 1);
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  stream_title_ = text;
+}
+
+std::string Player::StreamTitle() const {
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  return stream_title_;
 }
 
 // The tracks from mpv's track-list. The label is built from the metadata
@@ -1146,4 +1279,6 @@ void Player::SetPreferredLanguages(const std::string& audio, const std::string& 
     return;
   mpv_set_property_string(mpv_, "alang", audio.c_str());
   mpv_set_property_string(mpv_, "slang", subs.c_str());
+  std::lock_guard<std::mutex> lock(tracks_mutex_);
+  sub_languages_ = subs;
 }

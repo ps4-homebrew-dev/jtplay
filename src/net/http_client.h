@@ -5,9 +5,11 @@
 // and the artwork cache both use it, so anything a plugin can reach is also
 // something the UI can display.
 //
-// (upnp/http.h is a different animal on purpose: a hand-rolled plain-http
-// client for SOAP control endpoints on the LAN. Nothing outside src/upnp
-// should be using it.)
+// (upnp/http.h is a thin layer over this one for SOAP control endpoints on
+// the LAN: the UPnP user agent, tighter limits.)
+//
+// A request gives up early when the work it is part of is cancelled (see
+// net/cancel.h); Perform() then fails with net::kCancelledError.
 //
 // Not thread safe: one instance belongs to one thread, or to whoever holds
 // the mutex that guards it. Requests block, so callers are worker threads.
@@ -67,7 +69,24 @@ public:
   // HTTP error statuses are a successful request with res.status set.
   bool Perform(const Request& req, Response& res, std::string& error);
 
+  // The outcome of one request of several: what Perform() returns and
+  // leaves in 'res' and 'error'.
+  struct Result {
+    bool ok = false;
+    Response response;
+    std::string error;
+  };
+
+  // Performs all of 'requests' concurrently (a bounded number at a time)
+  // and returns their results in the same order. One failing does not stop
+  // the others. Blocks until every one has finished or been given up on.
+  std::vector<Result> PerformAll(const std::vector<Request>& requests);
+
 private:
+  struct Transfer;
+  static void Setup(CURL* curl, const Request& req, Transfer& transfer, Response& res);
+  static bool Finish(CURL* curl, CURLcode code, const Request& req, Transfer& transfer,
+                     Response& res, std::string& error, bool* dates);
   // One try. 'dates' (if given) is set when it failed only because the
   // certificate's dates did not fit this console's clock.
   bool PerformOnce(const Request& req, Response& res, std::string& error, bool* dates);
@@ -76,6 +95,7 @@ private:
   bool LearnServerTime(const std::string& url);
 
   CURL* curl_ = nullptr;
+  CURLM* multi_ = nullptr; // made by the first PerformAll()
 };
 
 } // namespace net

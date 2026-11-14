@@ -9,6 +9,7 @@
 
 #include "RmlUi/RmlUi_Backend.h"
 #include "app.h"
+#include "plugin_cli.h"
 
 #define SCREEN_WIDTH  1920
 #define SCREEN_HEIGHT 1080
@@ -24,20 +25,36 @@ static void PrintUsage(const char* argv0) {
     "                     (default: <assets>/../fonts)\n"
     "  -p, --plugins DIR  JavaScript plugin directory\n"
     "                     (default: <assets>/../plugins)\n"
+    "  -u, --user-plugins DIR\n"
+    "                     your own plugins, loaded after those above; a file\n"
+    "                     of the same name replaces the bundled one\n"
+    "                     (default: $XDG_CONFIG_HOME/jtplay/plugins,\n"
+    "                      i.e. ~/.config/jtplay/plugins)\n"
     "  -c, --cache DIR    artwork cache directory\n"
     "                     (default: $XDG_CACHE_HOME/jtplay,\n"
     "                      i.e. ~/.cache/jtplay)\n"
-    "  -h, --help         show this help\n",
+    "  -h, --help         show this help\n"
+    "\n"
+    "  --plugin FILE ...  run a plugin script without the app, for writing\n"
+    "                     and testing plugins (--plugin FILE --help)\n",
     argv0);
 }
 
 
 extern "C" int SDL_main(int argc, char* argv[]) {
+  // The plugin runner needs no window; it is done before there is one.
+  for (int i = 1; i < argc; i++)
+    if (!std::strcmp(argv[i], "--plugin"))
+      return PluginCli(argc, argv);
+
   App::Options options;
 
 #if defined(__SCE__)
   options.assets_dir = "/app0/assets";
   options.plugins_dir = "/app0/plugins";
+  // The package is read-only; plugins of one's own go on the console's
+  // disk, where FTP reaches them.
+  options.user_plugins_dir = "/data/jtplay/plugins";
   options.fonts_dir = "/app0/fonts";
   options.cache_dir = ::getenv("XDG_CACHE_HOME");
   ::setenv("SSL_CERT_FILE", "/app0/ca-bundle.crt", 0);
@@ -58,6 +75,7 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     if (arg("-a", "--assets")) options.assets_dir = value();
     else if (arg("-f", "--fonts")) options.fonts_dir = value();
     else if (arg("-p", "--plugins")) options.plugins_dir = value();
+    else if (arg("-u", "--user-plugins")) options.user_plugins_dir = value();
     else if (arg("-c", "--cache")) options.cache_dir = value();
     else if (arg("-h", "--help")) { PrintUsage(argv[0]); return 0; }
     else {
@@ -77,6 +95,15 @@ extern "C" int SDL_main(int argc, char* argv[]) {
 
   if (options.plugins_dir.empty())
     options.plugins_dir = options.assets_dir + "/../plugins";
+
+  if (options.user_plugins_dir.empty()) {
+    const char* config = std::getenv("XDG_CONFIG_HOME");
+    const char* home = std::getenv("HOME");
+    if (config && *config)
+      options.user_plugins_dir = std::string(config) + "/jtplay/plugins";
+    else if (home && *home)
+      options.user_plugins_dir = std::string(home) + "/.config/jtplay/plugins";
+  }
 
   if (!Backend::Initialize("jtplay", SCREEN_WIDTH, SCREEN_HEIGHT, false))
     return -1;

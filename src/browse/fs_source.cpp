@@ -44,6 +44,9 @@ bool ClassifyExt(const std::string& ext, Entry::Type& type) {
     {"wma",  Entry::Type::Audio},
     {"ape",  Entry::Type::Audio},
     {"mka",  Entry::Type::Audio},
+    // Playlists, as stations hand them out; the player follows them.
+    {"m3u",  Entry::Type::Audio},
+    {"pls",  Entry::Type::Audio},
     // Video
     {"mkv",  Entry::Type::Video},
     {"mp4",  Entry::Type::Video},

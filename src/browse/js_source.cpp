@@ -1,604 +1,413 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// See js_source.h.
+#include "browse/js_source.h"
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 #include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <fstream>
-#include <sstream>
+#include <map>
 
-#include <RmlUi/Core/Log.h>
-
-#include "browse/js_http.h"
-#include "browse/js_source.h"
+#include "browse/js_util.h"
 #include "icons.h"
+#include "net/cancel.h"
 
 namespace browse {
-  namespace {
+namespace {
 
-    // Script time per call; waiting on the network does not count (see
-    // ExtendDeadline()), so this only has to catch a runaway loop.
-    constexpr int kCallTimeoutMs = 10000;
-    constexpr size_t kMemoryLimitBytes = 32u << 20;
+using namespace js;
 
-    std::string BaseName(const std::string& path) {
-      const size_t slash = path.rfind('/');
-      return slash == std::string::npos ? path : path.substr(slash + 1);
-    }
+// A date field as seconds since the epoch, 0 when absent or invalid.
+// Accepts whatever 'new Date(x)' does: milliseconds since the epoch, an
+// ISO 8601 string or a Date object.
+int64_t FieldDate(JSContext* ctx, JSValue obj, const char* key) {
+  Ref v(ctx, JS_GetPropertyStr(ctx, obj, key));
+  if (JS_IsException(v.get())) {
+    ClearException(ctx);
+    return 0;
+  }
+  if (JS_IsUndefined(v.get()) || JS_IsNull(v.get()))
+    return 0;
+  Ref global(ctx, JS_GetGlobalObject(ctx));
+  Ref ctor(ctx, JS_GetPropertyStr(ctx, global.get(), "Date"));
+  JSValue arg = v.get();
+  Ref date(ctx, JS_CallConstructor(ctx, ctor.get(), 1, &arg));
+  double ms = 0;
+  if (JS_IsException(date.get()) || JS_ToFloat64(ctx, &ms, date.get()) < 0) {
+    ClearException(ctx);
+    return 0;
+  }
+  if (!std::isfinite(ms) || ms <= 0)
+    return 0;
+  return (int64_t)(ms / 1000.0);
+}
 
-    // Refreshes the stack base (the script is loaded on the main thread but
-    // called from the worker thread) and arms the watchdog for one call.
-    // Constructed with 'plugin->mutex' held.
-    class CallScope {
-    public:
-      explicit CallScope(JsPlugin& plugin) : plugin_(plugin) {
-	JS_UpdateStackTop(plugin_.rt);
-	plugin_.ArmWatchdog(kCallTimeoutMs);
-      }
-      ~CallScope() { plugin_.DisarmWatchdog(); }
-
-      CallScope(const CallScope&) = delete;
-      CallScope& operator=(const CallScope&) = delete;
-
-    private:
-      JsPlugin& plugin_;
-    };
-
-    // Frees 'v' on scope exit; error paths would otherwise leak references.
-    class Ref {
-    public:
-      Ref(JSContext* ctx, JSValue v) : ctx_(ctx), v_(v) {}
-      ~Ref() { JS_FreeValue(ctx_, v_); }
-
-      Ref(const Ref&) = delete;
-      Ref& operator=(const Ref&) = delete;
-
-      JSValue get() const { return v_; }
-
-      // Hands the reference to the caller; no longer freed here.
-      JSValue release() {
-	JSValue v = v_;
-	v_ = JS_UNDEFINED;
-	return v;
-      }
-
-    private:
-      JSContext* ctx_;
-      JSValue v_;
-    };
-
-    std::string ToStdString(JSContext* ctx, JSValue v) {
-      size_t len = 0;
-      const char* s = JS_ToCStringLen(ctx, &len, v);
-      if (!s) {
-	// Conversion threw (a Symbol, or a throwing toString).
-	JS_FreeValue(ctx, JS_GetException(ctx));
-	return {};
-      }
-      std::string out(s, len);
-      JS_FreeCString(ctx, s);
-      return out;
-    }
-
-    // Takes the pending exception and renders it as one line. Errors carry
-    // the script location in their stack, so the first stack frame is worth
-    // keeping: "SyntaxError: unexpected token (sr.js:12)".
-    std::string TakeException(JSContext* ctx) {
-      Ref e(ctx, JS_GetException(ctx));
-      std::string msg = ToStdString(ctx, e.get());
-      if (msg.empty())
-	msg = "(unknown error)";
-
-      if (JS_IsObject(e.get())) {
-	Ref stack(ctx, JS_GetPropertyStr(ctx, e.get(), "stack"));
-	if (JS_IsString(stack.get())) {
-	  std::string frame = ToStdString(ctx, stack.get());
-	  frame = frame.substr(0, frame.find('\n'));
-	  const size_t begin = frame.find_first_not_of(" \t");
-	  if (begin != std::string::npos)
-	    msg += " (" + frame.substr(begin) + ")";
-	}
-      }
-      return msg;
-    }
-
-    // True for anything that looks like a promise. Plugins run without an
-    // event loop, so an async function is a mistake worth naming.
-    bool IsThenable(JSContext* ctx, JSValue v) {
-      if (!JS_IsObject(v))
-	return false;
-      Ref then(ctx, JS_GetPropertyStr(ctx, v, "then"));
-      return JS_IsFunction(ctx, then.get());
-    }
-
-    // Field readers; all tolerate a missing field ('obj' is the object).
-
-    std::string FieldString(JSContext* ctx, JSValue obj, const char* key,
-			    const std::string& fallback = {}) {
-      Ref v(ctx, JS_GetPropertyStr(ctx, obj, key));
-      if (JS_IsException(v.get())) {
-	JS_FreeValue(ctx, JS_GetException(ctx));
-	return fallback;
-      }
-      // Numbers are convenient for ids; anything else (objects, booleans,
-      // null, undefined) is treated as absent rather than stringified.
-      if (!JS_IsString(v.get()) && !JS_IsNumber(v.get()))
-	return fallback;
-      return ToStdString(ctx, v.get());
-    }
-
-    // A finite number field, or 'fallback' when absent or not a number.
-    double FieldNumber(JSContext* ctx, JSValue obj, const char* key,
-		       double fallback) {
-      Ref v(ctx, JS_GetPropertyStr(ctx, obj, key));
-      if (JS_IsException(v.get())) {
-	JS_FreeValue(ctx, JS_GetException(ctx));
-	return fallback;
-      }
-      double d = 0;
-      if (!JS_IsNumber(v.get()) || JS_ToFloat64(ctx, &d, v.get()) < 0 ||
-	  !std::isfinite(d))
-	return fallback;
-      return d;
-    }
-
-    // A date field as seconds since the epoch, 0 when absent or invalid.
-    // Accepts whatever 'new Date(x)' does: milliseconds since the epoch, an
-    // ISO 8601 string or a Date object.
-    int64_t FieldDate(JSContext* ctx, JSValue obj, const char* key) {
-      Ref v(ctx, JS_GetPropertyStr(ctx, obj, key));
-      if (JS_IsException(v.get())) {
-	JS_FreeValue(ctx, JS_GetException(ctx));
-	return 0;
-      }
-      if (JS_IsUndefined(v.get()) || JS_IsNull(v.get()))
-	return 0;
-      Ref global(ctx, JS_GetGlobalObject(ctx));
-      Ref ctor(ctx, JS_GetPropertyStr(ctx, global.get(), "Date"));
-      JSValue arg = v.get();
-      Ref date(ctx, JS_CallConstructor(ctx, ctor.get(), 1, &arg));
-      double ms = 0;
-      if (JS_IsException(date.get()) ||
-	  JS_ToFloat64(ctx, &ms, date.get()) < 0) {
-	JS_FreeValue(ctx, JS_GetException(ctx));
-	return 0;
-      }
-      if (!std::isfinite(ms) || ms <= 0)
-	return 0;
-      return (int64_t)(ms / 1000.0);
-    }
-
-    // Length of an array (or any array-like). JS_IsArray() has an
-    // incompatible signature across QuickJS forks, so duck-type instead.
-    bool ArrayLength(JSContext* ctx, JSValue v, int64_t& out) {
-      if (!JS_IsObject(v))
-	return false;
-      Ref len(ctx, JS_GetPropertyStr(ctx, v, "length"));
-      if (!JS_IsNumber(len.get()))
-	return false;
-      if (JS_ToInt64(ctx, &out, len.get()) < 0) {
-	JS_FreeValue(ctx, JS_GetException(ctx));
-	return false;
-      }
-      return out >= 0;
-    }
-
-    // Converts one entry object into 'out'. The script writes the same six
-    // fields the app reads; 'id' defaults to the uri, then to the name, so
-    // a plugin listing plain streams need not invent one.
-    bool ToEntry(JSContext* ctx, JSValue v, Entry& out, std::string& error) {
-      if (!JS_IsObject(v)) {
-	error = "entry is not an object";
-	return false;
-      }
-
-      out.name = FieldString(ctx, v, "name");
-      if (out.name.empty()) {
-	error = "entry has no name";
-	return false;
-      }
-      out.type = TypeFromName(FieldString(ctx, v, "type"));
-      out.description = FieldString(ctx, v, "description");
-      out.image = FieldString(ctx, v, "image");
-      out.uri = FieldString(ctx, v, "uri");
-      out.id = FieldString(ctx, v, "id",
-			   out.uri.empty() ? out.name : out.uri);
-      out.size = (int64_t)FieldNumber(ctx, v, "size", -1);
-      out.date = FieldDate(ctx, v, "date");
-      out.duration = (int64_t)FieldNumber(ctx, v, "duration", 0);
-      return true;
-    }
-
-    // The mirror of ToEntry(): hands an entry back to the script, so
-    // resolve() can look at more than the bare id.
-    JSValue EntryToJs(JSContext* ctx, const Entry& e) {
-      JSValue obj = JS_NewObject(ctx);
-      if (JS_IsException(obj))
-	return obj;
-
-      auto set_str = [&](const char* key, const std::string& value) {
-	if (!value.empty())
-	  JS_SetPropertyStr(ctx, obj, key,
-			    JS_NewStringLen(ctx, value.data(), value.size()));
-      };
-      set_str("id", e.id);
-      JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, TypeName(e.type)));
-      set_str("name", e.name);
-      set_str("description", e.description);
-      set_str("image", e.image);
-      set_str("uri", e.uri);
-      if (e.size >= 0)
-	JS_SetPropertyStr(ctx, obj, "size", JS_NewFloat64(ctx, (double)e.size));
-      if (e.date > 0)
-	JS_SetPropertyStr(ctx, obj, "date", JS_NewFloat64(ctx, e.date * 1000.0));
-      if (e.duration > 0)
-	JS_SetPropertyStr(ctx, obj, "duration",
-			  JS_NewFloat64(ctx, (double)e.duration));
-      return obj;
-    }
-
-    // Converts the array of entry objects returned by browse() or search()
-    // ('function' names the caller in error messages).
-    bool ToListing(JSContext* ctx, JSValue v, Listing& out,
-		   std::string& error, const char* function = "browse") {
-      int64_t n = 0;
-      if (!ArrayLength(ctx, v, n)) {
-	error = IsThenable(ctx, v)
-	  ? std::string(function) + "() returned a promise; plugin functions must be synchronous"
-	  : std::string(function) + "() did not return an array";
-	return false;
-      }
-
-      for (int64_t i = 0; i < n; i++) {
-	Ref item(ctx, JS_GetPropertyUint32(ctx, v, (uint32_t)i));
-	if (JS_IsException(item.get())) {
-	  error = TakeException(ctx);
-	  return false;
-	}
-	Entry e;
-	if (!ToEntry(ctx, item.get(), e, error)) {
-	  error = "entry " + std::to_string(i + 1) + ": " + error;
-	  return false;
-	}
-	out.push_back(std::move(e));
-      }
-      return true;
-    }
-
-    // console.log()/warn()/error(); the only global a plugin gets beyond
-    // the standard objects. Output goes to the RmlUi log, tagged with the
-    // provider name.
-    JSValue ConsoleWrite(JSContext* ctx, JSValue this_val, int argc,
-			 JSValue* argv, int magic) {
-      (void)this_val;
-
-      std::string line;
-      for (int i = 0; i < argc; i++) {
-	if (i)
-	  line += ' ';
-	line += ToStdString(ctx, argv[i]);
-      }
-
-      Rml::Log::Type level = Rml::Log::LT_INFO;
-      if (magic == 1) level = Rml::Log::LT_WARNING;
-      else if (magic == 2) level = Rml::Log::LT_ERROR;
-
-      const JsPlugin* plugin =
-	static_cast<const JsPlugin*>(JS_GetContextOpaque(ctx));
-      Rml::Log::Message(level, "[%s] %s",
-			plugin ? plugin->ProviderName().c_str() : "plugin",
-			line.c_str());
-      return JS_UNDEFINED;
-    }
-
-    void InstallConsole(JSContext* ctx) {
-      Ref global(ctx, JS_GetGlobalObject(ctx));
-      JSValue console = JS_NewObject(ctx);
-      static const struct { const char* name; int magic; } kMethods[] = {
-	{"log", 0}, {"info", 0}, {"debug", 0}, {"warn", 1}, {"error", 2},
-      };
-      for (const auto& m : kMethods)
-	JS_SetPropertyStr(ctx, console, m.name,
-			  JS_NewCFunctionMagic(ctx, ConsoleWrite, m.name, 1,
-					       JS_CFUNC_generic_magic,
-					       m.magic));
-      JS_SetPropertyStr(ctx, global.get(), "console", console);
-    }
-
-    bool ReadFile(const std::string& path, std::string& out) {
-      std::ifstream file(path, std::ios::binary);
-      if (!file)
-	return false;
-      std::ostringstream buffer;
-      buffer << file.rdbuf();
-      out = buffer.str();
-      return true;
-    }
+// Converts one entry object into 'out'. Only 'name' is required; 'id'
+// defaults to the uri, then to the name, so a plugin listing plain streams
+// need not invent one.
+bool ToEntry(JSContext* ctx, JSValue v, Entry& out, std::string& error) {
+  if (!JS_IsObject(v)) {
+    error = "not an object";
+    return false;
   }
 
-  int JsPlugin::InterruptHandler(JSRuntime* rt, void* opaque) {
-    (void)rt;
-    JsPlugin* self = static_cast<JsPlugin*>(opaque);
-    if (!self->armed_)
-      return 0;
-    return std::chrono::steady_clock::now() >= self->deadline_ ? 1 : 0;
+  out.name = FieldString(ctx, v, "name");
+  if (out.name.empty()) {
+    error = "has no name";
+    return false;
+  }
+  out.type = TypeFromName(FieldString(ctx, v, "type"));
+  out.description = FieldString(ctx, v, "description");
+  out.image = FieldString(ctx, v, "image");
+  out.uri = FieldString(ctx, v, "uri");
+  out.id = FieldString(ctx, v, "id", out.uri.empty() ? out.name : out.uri);
+  out.size = (int64_t)FieldNumber(ctx, v, "size", -1);
+  out.date = FieldDate(ctx, v, "date");
+  out.duration = (int64_t)FieldNumber(ctx, v, "duration", 0);
+  return true;
+}
+
+// The mirror of ToEntry(): hands an entry back to the script, so
+// resolve() can look at more than the bare id.
+JSValue EntryToJs(JSContext* ctx, const Entry& e) {
+  JSValue obj = JS_NewObject(ctx);
+  if (JS_IsException(obj))
+    return obj;
+
+  auto set_str = [&](const char* key, const std::string& value) {
+    if (!value.empty())
+      JS_SetPropertyStr(ctx, obj, key, NewString(ctx, value));
+  };
+  set_str("id", e.id);
+  JS_SetPropertyStr(ctx, obj, "type", JS_NewString(ctx, TypeName(e.type)));
+  set_str("name", e.name);
+  set_str("description", e.description);
+  set_str("image", e.image);
+  set_str("uri", e.uri);
+  if (e.size >= 0)
+    JS_SetPropertyStr(ctx, obj, "size", JS_NewFloat64(ctx, (double)e.size));
+  if (e.date > 0)
+    JS_SetPropertyStr(ctx, obj, "date", JS_NewFloat64(ctx, e.date * 1000.0));
+  if (e.duration > 0)
+    JS_SetPropertyStr(ctx, obj, "duration", JS_NewFloat64(ctx, (double)e.duration));
+  return obj;
+}
+
+// Converts the array of entry objects returned by browse() or search()
+// ('function' names the caller in messages). An entry that cannot be used
+// is left out and remarked on in the log: one bad row out of a backend's
+// five hundred is no reason to show none of them.
+bool ToListing(const JsPlugin& plugin, JSValue v, Listing& out, std::string& error,
+               const char* function) {
+  JSContext* ctx = plugin.ctx;
+  int64_t n = 0;
+  if (!ArrayLength(ctx, v, n)) {
+    error = std::string(function) + "() did not return an array";
+    return false;
   }
 
-  void JsPlugin::ArmWatchdog(int timeout_ms) {
-    deadline_ = std::chrono::steady_clock::now() +
-      std::chrono::milliseconds(timeout_ms);
-    armed_ = true;
-  }
-
-  void JsPlugin::DisarmWatchdog() {
-    armed_ = false;
-  }
-
-  void JsPlugin::ExtendDeadline(std::chrono::steady_clock::duration by) {
-    if (armed_)
-      deadline_ += by;
-  }
-
-  JsPlugin::JsPlugin(const std::string& path)
-    : provider(JS_UNDEFINED), name_(BaseName(path)) {
-    std::string source;
-    if (!ReadFile(path, source)) {
-      load_error_ = "cannot read " + path;
-      return;
-    }
-
-    if (!(rt = JS_NewRuntime())) {
-      load_error_ = "cannot create JS runtime";
-      return;
-    }
-    JS_SetMemoryLimit(rt, kMemoryLimitBytes);
-    JS_SetInterruptHandler(rt, &JsPlugin::InterruptHandler, this);
-
-    if (!(ctx = JS_NewContext(rt))) {
-      load_error_ = "cannot create JS context";
-      return;
-    }
-    JS_SetContextOpaque(ctx, this);
-    http_ = std::make_unique<net::HttpClient>();
-    InstallConsole(ctx);
-    InstallHttp(ctx);
-
-    // The script body is wrapped in a function so a plugin can 'return' its
-    // provider object, the way a CommonJS module does. The prologue has no
-    // newline in it, so reported line numbers still match the file.
-    const std::string wrapped = "(function(){" + source + "\n})();";
-
-    CallScope scope(*this);
-    Ref result(ctx, JS_Eval(ctx, wrapped.c_str(), wrapped.size(),
-			    BaseName(path).c_str(), JS_EVAL_TYPE_GLOBAL));
-    if (JS_IsException(result.get())) {
-      load_error_ = TakeException(ctx);
-      return;
-    }
-    if (!JS_IsObject(result.get())) {
-      load_error_ = "script did not return a provider object";
-      return;
-    }
-
-    provider = result.release();
-    const std::string name = FieldString(ctx, provider, "name");
-    if (!name.empty())
-      name_ = name;
-  }
-
-  JsPlugin::~JsPlugin() {
-    if (ctx) {
-      JS_FreeValue(ctx, provider);
-      JS_FreeContext(ctx);
-    }
-    if (rt)
-      JS_FreeRuntime(rt);
-  }
-
-  JsSource::JsSource(JsPluginPtr plugin, JSValue source, std::string name,
-		     std::string detail, std::string icon, std::string root,
-		     bool can_search)
-    : plugin_(std::move(plugin)), source_(source),
-      name_(std::move(name)), detail_(std::move(detail)),
-      // A plugin names its icon as an emoji; the UI draws its own icons.
-      icon_(icon::FromEmoji(icon)), root_(std::move(root)),
-      can_search_(can_search) {}
-
-  JsSource::~JsSource() {
-    std::lock_guard<std::mutex> lock(plugin_->mutex);
-    JS_FreeValue(plugin_->ctx, source_);
-  }
-
-  bool JsSource::Browse(const std::string& id, Listing& out,
-			std::string& error) {
-    std::lock_guard<std::mutex> lock(plugin_->mutex);
-    JSContext* ctx = plugin_->ctx;
-    CallScope scope(*plugin_);
-
-    Ref browse(ctx, JS_GetPropertyStr(ctx, source_, "browse"));
-    if (!JS_IsFunction(ctx, browse.get())) {
-      error = "source has no browse function";
-      return false;
-    }
-
-    Ref arg(ctx, JS_NewStringLen(ctx, id.data(), id.size()));
-    JSValue argv[] = {arg.get()};
-    // 'this' is the source object, so a plugin can keep state on it.
-    Ref result(ctx, JS_Call(ctx, browse.get(), source_, 1, argv));
-    if (JS_IsException(result.get())) {
+  out.reserve(out.size() + (size_t)n);
+  int skipped = 0;
+  std::string first_problem;
+  for (int64_t i = 0; i < n; i++) {
+    Ref item(ctx, JS_GetPropertyUint32(ctx, v, (uint32_t)i));
+    if (JS_IsException(item.get())) {
       error = TakeException(ctx);
       return false;
     }
-
-    return ToListing(ctx, result.get(), out, error);
+    Entry e;
+    std::string problem;
+    if (!ToEntry(ctx, item.get(), e, problem)) {
+      if (!skipped++)
+        first_problem = "entry " + std::to_string(i + 1) + " " + problem;
+      continue;
+    }
+    out.push_back(std::move(e));
   }
+  if (skipped)
+    plugin.Log(JsLogLevel::Warning,
+               std::string(function) + "(): left out " + std::to_string(skipped) + " of " +
+                 std::to_string(n) + " entries (" + first_problem + ")");
+  return true;
+}
 
-  bool JsSource::Search(const std::string& folder_id, const std::string& query,
-			Listing& out, std::string& error) {
-    std::lock_guard<std::mutex> lock(plugin_->mutex);
-    JSContext* ctx = plugin_->ctx;
-    CallScope scope(*plugin_);
+// What resolve() returned, as something to play: the uri itself, or an
+// object { uri, headers: { name: value }, subtitles: [{ uri, lang, name }] }
+// (an entry object, as browse() returns them, is such an object too).
+bool ToPlayable(JSContext* ctx, JSValue v, Playable& out, std::string& error) {
+  if (JS_IsString(v)) {
+    out.uri = ToStdString(ctx, v);
+  } else if (JS_IsObject(v)) {
+    out.uri = FieldString(ctx, v, "uri");
+    if (out.uri.empty())
+      out.uri = FieldString(ctx, v, "url");
 
-    Ref search(ctx, JS_GetPropertyStr(ctx, source_, "search"));
-    if (!JS_IsFunction(ctx, search.get())) {
-      error = "source has no search function";
-      return false;
+    Ref headers(ctx, JS_GetPropertyStr(ctx, v, "headers"));
+    if (JS_IsObject(headers.get())) {
+      const bool ok = ForEachProperty(ctx, headers.get(), [&](const char* name, JSValue value) {
+        const std::string text = ToStdString(ctx, value);
+        // A header is one line; anything else is not passed on.
+        if (*name && text.find_first_of("\r\n") == std::string::npos)
+          out.headers.emplace_back(name, text);
+        return true;
+      });
+      if (!ok)
+        ClearException(ctx);
     }
 
-    Ref q(ctx, JS_NewStringLen(ctx, query.data(), query.size()));
-    Ref id(ctx, JS_NewStringLen(ctx, folder_id.data(), folder_id.size()));
-    JSValue argv[] = {q.get(), id.get()};
-    // 'this' is the source object, as for browse().
-    Ref result(ctx, JS_Call(ctx, search.get(), source_, 2, argv));
-    if (JS_IsException(result.get())) {
-      error = TakeException(ctx);
-      return false;
-    }
-    return ToListing(ctx, result.get(), out, error, "search");
-  }
-
-  bool JsSource::Resolve(const Entry& entry, std::string& uri,
-			 std::string& error) {
-    std::lock_guard<std::mutex> lock(plugin_->mutex);
-    JSContext* ctx = plugin_->ctx;
-    CallScope scope(*plugin_);
-
-    Ref resolve(ctx, JS_GetPropertyStr(ctx, source_, "resolve"));
-    if (!JS_IsFunction(ctx, resolve.get())) {
-      // No resolve(): the uri from browse() is all there is.
-      uri = entry.uri;
-      if (uri.empty()) {
-	error = "this item has nothing to play";
-	return false;
-      }
-      return true;
-    }
-
-    Ref id(ctx, JS_NewStringLen(ctx, entry.id.data(), entry.id.size()));
-    Ref obj(ctx, EntryToJs(ctx, entry));
-    JSValue argv[] = {id.get(), obj.get()};
-    Ref result(ctx, JS_Call(ctx, resolve.get(), source_, 2, argv));
-    if (JS_IsException(result.get())) {
-      error = TakeException(ctx);
-      return false;
-    }
-
-    // Either the uri itself, or an entry object like the ones browse()
-    // returns. Anything else means the plugin gave up on this item.
-    if (IsThenable(ctx, result.get())) {
-      error = "resolve() returned a promise; plugin functions must be "
-	"synchronous";
-      return false;
-    }
-    if (JS_IsString(result.get()))
-      uri = ToStdString(ctx, result.get());
-    else if (JS_IsObject(result.get()))
-      uri = FieldString(ctx, result.get(), "uri");
-
-    if (uri.empty()) {
-      error = "resolve() did not return a uri";
-      return false;
-    }
-    return true;
-  }
-
-  JsProvider::JsProvider(const std::string& path)
-    : plugin_(std::make_shared<JsPlugin>(path)) {}
-
-  bool JsProvider::Discover(std::vector<SourcePtr>& out, std::string& error) {
-    if (!plugin_->LoadError().empty()) {
-      error = plugin_->LoadError();
-      return false;
-    }
-
-    // Declared before the lock: on an error part-way through, the sources
-    // made so far are destroyed with it, and ~JsSource() takes the plugin's
-    // mutex itself.
-    std::vector<SourcePtr> found;
-
-    std::lock_guard<std::mutex> lock(plugin_->mutex);
-    JSContext* ctx = plugin_->ctx;
-    CallScope scope(*plugin_);
-
-    Ref discover(ctx, JS_GetPropertyStr(ctx, plugin_->provider, "discover"));
-    if (!JS_IsFunction(ctx, discover.get())) {
-      error = "plugin has no discover function";
-      return false;
-    }
-
-    Ref result(ctx, JS_Call(ctx, discover.get(), plugin_->provider, 0,
-			    nullptr));
-    if (JS_IsException(result.get())) {
-      error = TakeException(ctx);
-      return false;
-    }
-
+    Ref subtitles(ctx, JS_GetPropertyStr(ctx, v, "subtitles"));
     int64_t n = 0;
-    if (!ArrayLength(ctx, result.get(), n)) {
-      error = IsThenable(ctx, result.get())
-	? "discover() returned a promise; plugin functions must be synchronous"
-	: "discover() did not return an array";
+    if (ArrayLength(ctx, subtitles.get(), n)) {
+      for (int64_t i = 0; i < n && i < 64; i++) {
+        Ref item(ctx, JS_GetPropertyUint32(ctx, subtitles.get(), (uint32_t)i));
+        Playable::Subtitle sub;
+        if (JS_IsString(item.get())) {
+          sub.uri = ToStdString(ctx, item.get());
+        } else if (JS_IsObject(item.get())) {
+          sub.uri = FieldString(ctx, item.get(), "uri");
+          if (sub.uri.empty())
+            sub.uri = FieldString(ctx, item.get(), "url");
+          sub.language = FieldString(ctx, item.get(), "lang");
+          if (sub.language.empty())
+            sub.language = FieldString(ctx, item.get(), "language");
+          sub.title = FieldString(ctx, item.get(), "name");
+          if (sub.title.empty())
+            sub.title = FieldString(ctx, item.get(), "title");
+        }
+        if (!sub.uri.empty())
+          out.subtitles.push_back(std::move(sub));
+      }
+    }
+  }
+
+  if (out.uri.empty()) {
+    error = "resolve() did not return a uri";
+    return false;
+  }
+  return true;
+}
+
+bool FileStamp(const std::string& path, int64_t& mtime, int64_t& size) {
+  struct stat st;
+  if (::stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+    return false;
+  mtime = (int64_t)st.st_mtime;
+  size = (int64_t)st.st_size;
+  return true;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// JsSource
+// ---------------------------------------------------------------------------
+
+JsSource::JsSource(JsPluginPtr plugin, JSValue source, std::string name, std::string detail,
+                   std::string icon, std::string root, bool can_search)
+  : plugin_(std::move(plugin)), source_(source), name_(std::move(name)),
+    detail_(std::move(detail)),
+    // A plugin names its icon as an emoji; the UI draws its own icons.
+    icon_(icon::FromEmoji(icon)), root_(std::move(root)), can_search_(can_search) {}
+
+JsSource::~JsSource() {
+  // Not freed here: that would mean waiting for the plugin's lock, which a
+  // slow browse elsewhere may hold, and this may be the main thread.
+  plugin_->Release(source_);
+}
+
+std::string JsSource::Key() const {
+  return "js:" + plugin_->ProviderName() + "/" + name_;
+}
+
+bool JsSource::Browse(const std::string& id, Listing& out, std::string& error) {
+  std::lock_guard<std::mutex> lock(plugin_->mutex);
+  JSContext* ctx = plugin_->ctx;
+
+  Ref arg(ctx, NewString(ctx, id));
+  JSValue argv[] = {arg.get()};
+  JSValue result;
+  if (!plugin_->Call(source_, "browse", 1, argv, result, error))
+    return false;
+  Ref owned(ctx, result);
+  return ToListing(*plugin_, result, out, error, "browse");
+}
+
+bool JsSource::Search(const std::string& folder_id, const std::string& query, Listing& out,
+                      std::string& error) {
+  std::lock_guard<std::mutex> lock(plugin_->mutex);
+  JSContext* ctx = plugin_->ctx;
+
+  Ref q(ctx, NewString(ctx, query));
+  Ref id(ctx, NewString(ctx, folder_id));
+  JSValue argv[] = {q.get(), id.get()};
+  JSValue result;
+  if (!plugin_->Call(source_, "search", 2, argv, result, error))
+    return false;
+  Ref owned(ctx, result);
+  return ToListing(*plugin_, result, out, error, "search");
+}
+
+bool JsSource::Resolve(const Entry& entry, Playable& out, std::string& error) {
+  std::lock_guard<std::mutex> lock(plugin_->mutex);
+  JSContext* ctx = plugin_->ctx;
+
+  Ref id(ctx, NewString(ctx, entry.id));
+  Ref obj(ctx, EntryToJs(ctx, entry));
+  JSValue argv[] = {id.get(), obj.get()};
+  JSValue result;
+  bool missing = false;
+  if (!plugin_->Call(source_, "resolve", 2, argv, result, error, &missing))
+    return false;
+  // No resolve(): the uri from browse() is all there is.
+  if (missing)
+    return Source::Resolve(entry, out, error);
+  Ref owned(ctx, result);
+  return ToPlayable(ctx, result, out, error);
+}
+
+// ---------------------------------------------------------------------------
+// Discovery
+// ---------------------------------------------------------------------------
+
+bool DiscoverJsSources(const JsPluginPtr& plugin, std::vector<SourcePtr>& out,
+                       std::string& error) {
+  if (!plugin->LoadError().empty()) {
+    error = plugin->LoadError();
+    return false;
+  }
+
+  std::vector<SourcePtr> found;
+
+  std::lock_guard<std::mutex> lock(plugin->mutex);
+  JSContext* ctx = plugin->ctx;
+
+  JSValue result;
+  if (!plugin->Call(plugin->provider, "discover", 0, nullptr, result, error))
+    return false;
+  Ref owned(ctx, result);
+
+  int64_t n = 0;
+  if (!ArrayLength(ctx, result, n)) {
+    error = "discover() did not return an array";
+    return false;
+  }
+
+  for (int64_t i = 0; i < n; i++) {
+    Ref item(ctx, JS_GetPropertyUint32(ctx, result, (uint32_t)i));
+    if (JS_IsException(item.get())) {
+      error = TakeException(ctx);
+      return false;
+    }
+    if (!JS_IsObject(item.get())) {
+      error = "source " + std::to_string(i + 1) + " is not an object";
       return false;
     }
 
-    for (int64_t i = 0; i < n; i++) {
-      Ref item(ctx, JS_GetPropertyUint32(ctx, result.get(), (uint32_t)i));
-      if (JS_IsException(item.get())) {
-	error = TakeException(ctx);
-	return false;
-      }
-      if (!JS_IsObject(item.get())) {
-	error = "source " + std::to_string(i + 1) + " is not an object";
-	return false;
-      }
-
-      const std::string name = FieldString(ctx, item.get(), "name");
-      if (name.empty()) {
-	error = "source " + std::to_string(i + 1) + " has no name";
-	return false;
-      }
-      const std::string detail =
-	FieldString(ctx, item.get(), "detail", plugin_->ProviderName());
-      const std::string icon =
-	FieldString(ctx, item.get(), "icon", "\U0001F9E9");
-      const std::string root = FieldString(ctx, item.get(), "root", "/");
-      // Looked up here, with the plugin's mutex held, so that asking
-      // whether it can search later (on the main thread) never enters it.
-      Ref search(ctx, JS_GetPropertyStr(ctx, item.get(), "search"));
-      const bool can_search = JS_IsFunction(ctx, search.get());
-
-      found.push_back(std::make_shared<JsSource>(plugin_, item.release(), name,
-						 detail, icon, root, can_search));
+    const std::string name = FieldString(ctx, item.get(), "name");
+    if (name.empty()) {
+      error = "source " + std::to_string(i + 1) + " has no name";
+      return false;
     }
+    if (!HasFunction(ctx, item.get(), "browse")) {
+      error = "source '" + name + "' has no browse() function";
+      return false;
+    }
+    const std::string detail = FieldString(ctx, item.get(), "detail", plugin->ProviderName());
+    const std::string icon = FieldString(ctx, item.get(), "icon", "\U0001F9E9");
+    const std::string root = FieldString(ctx, item.get(), "root", "/");
+    // Looked up here, with the plugin's mutex held, so that asking
+    // whether it can search later (on the main thread) never enters it.
+    const bool can_search = HasFunction(ctx, item.get(), "search");
 
-    out.insert(out.end(), std::make_move_iterator(found.begin()),
-	       std::make_move_iterator(found.end()));
-    return true;
+    found.push_back(std::make_shared<JsSource>(plugin, item.release(), name, detail, icon, root,
+                                               can_search));
   }
 
-  void LoadJsProviders(const std::string& dir,
-		       std::vector<std::unique_ptr<Provider>>& out) {
+  out.insert(out.end(), std::make_move_iterator(found.begin()),
+             std::make_move_iterator(found.end()));
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// JsProvider
+// ---------------------------------------------------------------------------
+
+JsProvider::JsProvider(std::vector<std::string> dirs, std::shared_ptr<const JsEnvironment> env)
+  : dirs_(std::move(dirs)), env_(std::move(env)) {}
+
+std::vector<JsPluginPtr> JsProvider::Plugins() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<JsPluginPtr> out;
+  out.reserve(loaded_.size());
+  for (const Loaded& l : loaded_)
+    out.push_back(l.plugin);
+  return out;
+}
+
+// Brings loaded_ up to date with the *.js files of the plugin directories.
+void JsProvider::Reload() {
+  // File name -> path; a later directory wins. A missing or unreadable
+  // directory is not an error; it just adds nothing.
+  std::map<std::string, std::string> scripts;
+  for (const std::string& dir : dirs_) {
     DIR* d = ::opendir(dir.c_str());
     if (!d)
-      return; // no plugin directory, no plugins
-
-    std::vector<std::string> scripts;
+      continue;
     while (struct dirent* de = ::readdir(d)) {
       const std::string name = de->d_name;
-      if (name.size() > 3 && name[0] != '.' &&
-	  name.compare(name.size() - 3, 3, ".js") == 0)
-	scripts.push_back(dir + "/" + name);
+      if (name.size() > 3 && name[0] != '.' && name.compare(name.size() - 3, 3, ".js") == 0)
+        scripts[name] = dir + "/" + name;
     }
     ::closedir(d);
-
-    std::sort(scripts.begin(), scripts.end());
-    for (const std::string& path : scripts)
-      out.push_back(std::make_unique<JsProvider>(path));
   }
 
-  std::string JsSource::Key() const {
-    return "js:" + plugin_->ProviderName() + "/" + name_;
+  std::vector<Loaded> before;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    before = loaded_;
   }
 
+  std::vector<Loaded> now;
+  for (const auto& script : scripts) { // by file name
+    Loaded l;
+    l.path = script.second;
+    if (!FileStamp(l.path, l.mtime, l.size))
+      continue;
+    for (const Loaded& old : before) {
+      if (old.path == l.path && old.mtime == l.mtime && old.size == l.size) {
+        l.plugin = old.plugin;
+        break;
+      }
+    }
+    // Evaluating a script takes a moment; not under the lock, which the
+    // main thread takes to look at the plugins.
+    if (!l.plugin)
+      l.plugin = std::make_shared<JsPlugin>(l.path, env_);
+    now.push_back(std::move(l));
+  }
+
+  std::sort(now.begin(), now.end(), [](const Loaded& a, const Loaded& b) {
+    return a.plugin->ProviderName() < b.plugin->ProviderName();
+  });
+  std::lock_guard<std::mutex> lock(mutex_);
+  loaded_ = std::move(now);
 }
+
+bool JsProvider::Discover(std::vector<SourcePtr>& out, std::string& error) {
+  Reload();
+
+  bool ok = true;
+  for (const JsPluginPtr& plugin : Plugins()) {
+    std::string problem;
+    if (DiscoverJsSources(plugin, out, problem))
+      continue;
+    ok = false;
+    if (!error.empty())
+      error += "; ";
+    error += plugin->ProviderName() + ": " + problem;
+  }
+  return ok;
+}
+
+} // namespace browse

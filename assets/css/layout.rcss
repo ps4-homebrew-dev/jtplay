@@ -141,6 +141,18 @@ body.home.featured #backdrop-shade {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+/* The song on a station, after its name; gives way first. */
+.np-chip-song {
+	flex: 0 100 auto;
+	min-width: 0px;
+	max-width: 320px;
+	margin-left: 12px;
+	font-size: 21px;
+	color: #4dd6b8;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 .np-chip-time {
 	flex-shrink: 0;
 	margin-left: 14px;

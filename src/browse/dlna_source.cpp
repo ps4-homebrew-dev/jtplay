@@ -117,17 +117,16 @@ bool DlnaSource::Browse(const std::string& id, Listing& out,
 // between runs (DHCP, a random listening port, a rescanned database). Ask
 // the server again for the object's current URL; the saved one is only the
 // fallback for a server that cannot answer.
-bool DlnaSource::Resolve(const Entry& entry, std::string& uri,
-                         std::string& error) {
+bool DlnaSource::Resolve(const Entry& entry, Playable& out, std::string& error) {
   upnp::DidlObject object;
   std::string lookup_error;
   if (!entry.id.empty() &&
       upnp::BrowseMetadata(server_, entry.id, object, lookup_error) &&
       !object.res_url.empty()) {
-    uri = object.res_url;
+    out.uri = object.res_url;
     return true;
   }
-  return Source::Resolve(entry, uri, error);
+  return Source::Resolve(entry, out, error);
 }
 
 // ---------------------------------------------------------------------------

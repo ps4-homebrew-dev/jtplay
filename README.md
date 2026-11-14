@@ -13,12 +13,21 @@ plugins, in the spirit of Kodi.
   storage and `/data` are listed as their own sources; on a PC, the home
   folder. The whole filesystem is always available as well.
 - **UPnP/DLNA servers** on the local network (MiniDLNA, Jellyfin, Plex, ...).
-- **JavaScript plugins** (see below). Bundled: internet radio from
-  radio-browser.info (by popularity, country and genre), podcasts (the
-  Apple Podcasts top 50: most popular, of every country it is in and of
-  every genre; add the shows you follow to Favorites), Sveriges Radio, SVT Play and Pluto TV (free live
-  channels, films and series; the catalogue is whatever Pluto serves your
-  region).
+- **JavaScript plugins** (see below). Bundled:
+  - *Internet Radio*: the stations of radio-browser.info by popularity,
+    country and genre, with search by name.
+  - *SomaFM*: listener-supported, commercial-free channels.
+  - *Podcasts*: the Apple Podcasts top 50, of your country (a setting), of
+    every country it is in and of every genre; search finds any show. Add
+    the ones you follow to Favorites.
+  - *Internet Archive*: public domain feature films, cartoons and classic
+    TV, live concerts, old time radio and LibriVox audiobooks.
+  - *media.ccc.de*: the talks of the Chaos Communication Congress and a few
+    hundred other conferences, with their subtitles.
+  - *Art gallery*: the Art Institute of Chicago's open collection, room by
+    room; start the slideshow and the TV is a picture frame.
+  - *Sveriges Radio*, *SVT Play* and *Pluto TV* (free live channels, films
+    and series; the catalogue is whatever Pluto serves your region).
 
 ## Home
 
@@ -76,6 +85,11 @@ Moving past the last row of a list (or the last row of the grid) wraps
 around to the first, and the other way round. In a list sorted by name,
 left and right jump to the previous / next letter (shown large for a
 moment) instead of paging.
+
+A folder on a slow server says so where the eyes are: the focused row
+pulses while what it opens is on its way, and back gives up on it and
+stays put. A folder that cannot be listed says why in place of the list;
+select tries again. The item that is playing is marked in the list.
 
 The options button opens a side menu: what can be done with the selected
 item (play, resume, play from the beginning, add to favorites, mark as
@@ -160,7 +174,8 @@ the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a
 paused video shows a large pause badge, and streams that cannot seek are
 marked LIVE and have no timeline.
 
-Audio-only playback shows a now-playing card (cover art, title, track,
+Audio-only playback shows a now-playing card (cover art, title, the song a
+radio station says is on or a file's own artist and title, track,
 progress, what plays next) in frosted glass over a visualizer drawn with
 OpenGL: an aurora night sky, the spectrum as a mirrored mountain range on
 the horizon (bass at the edges, treble in the middle) with its reflection,
@@ -191,7 +206,9 @@ skipped.
 Settings, the last of the home tabs, lists the settings right under the
 tab: down from the tab into the list, left and right change the one in
 focus (select steps it on), and what it does is shown beside the list.
-They are grouped as playback, screen, library and diagnostics: whether the
+Select on a setting with many choices (a language, a plugin's country)
+lists them all. They are grouped as playback, screen, library, a section
+for each plugin that has settings of its own, and diagnostics: whether the
 next episode plays by itself,
 **Show input** (every key and button as it arrives, in a corner of the
 screen and the log, also those nothing reacts to: for finding out what a
@@ -209,104 +226,49 @@ key press only wakes it.
 ## JavaScript plugins
 
 Besides UPnP/DLNA servers and the local filesystem, media sources can be
-added with JavaScript. Every `*.js` file in the plugin directory
-(`--plugins DIR`, default `<assets>/../plugins`) is evaluated by QuickJS and
-becomes one provider; the script returns an object implementing the same
-interface as `browse::Provider` and `browse::Source`:
+added with JavaScript: every `*.js` file in the plugin directories is run by
+QuickJS and becomes a source on the Plugins tab. **[docs/plugins.md](docs/plugins.md)**
+is the guide to writing one; in short, a plugin returns an object like this
 
 ```js
 return {
   name: "My provider",
   discover() {
-    return [
-      {
-        name: "My source",         // row title
-        detail: "somewhere",       // row subtitle (optional)
-        icon: "📻",                // emoji glyph (optional)
-        root: "/",                 // root folder id (optional)
-        browse(id) {               // list the children of 'id'
-          return [
-            {
-              id: "bbc1",                        // optional; defaults to uri
-              type: "audio",                     // folder|audio|video|image
-              name: "A stream",                  // required
-              description: "Some station",       // optional
-              image: "https://example.com/a.jpg",// optional
-              uri: "https://example.com/stream",
-            },
-          ];
-        },
+    return [{
+      name: "My source",
+      icon: "📻",
+      browse(id) {               // list the folder 'id'
+        return http.json("https://api.example.com/stations").map(s => ({
+          type: "audio", name: s.name, image: s.logo, uri: s.stream,
+        }));
       },
-    ];
+    }];
   },
 };
 ```
 
-The script body runs inside a function (like a CommonJS module), so it ends
-with `return` rather than an `export`, and top-level `const`/`let` stay
-private to the plugin. In `browse()`, `this` is the source object, so a
-plugin can keep per-source state on it.
+and may add `search(query, folderId)` to get Search in the options menu,
+`resolve(id, entry)` to mint the address (and the request headers and
+subtitles that go with it) at the moment playback starts, and `settings`
+for choices that appear on the Settings page. The host gives it blocking
+`http` (with `http.all()` for requests side by side), a small persistent
+`storage`, and a library of what every plugin otherwise writes for itself
+(`util`, `xml`).
 
-Each script gets its own QuickJS runtime with the standard objects (`JSON`,
-`Math`, `Date`, `RegExp`, ...), `console.log()`/`warn()`/`error()` writing to
-the RmlUi log, and the `http` object below. There is no event loop:
-`discover()` and `browse()` must return their result synchronously (an
-`async` function returns a promise and is reported as an error), and a call
-that spends more than 10 seconds *executing* is interrupted.
+Plugins of your own go in `/data/jtplay/plugins` on a console
+(`~/.config/jtplay/plugins` on a PC, or `--user-plugins DIR`), where a file
+with the name of a bundled plugin replaces it. They are picked up, and
+changed ones loaded afresh, whenever the Plugins tab is searched (square):
+no restart, no new package.
 
-An entry has the fields `id`, `type`, `name`, `description`, `image` and
-`uri`, plus optional `size` (bytes), `date` (anything `new Date(x)` accepts:
-milliseconds since the epoch, an ISO 8601 string or a `Date`) and `duration`
-(seconds), which are used for sorting and shown in the info panel (see
-`browse::Entry` in `src/browse/source.h`). Only `name` is required; a `folder` entry is browsed by handing its `id` back to
-`browse()`, anything else is opened by its `uri`. A source that serves signed
-or otherwise short-lived URIs can leave `uri` out and add a
-`resolve(id, entry)` function returning a fresh one (as a string, or as an
-entry object with a `uri`) at the moment playback starts.
+`jtplay --plugin FILE [--browse ID | --search QUERY | --resolve ID]` runs a
+plugin without the app and prints what it answers, which is the quick way
+to write one.
 
-A source that can ask a backend for content that is not listed adds
-`search(query, folderId)` and gets Search in the options menu (there is
-nothing to declare: having the function is enough). It is called with what
-was typed and the id of the folder on screen, which most searches have no use
-for, and returns entries like `browse()` does; an empty array is an answer:
-nothing found. Narrowing what is listed is the app's own filter and needs
-nothing from the plugin. See `plugins/podcasts.js`.
-
-See `plugins/sr.js` (Sveriges Radio live channels) for a working example.
-
-### Fetching over the network
-
-Plugins talk to the network through `http`, backed by libcurl, so https,
-redirects and compressed responses work. The calls block (plugins already
-run on the browsing worker thread) and return the response directly:
-
-```js
-const res = http.get("https://api.example.com/things", {
-  headers: { Accept: "application/json" },
-  timeout: 20,        // seconds without data; default 30, capped at 60
-});
-if (!res.ok) throw new Error("HTTP " + res.status);
-const things = JSON.parse(res.body);
-```
-
-```js
-http.post(url, body, options);   // options as above
-http.request({ method, url, headers, body, timeout, redirect, binary });
-```
-
-A response is `{ ok, status, url, headers, body }`, where `url` is the final
-URL after redirects and `headers` keys are lower-cased. Following redirects
-can be turned off with `redirect: false`, and `binary: true` returns the body
-as an `ArrayBuffer` instead of a string (a string body is decoded as UTF-8).
-A response over 8 MiB is normally an error; with `maxBytes: n` (at most
-8 MiB) the first `n` bytes are returned instead and the response has
-`truncated: true`, which suits reading the newest end of a large RSS feed.
-
-An HTTP error status is *not* an exception: check `res.ok`. Transport
-failures (DNS, TLS, a server that stops sending) throw an `Error`, so wrap calls in `try`/`catch`
-if a source should survive an unreachable server. Only `http` and `https`
-URLs are permitted, and a response over 8 MiB is refused. Time spent waiting
-on a request does not count towards the 10-second watchdog.
+A plugin runs in a runtime of its own, 32 MiB at most, and a call that
+spends more than ten seconds *executing* (waiting on the network does not
+count) is interrupted. Backing out of a folder that is still loading drops
+the request it was waiting for.
 
 If the build's libcurl has no default CA bundle, point it at one with the
 `SSL_CERT_FILE` (or `CURL_CA_BUNDLE`) environment variable, otherwise https
@@ -367,11 +329,20 @@ icon with an emoji, which is shown as the matching icon where there is one.
 
 ## Building
 
-Besides SDL2, RmlUi, libmpv and tinyxml2, the build needs
-[QuickJS](https://bellard.org/quickjs/) and libcurl. On a PC:
+Besides SDL2 (and SDL2_image), RmlUi 6.2 or later, libmpv and tinyxml2, the
+build needs [QuickJS](https://bellard.org/quickjs/), libcurl and OpenSSL.
+On a PC:
 
     cmake -S . -B build && cmake --build build
     ./build/jtplay -a assets
+
+That also builds `jtplay-plugin`, the plugin runner on its own, and
+
+    ctest --test-dir build --output-on-failure
+
+runs the plugin host's tests with it (they need Python 3, and no network
+beyond the loopback interface). `-DJTPLAY_WERROR=OFF` builds with a
+compiler whose warnings are not the ones the code is kept clean of.
 
 For the PS4, with the ps4-homebrew-dev SDK, the same CMakeLists.txt builds
 `build-ps4/IV0000-BREW04327_00-JTPLAY0000000000.pkg`:

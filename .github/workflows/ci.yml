@@ -38,6 +38,53 @@ jobs:
           path: "build/*.pkg"
           if-no-files-found: error
 
+  # The PC build, and with it the tests of the plugin host (the console
+  # build has nowhere to run them).
+  linux:
+    runs-on: ubuntu-24.04
+    env:
+      RMLUI_VERSION: "6.2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config python3 \
+            libsdl2-dev libsdl2-image-dev libmpv-dev libtinyxml2-dev \
+            libcurl4-openssl-dev libssl-dev libfreetype-dev
+
+      - name: Cache RmlUi and QuickJS
+        id: deps
+        uses: actions/cache@v4
+        with:
+          path: ~/deps
+          key: deps-${{ runner.os }}-rmlui-${{ env.RMLUI_VERSION }}-quickjs-1
+
+      # Neither is packaged for Ubuntu at the version the app needs.
+      - name: Build RmlUi and QuickJS
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$RMLUI_VERSION" https://github.com/mikke89/RmlUi /tmp/rmlui
+          cmake -S /tmp/rmlui -B /tmp/rmlui/build -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX="$HOME/deps"
+          cmake --build /tmp/rmlui/build -j"$(nproc)"
+          cmake --install /tmp/rmlui/build
+          git clone --depth 1 https://github.com/bellard/quickjs /tmp/quickjs
+          make -C /tmp/quickjs -j"$(nproc)" libquickjs.a
+          mkdir -p "$HOME/deps/include/quickjs" "$HOME/deps/lib/quickjs"
+          cp /tmp/quickjs/quickjs.h "$HOME/deps/include/quickjs/"
+          cp /tmp/quickjs/libquickjs.a "$HOME/deps/lib/quickjs/"
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_PREFIX_PATH="$HOME/deps"
+          cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
   release:
     needs: build
     permissions:

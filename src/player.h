@@ -18,6 +18,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 struct mpv_handle;
@@ -59,10 +60,29 @@ public:
   // Main thread, GL context still current.
   void Shutdown();
 
-  // Opens 'url' and starts playback at 'start_seconds', replacing whatever
+  // What to open: an address, and what goes with it.
+  struct Media {
+    std::string url;
+    // Sent with every http(s) request for the stream.
+    std::vector<std::pair<std::string, std::string>> headers;
+    // Subtitle files beside the stream; added as tracks once it is open.
+    struct Subtitle {
+      std::string url;
+      std::string language; // "" = unknown
+      std::string title;    // "" = none
+    };
+    std::vector<Subtitle> subtitles;
+  };
+
+  // Opens 'media' and starts playback at 'start_seconds', replacing whatever
   // is playing. Blocks until mpv has opened the file or given up on it;
   // call from a worker thread.
-  bool Open(const std::string& url, std::string& error, int64_t start_seconds = 0);
+  bool Open(const Media& media, std::string& error, int64_t start_seconds = 0);
+  bool Open(const std::string& url, std::string& error, int64_t start_seconds = 0) {
+    Media media;
+    media.url = url;
+    return Open(media, error, start_seconds);
+  }
 
   // Any thread: makes an Open() in progress give up at once (it returns
   // false with "cancelled"). Does nothing when no open is in progress.
@@ -117,6 +137,11 @@ public:
   // Playback speed, 1.0 = normal. Reset to normal for every file.
   void SetSpeed(double speed);
   double Speed() const { return speed_.load(); }
+
+  // What the stream says is on right now: the song an internet radio
+  // station announces (its ICY title), or a file's own "Artist - Title"
+  // tags. "" when it says nothing. Changes while a station plays.
+  std::string StreamTitle() const;
 
   // --- Chapters -------------------------------------------------------------
   std::vector<ChapterInfo> Chapters() const;
@@ -180,6 +205,7 @@ private:
   void EventThread();
   void UpdateTracks(const mpv_node* list);
   void UpdateChapters(const mpv_node* list);
+  void UpdateMetadata(const mpv_node* map);
   void SetDouble(const char* name, double value);
   // Feeds audio track 'aid' to the spectrum filter, or (-1) turns it off.
   void SetVisualizer(int aid);
@@ -199,6 +225,10 @@ private:
   int64_t started_id_ = -1;     // playlist entry of the last start-file
   int64_t loaded_id_ = -1;      // ... of the last file-loaded
   int64_t ended_id_ = -1;       // ... of the last end-file
+  // A playlist entry that was itself a playlist, and the first of the
+  // entries that replaced it.
+  int64_t redirect_from_ = -1;
+  int64_t redirect_to_ = -1;
   std::string end_error_;       // why that one ended, if it failed
   std::string last_log_error_;  // mpv's last error message
   std::string log_repeat_text_; // event thread: last message printed
@@ -222,6 +252,8 @@ private:
   std::atomic<int> vis_aid_{-1}; // audio track feeding the spectrum, or -1
   std::atomic<int> chapter_{-1};
   std::vector<ChapterInfo> chapters_;   // guarded by tracks_mutex_
+  std::string stream_title_;            // guarded by tracks_mutex_
+  std::string sub_languages_;           // preferred, as mpv's slang; same guard
 
   // Adjustments (main thread).
   Fit fit_ = Fit::Fit;
@@ -241,6 +273,8 @@ private:
   // them): what files and on-demand streams use. Live ones read less.
   std::string cache_secs_;
   std::string readahead_secs_;
+  // mpv's own User-Agent, put back for media that brings none.
+  std::string default_user_agent_;
 };
 
 #endif

@@ -74,8 +74,96 @@
 	color: #e0b84d;
 }
 
-.emark.watched {
+.emark.watched,
+.emark.playing {
 	color: #4dd6b8;
+}
+
+/* The focused row, while what it opens is on its way. */
+.row-busy {
+	display: flex;
+	flex-shrink: 0;
+	margin-left: 14px;
+	align-items: center;
+}
+.row-busy .busy-dot {
+	width: 10dp;
+	height: 10dp;
+	margin-left: 5dp;
+	border-radius: 5dp;
+	background-color: #06231d;
+}
+#browse.grid .row-busy {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+	padding: 6px 8px 6px 3px;
+	border-radius: 12px;
+	background-color: #0b1020cc;
+}
+#browse.grid .row-busy .busy-dot {
+	background-color: #4dd6b8;
+}
+
+/* Grid: what plays, marked on its tile. */
+.art-playing {
+	display: none;
+	position: absolute;
+	bottom: 12px;
+	left: 10px;
+	padding: 2px 8px;
+	font-size: 20px;
+	color: #4dd6b8;
+	background-color: #0b1020cc;
+	border-radius: 12px;
+}
+#browse.grid .entry-row .art-playing {
+	display: block;
+}
+
+/* In place of the list: waiting for it, or why there is none. (The whole
+   width, also where the list is a grid: a flex row of tiles.) */
+#entry-list .empty {
+	width: 100%;
+}
+.empty.loading {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+.empty.loading .busy-dot {
+	width: 12dp;
+	height: 12dp;
+	margin-right: 8dp;
+	border-radius: 6dp;
+}
+.loading-label {
+	margin-left: 10px;
+}
+.empty.failed {
+	margin-top: 96px;
+}
+.failed-icon {
+	font-size: 64px;
+	color: #e0b84d;
+}
+.failed-title {
+	margin-top: 12px;
+	font-size: 34px;
+	font-weight: bold;
+	color: #e8edf7;
+}
+.failed-why {
+	margin: 12px auto 0 auto;
+	max-width: 720px;
+	font-size: 24px;
+	color: #8593ab;
+	word-break: break-word;
+}
+.failed-keys {
+	margin-top: 28px;
+	font-size: 22px;
+	color: #5a6478;
 }
 
 /* Kodi's "label2": the value the list is sorted by. */

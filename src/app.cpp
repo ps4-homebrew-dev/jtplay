@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <sstream>
 
 #include <sys/stat.h>
 
@@ -21,6 +22,11 @@
 #include "browse/js_source.h"
 #include "gamepad.h"
 #include "icons.h"
+#include "util/atomic_file.h"
+
+#ifndef JTPLAY_VERSION
+#define JTPLAY_VERSION "dev"
+#endif
 
 using namespace appdetail;
 
@@ -81,11 +87,37 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
 
   providers_.push_back(std::make_unique<browse::FsProvider>());
   providers_.push_back(std::make_unique<browse::DlnaProvider>(kDiscoveryWaitMs));
-  if (!options.plugins_dir.empty())
-    browse::LoadJsProviders(options.plugins_dir, providers_);
 
-  worker_running_ = true;
-  worker_ = std::thread(&App::WorkerMain, this);
+  // Plugins: the bundled scripts, then the user's own. They are only named
+  // here; the scripts are read and run by the first search of their group,
+  // on the discovery lane, so a slow or broken one cannot delay start-up.
+  std::vector<std::string> plugin_dirs;
+  for (const std::string& dir : {options.plugins_dir, options.user_plugins_dir})
+    if (!dir.empty())
+      plugin_dirs.push_back(dir);
+  if (!plugin_dirs.empty()) {
+    auto env = std::make_shared<browse::JsEnvironment>();
+    env->data_dir = cache_dir + "/plugin-data";
+    env->app_version = JTPLAY_VERSION;
+#if defined(__SCE__)
+    env->platform = "ps4";
+#else
+    env->platform = "linux";
+#endif
+    env->settings = plugin_settings_;
+    env->log = [](browse::JsLogLevel level, const std::string& plugin, const std::string& text) {
+      Rml::Log::Message(level == browse::JsLogLevel::Error ? Rml::Log::LT_ERROR
+                        : level == browse::JsLogLevel::Warning ? Rml::Log::LT_WARNING
+                                                               : Rml::Log::LT_INFO,
+                        "[%s] %s", plugin.c_str(), text.c_str());
+    };
+    auto provider = std::make_unique<browse::JsProvider>(std::move(plugin_dirs), std::move(env));
+    js_provider_ = provider.get();
+    providers_.push_back(std::move(provider));
+  }
+
+  for (util::Worker& lane : lanes_)
+    lane.Start();
   {
     std::lock_guard<std::mutex> lock(art_mutex_);
     art_running_ = true;
@@ -111,17 +143,13 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
 }
 
 void App::Shutdown() {
-  // Stop the workers first; their tasks capture 'this'.
-  if (worker_running_) {
-    {
-      std::lock_guard<std::mutex> lock(tasks_mutex_);
-      worker_running_ = false;
-      tasks_.clear();
-    }
-    tasks_cv_.notify_all();
-    if (worker_.joinable())
-      worker_.join();
-  }
+  // Stop the workers first; their tasks capture 'this'. Whatever they are
+  // waiting on is told to give up, so quitting does not wait out a server.
+  net::Cancel(browse_cancel_);
+  net::Cancel(launch_cancel_);
+  player_->AbortOpen();
+  for (util::Worker& lane : lanes_)
+    lane.Stop();
   {
     std::lock_guard<std::mutex> lock(art_mutex_);
     art_running_ = false;
@@ -212,6 +240,10 @@ void App::LoadSettings() {
       screensaver_sec_ = std::max(0.0, std::atof(value.c_str()));
     } else if (key == "sub_scale") {
       player_->SetSubtitleScale(std::clamp(std::atof(value.c_str()), 0.5, 2.5));
+    } else if (key.compare(0, 7, "plugin.") == 0) {
+      // "plugin.<plugin id>.<setting>": a plugin's own (see BuildSettings).
+      // Kept as found, whether or not that plugin is around this time.
+      plugin_settings_->SetNamed(key.substr(7), value);
     }
   }
 }
@@ -219,7 +251,7 @@ void App::LoadSettings() {
 void App::SaveSettings() const {
   if (settings_path_.empty())
     return;
-  std::ofstream out(settings_path_, std::ios::trunc);
+  std::ostringstream out;
   out << "sort=" << (int)sort_mode_ << "\n"
       << "sort_desc=" << (sort_desc_ ? 1 : 0) << "\n"
       << "view=" << (view_mode_ == ViewMode::Grid ? "grid" : "list") << "\n"
@@ -236,20 +268,55 @@ void App::SaveSettings() const {
       << "audio_lang=" << audio_lang_ << "\n"
       << "sub_lang=" << sub_lang_ << "\n"
       << "screensaver=" << screensaver_sec_ << "\n";
+  for (const auto& setting : plugin_settings_->All())
+    out << "plugin." << setting.first << "=" << setting.second << "\n";
+  // Whole or not at all: a console switched off mid-write must not come
+  // back with half its settings.
+  if (!util::WriteFileAtomic(settings_path_, out.str()))
+    Rml::Log::Message(Rml::Log::LT_WARNING, "Cannot write %s: %s", settings_path_.c_str(),
+                      std::strerror(errno));
 }
 
 // ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
 
-void App::PostTask(std::function<void()> task) {
-  {
-    std::lock_guard<std::mutex> lock(tasks_mutex_);
-    if (!worker_running_)
-      return;
-    tasks_.push_back(std::move(task));
+void App::PostTask(Lane lane, std::function<void()> task, bool busy) {
+  if (!busy) {
+    lanes_[(int)lane].Post(std::move(task));
+    return;
   }
-  tasks_cv_.notify_one();
+  busy_ops_++;
+  const bool posted = lanes_[(int)lane].Post([this, task = std::move(task)] {
+    // Also when the task throws: the indicator must not spin for ever.
+    struct Done {
+      std::atomic<int>& ops;
+      ~Done() { ops--; }
+    } done{busy_ops_};
+    task();
+  });
+  if (!posted)
+    busy_ops_--;
+}
+
+App::BrowseTicket App::NewBrowseRequest() {
+  AbandonBrowse();
+  browse_cancel_ = net::MakeCancelToken();
+  browse_pending_ = true;
+  browse_started_at_ = Now();
+  return {browse_request_, browse_cancel_};
+}
+
+void App::AbandonBrowse() {
+  browse_request_++;
+  net::Cancel(browse_cancel_);
+  browse_cancel_.reset();
+  browse_pending_ = false;
+}
+
+void App::BrowseArrived() {
+  browse_cancel_.reset();
+  browse_pending_ = false;
 }
 
 // Worker thread: hands a result to the main thread. Replies are applied in
@@ -268,21 +335,6 @@ void App::RunReplies() {
   }
   for (std::function<void()>& apply : ready)
     apply();
-}
-
-void App::WorkerMain() {
-  for (;;) {
-    std::function<void()> task;
-    {
-      std::unique_lock<std::mutex> lock(tasks_mutex_);
-      tasks_cv_.wait(lock, [&] { return !tasks_.empty() || !worker_running_; });
-      if (!worker_running_)
-        return;
-      task = std::move(tasks_.front());
-      tasks_.pop_front();
-    }
-    task();
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -333,6 +385,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("folder", &EntryRow::folder);
     row.RegisterMember("favorite", &EntryRow::favorite);
     row.RegisterMember("watched", &EntryRow::watched);
+    row.RegisterMember("playing", &EntryRow::playing);
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
 
@@ -368,6 +421,10 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("clock", &bind_clock_);
   ctor.Bind("date", &bind_date_);
   ctor.Bind("busy", &bind_busy_);
+  ctor.Bind("browse_loading", &bind_browse_loading_);
+  ctor.Bind("browse_slow", &bind_browse_slow_);
+  ctor.Bind("row_busy", &bind_row_busy_);
+  ctor.Bind("browse_error", &bind_browse_error_);
   ctor.Bind("launch_status", &bind_launch_status_);
 
   ctor.Bind("rail", &rail_rows_);
@@ -453,6 +510,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_seekable", &bind_watch_seekable_);
   ctor.Bind("watch_name", &bind_watch_name_);
   ctor.Bind("watch_description", &bind_watch_description_);
+  ctor.Bind("watch_stream_title", &bind_watch_stream_title_);
   ctor.Bind("watch_pos", &bind_watch_pos_);
   ctor.Bind("watch_dur", &bind_watch_dur_);
   ctor.Bind("watch_ends", &bind_watch_ends_);
@@ -497,6 +555,19 @@ void App::Update() {
   }
 
   Set("busy", bind_busy_, busy_ops_.load() > 0);
+  // Waiting, said where the eyes are: in place of the list while there is
+  // nothing in it, on the focused row once there is. (Not for the first moments: a
+  // local folder answers before anyone could read it.)
+  {
+    const bool browsing = view_ == View::Browse;
+    const bool slow = browse_pending_ && now - browse_started_at_ >= kLaunchFeedbackSec;
+    Set("browse_loading", bind_browse_loading_, browsing && browse_pending_);
+    Set("browse_slow", bind_browse_slow_, browsing && slow);
+    const bool opening_folder = slow && !path_.empty();
+    const bool starting_item =
+      launch_request_ && !launch_from_queue_ && now >= launch_visible_at_;
+    Set("row_busy", bind_row_busy_, browsing && (opening_folder || starting_item));
+  }
 
   // How far an in-flight launch has got. Only shown once the open has been
   // slow enough to be worth mentioning.

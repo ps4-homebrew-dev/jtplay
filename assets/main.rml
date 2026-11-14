@@ -45,6 +45,7 @@
 					<span class="np-chip-state" data-if="watch_paused">&#xE132;</span>
 					<span class="np-chip-state" data-if="!watch_paused">&#xE140;</span>
 					<span class="np-chip-title">{{watch_name}}</span>
+					<span class="np-chip-song" data-if="watch_audio && watch_stream_title != ''">{{watch_stream_title}}</span>
 					<span class="np-chip-time" data-if="watch_pos != ''">{{watch_pos}}</span>
 					<div class="np-chip-bar" data-if="watch_seekable">
 						<div class="np-chip-played" data-style-width="watch_progress"/>
@@ -182,10 +183,11 @@
 			     data-class-grid="view_mode == 'grid'">
 				<div id="entries" class="pane">
 					<div class="pane-head">
-						<span class="eyebrow" data-if="filter_text == ''">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
+						<!-- (No count of a folder that is not there: on its way, or failed.) -->
+						<span class="eyebrow" data-if="filter_text == '' && browse_error == '' && !(entry_count == 0 && browse_loading)">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
 						<span class="eyebrow" data-if="filter_text != ''">&#xE155; {{filter_text}}  ·  {{entry_count}} of {{entry_total}}</span>
 						<span class="spacer"/>
-						<span class="sort">{{sort_label}}</span>
+						<span class="sort" data-if="entry_count > 0">{{sort_label}}</span>
 						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
 					</div>
 					<!-- The filter (src/app_browse.cpp): the list below follows what is
@@ -208,23 +210,41 @@
 								<div class="art-glyph" data-if="e.art == 'none'">{{e.icon}}</div>
 								<span class="art-check" data-if="e.watched">&#xE070;</span>
 								<span class="art-fav" data-if="e.favorite">&#xE17A;</span>
+								<span class="art-playing" data-if="e.playing">&#xE1AB;</span>
 								<div class="art-prog" data-if="e.progress != '0%'">
 									<div class="art-prog-bar" data-style-width="e.progress"/>
 								</div>
 							</div>
 							<div class="etitle" data-class-folder="e.folder">{{e.name}}</div>
+							<!-- Being opened, and taking its time (see App::Update). -->
+							<span class="row-busy" data-if="row_busy && it_index == sel_entry">
+								<span class="busy-dot busy-dot1"/>
+								<span class="busy-dot busy-dot2"/>
+								<span class="busy-dot busy-dot3"/>
+							</span>
+							<span class="emark playing" data-if="e.playing">&#xE1AB;</span>
 							<span class="emark" data-if="e.favorite">&#xE17A;</span>
 							<span class="emark watched" data-if="e.watched">&#xE070;</span>
 							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
 						</div>
-						<div class="empty" data-if="entry_count == 0 && !busy && filter_text == ''">
+						<div class="empty" data-if="entry_count == 0 && !browse_loading && filter_text == '' && browse_error == ''">
 							This folder is empty.
 						</div>
-						<div class="empty" data-if="entry_count == 0 && !busy && filter_text != ''">
+						<div class="empty" data-if="entry_count == 0 && !browse_loading && filter_text != ''">
 							Nothing matches the filter.
 						</div>
-						<div class="empty" data-if="entry_count == 0 && busy">
-							Loading...
+						<div class="empty loading" data-if="entry_count == 0 && browse_loading && browse_slow">
+							<span class="busy-dot busy-dot1"/>
+							<span class="busy-dot busy-dot2"/>
+							<span class="busy-dot busy-dot3"/>
+							<div class="loading-label">Loading</div>
+						</div>
+						<!-- The folder could not be listed: why, and what to do about it. -->
+						<div class="empty failed" data-if="entry_count == 0 && !browse_loading && browse_error != ''">
+							<div class="failed-icon">&#xE193;</div>
+							<div class="failed-title">This did not load</div>
+							<div class="failed-why">{{browse_error}}</div>
+							<div class="failed-keys">Select tries again, back leaves</div>
 						</div>
 					</div>
 					<!-- Grid: what the focused tile is, along the bottom. -->
@@ -320,7 +340,9 @@
 				<div class="np-glyph" data-if="watch_image == ''">&#xE126;</div>
 			</div>
 			<div class="np-title">{{watch_name}}</div>
-			<div class="np-meta" data-if="watch_description != ''">{{watch_description}}</div>
+			<!-- What is on: the song a station announces, a file's tags. -->
+			<div class="np-song" data-if="watch_stream_title != ''">{{watch_stream_title}}</div>
+			<div class="np-meta" data-if="watch_description != '' && watch_stream_title == ''">{{watch_description}}</div>
 			<div class="np-track" data-if="watch_atrack != ''">{{watch_atrack}}</div>
 			<div class="np-progress" data-if="watch_seekable">
 				<div class="np-buffered" data-style-width="watch_buffered"/>

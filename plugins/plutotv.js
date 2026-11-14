@@ -162,9 +162,23 @@ function jwtPayload(token) {
 
 /* ---------------------------------------------------------------- session */
 
-// One device id and one session id for as long as the plugin lives. There is
-// no account behind either; they only tie a run of requests together.
-const deviceId = uuid();
+// One device id, kept between runs, and one session id for as long as the
+// plugin lives. There is no account behind either; they only tie a run of
+// requests together.
+const deviceId = (() => {
+    // The same device from one run to the next, as an app that is installed
+    // once would be; only the session is new each time.
+    let id = storage.get("deviceId");
+    if (typeof id !== "string" || id.length < 30) {
+        id = uuid();
+        try {
+            storage.set("deviceId", id);
+        } catch (e) {
+            console.warn("device id not kept: " + e.message);
+        }
+    }
+    return id;
+})();
 const sessionId = uuid();
 
 let session = null;

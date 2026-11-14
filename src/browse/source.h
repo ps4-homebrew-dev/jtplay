@@ -6,14 +6,18 @@
 // specific lives in the implementations (dlna_source.cpp, fs_source.cpp).
 //
 // All Browse()/Discover() calls are blocking I/O; the app invokes them from
-// its worker thread only. Sources are handed around as shared_ptr so an
-// in-flight browse survives a rescan that replaces the source list.
+// its worker threads only, and may give up on one that is under way: the
+// calling thread then has a cancelled token in scope (net/cancel.h), which
+// whatever the source waits on is expected to honour. Sources are handed
+// around as shared_ptr so an in-flight browse survives a rescan that
+// replaces the source list.
 #ifndef BROWSE_SOURCE_H
 #define BROWSE_SOURCE_H
 
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace browse {
@@ -58,6 +62,25 @@ struct Entry {
 };
 
 using Listing = std::vector<Entry>;
+
+// What the player is handed to play an entry: the address, and what it takes
+// to be let in and understood. Made by Source::Resolve() at the moment
+// playback starts, so anything short-lived in it is fresh.
+struct Playable {
+  std::string uri;
+
+  // Sent with every request for the stream ("Referer", "Authorization",
+  // "User-Agent", ...); only meaningful for http(s).
+  std::vector<std::pair<std::string, std::string>> headers;
+
+  // Subtitles that are not in the stream itself.
+  struct Subtitle {
+    std::string uri;
+    std::string language; // "sv", "eng", ...; "" = unknown
+    std::string title;    // "Swedish (hearing impaired)"; "" = none
+  };
+  std::vector<Subtitle> subtitles;
+};
 
 // The type as a word ("folder", "audio", "video", "image", "other"): what
 // plugins write, what the library file stores, and the class the UI tints
@@ -126,17 +149,17 @@ public:
     return false;
   }
 
-  // Turns 'entry' into something ffmpeg can open, immediately before
+  // Turns 'entry' into something the player can open, immediately before
   // playback starts. The default hands back the uri captured while
   // browsing, which is all a DLNA server or a local file needs; sources
   // whose URIs carry a token that expires between listing and playing
-  // override this and mint a fresh one from entry.id.
+  // override this and mint a fresh one from entry.id, and may add request
+  // headers and subtitles while at it.
   //
   // Blocking (it may do I/O); worker thread only.
-  virtual bool Resolve(const Entry& entry, std::string& uri,
-                       std::string& error) {
-    uri = entry.uri;
-    if (uri.empty()) {
+  virtual bool Resolve(const Entry& entry, Playable& out, std::string& error) {
+    out.uri = entry.uri;
+    if (out.uri.empty()) {
       error = "this item has nothing to play";
       return false;
     }
@@ -151,7 +174,9 @@ class Provider {
 public:
   virtual ~Provider() = default;
 
-  virtual const char* Name() const = 0; // for error messages
+  // For error messages ("DLNA: no route to host"); "" when the provider's
+  // errors say for themselves what they are about.
+  virtual const char* Name() const = 0;
 
   // The rail group of the sources it finds; each group is searched on its
   // own, when the rail enters it.

@@ -384,20 +384,20 @@ bool LibrarySource::Search(const std::string& folder_id, const std::string& quer
   return true;
 }
 
-bool LibrarySource::Resolve(const browse::Entry& entry, std::string& uri,
+bool LibrarySource::Resolve(const browse::Entry& entry, browse::Playable& out,
                             std::string& error) {
   std::string key, inner;
   if (!DecodeId(entry.id, key, inner))
-    return browse::Source::Resolve(entry, uri, error);
+    return browse::Source::Resolve(entry, out, error);
   if (const browse::SourcePtr source = registry_.Find(key)) {
     browse::Entry original = entry;
     original.id = inner;
-    return source->Resolve(original, uri, error);
+    return source->Resolve(original, out, error);
   }
   // Offline source: the URI saved with the entry may well still work (a
   // file on a drive, a server whose discovery is merely late).
   if (!entry.uri.empty()) {
-    uri = entry.uri;
+    out.uri = entry.uri;
     return true;
   }
   error = "that source is not available right now";

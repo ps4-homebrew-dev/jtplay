@@ -139,24 +139,44 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
   if (!current_source_)
     return;
 
-  const uint32_t request = ++browse_request_;
+  const BrowseTicket ticket = NewBrowseRequest();
+  const uint32_t request = ticket.id;
   const browse::SourcePtr source = current_source_;
 
-  busy_ops_++;
-  PostTask([this, request, source, id, name, replace] {
+  PostTask(Lane::Browse, [this, ticket, request, source, id, name, replace] {
     browse::Listing result;
     std::string error;
-    source->Browse(id, result, error);
+    {
+      net::CancelScope scope(ticket.cancel);
+      if (!net::Cancelled()) // given up on while it waited its turn
+        source->Browse(id, result, error);
+    }
 
     Reply([this, request, id, name, replace, result = std::move(result),
            error]() mutable {
       if (request != browse_request_)
         return; // superseded while it was in flight
+      BrowseArrived();
       if (!error.empty()) {
-        ShowToast(error, icon::kWarning);
-        // A failed root browse drops back home.
-        if (path_.empty())
-          GoHome();
+        // A refresh that failed leaves the listing there was, and says so.
+        if (replace && !path_.empty() && path_.back().error.empty()) {
+          ShowToast(error, icon::kWarning);
+          return;
+        }
+        // Anything else becomes the folder on screen: where it is, what
+        // went wrong, and select to try again (see ActivateSelection). The
+        // way back is the usual one.
+        if (replace && !path_.empty())
+          path_.pop_back();
+        BrowseLevel failed;
+        failed.id = id;
+        failed.name = name;
+        failed.error = error;
+        sel_entry_ = 0;
+        path_.push_back(std::move(failed));
+        RebuildEntryRows();
+        RebuildCrumb();
+        RebuildDetail();
         return;
       }
 
@@ -190,7 +210,6 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       RebuildDetail();
       scroll_entries_pending_ = true;
     });
-    busy_ops_--;
   });
 }
 
@@ -217,7 +236,7 @@ void App::RefreshContainer() {
 
 void App::LeaveContainer() {
   CancelForegroundLaunch(); // ... otherwise playback pops up over another folder
-  browse_request_++; // invalidate any browse that is still in flight
+  AbandonBrowse(); // any browse that is still in flight
   if (path_.size() <= 1) {
     GoHome(); // at the root: back home, where the rail still points here
     return;
@@ -242,6 +261,9 @@ void App::RebuildEntryRows() {
       row.folder = e.IsFolder();
       library::Ref ref;
       if (Identify(e, ref)) {
+        row.playing = bind_watching_ && playing_identified_ &&
+                      ref.source_key == playing_ref_.source_key &&
+                      ref.entry.id == playing_ref_.entry.id;
         row.favorite = library_.IsFavorite(ref.source_key, ref.entry.id);
         library::Progress p;
         if (library_.GetProgress(ref.source_key, ref.entry.id, p)) {
@@ -257,6 +279,7 @@ void App::RebuildEntryRows() {
   const BrowseLevel* shown = CurrentLevel();
   entry_total_ = shown ? (int)shown->raw.size() : 0;
   Set("filter_text", bind_filter_text_, shown ? shown->filter : std::string());
+  Set("browse_error", bind_browse_error_, shown ? shown->error : std::string());
   sel_entry_ = std::clamp(sel_entry_, 0, std::max(0, entry_count_ - 1));
   model_.DirtyVariable("entries");
   model_.DirtyVariable("entry_count");
@@ -384,8 +407,12 @@ void App::JumpLetter(int direction) {
 
 void App::ActivateSelection() {
   const browse::Entry* e = SelectedEntry();
-  if (!e)
+  if (!e) {
+    // Nothing listed because listing failed: select tries again.
+    if (const BrowseLevel* level = CurrentLevel(); level && !level->error.empty())
+      RefreshContainer();
     return;
+  }
   if (e->IsFolder())
     EnterContainer(*e);
   else
@@ -451,6 +478,10 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     if (launch_request_ && !launch_behind_) {
       CancelLaunch();
       ShowToast("Cancelled", icon::kStop);
+    } else if (browse_pending_ && !path_.empty()) {
+      // Likewise a folder that is still being opened (or listed again):
+      // back gives up on that, and stays where it was asked from.
+      AbandonBrowse();
     } else if (const BrowseLevel* level = CurrentLevel();
                level && !level->filter.empty()) {
       ClearFilter(); // back out of the filter before the folder
@@ -1089,20 +1120,24 @@ void App::RequestSearch(const std::string& query) {
     path_[scope].selection = sel_entry_; // where back returns to
   const std::string folder = path_[scope].id;
 
-  const uint32_t request = ++browse_request_;
+  const BrowseTicket ticket = NewBrowseRequest();
+  const uint32_t request = ticket.id;
   const browse::SourcePtr source = current_source_;
 
-  busy_ops_++;
-  PostTask([this, request, source, folder, query, scope, replace] {
+  PostTask(Lane::Browse, [this, ticket, request, source, folder, query, scope, replace] {
     browse::Listing result;
     std::string error;
-    if (!source->Search(folder, query, result, error) && error.empty())
-      error = "the search failed";
+    {
+      net::CancelScope cancel(ticket.cancel);
+      if (!net::Cancelled() && !source->Search(folder, query, result, error) && error.empty())
+        error = "the search failed";
+    }
 
     Reply([this, request, folder, query, scope, replace,
            result = std::move(result), error]() mutable {
       if (request != browse_request_ || scope >= path_.size())
         return; // superseded while it was in flight
+      BrowseArrived();
       if (!error.empty()) {
         ShowToast(error, icon::kWarning);
         return;
@@ -1129,6 +1164,5 @@ void App::RequestSearch(const std::string& query) {
       RebuildDetail();
       scroll_entries_pending_ = true;
     });
-    busy_ops_--;
   });
 }

@@ -1,0 +1,21 @@
+# The style the app's own sources are written in. src/RmlUi is vendored and
+# keeps upstream's (see src/RmlUi/.clang-format).
+BasedOnStyle: Google
+ColumnLimit: 100
+IndentWidth: 2
+AccessModifierOffset: -2
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+BinPackArguments: true
+BinPackParameters: true
+IndentCaseLabels: false
+NamespaceIndentation: None
+IncludeBlocks: Preserve
+SortIncludes: false
+SpacesBeforeTrailingComments: 1
+ReflowComments: false

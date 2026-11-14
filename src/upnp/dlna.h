@@ -18,10 +18,10 @@ namespace upnp {
 // A discovered media server, ready to be browsed.
 struct MediaServer {
   std::string friendly_name;
-  std::string model;        // "<manufacturer> <modelName>", best effort
-  std::string udn;          // uuid:... from the description
-  std::string location;     // description document URL (shown as the host)
-  std::string control_url;  // absolute ContentDirectory control URL
+  std::string model;       // "<manufacturer> <modelName>", best effort
+  std::string udn;         // uuid:... from the description
+  std::string location;    // description document URL (shown as the host)
+  std::string control_url; // absolute ContentDirectory control URL
 };
 
 // One entry of a DIDL-Lite listing: either a container ("folder") or an
@@ -30,16 +30,16 @@ struct MediaServer {
 struct DidlObject {
   std::string id;
   std::string title;
-  std::string upnp_class;   // object.container..., object.item.videoItem...
+  std::string upnp_class; // object.container..., object.item.videoItem...
   bool container = false;
 
   // Metadata, all optional.
-  std::string artist;       // dc:creator or upnp:artist
+  std::string artist; // dc:creator or upnp:artist
   std::string album;
   std::string genre;
-  std::string date;         // dc:date
-  std::string album_art;    // upnp:albumArtURI, absolute
-  std::string thumb;        // image <res> on a non-image item (JPEG_TN etc)
+  std::string date;      // dc:date
+  std::string album_art; // upnp:albumArtURI, absolute
+  std::string thumb;     // image <res> on a non-image item (JPEG_TN etc)
 
   std::string res_url;      // best playable resource (http-get preferred)
   int64_t res_size = -1;    // <res size="...">, bytes; -1 = unknown
@@ -67,15 +67,15 @@ bool DescribeServer(const std::string& location, MediaServer& out, std::string& 
 // ContentDirectory Browse with BrowseFlag=BrowseDirectChildren. The root of
 // every server is object id "0". Handles paging internally and returns the
 // complete listing (capped at 'max_objects' for pathological folders).
-bool Browse(const MediaServer& server, const std::string& object_id,
-            BrowseResult& out, std::string& error, size_t max_objects = 5000);
+bool Browse(const MediaServer& server, const std::string& object_id, BrowseResult& out,
+            std::string& error, size_t max_objects = 5000);
 
 // ContentDirectory Browse with BrowseFlag=BrowseMetadata: the object itself
 // rather than its children. Used to get a playable URL that is current,
 // since the one seen while browsing (host, port, session) can be stale by
 // the time a saved item is played again.
-bool BrowseMetadata(const MediaServer& server, const std::string& object_id,
-                    DidlObject& out, std::string& error);
+bool BrowseMetadata(const MediaServer& server, const std::string& object_id, DidlObject& out,
+                    std::string& error);
 
 } // namespace upnp
 
