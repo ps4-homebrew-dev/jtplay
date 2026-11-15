@@ -21,6 +21,10 @@
 //        config: { iiif_url } }
 // and a picture is <iiif_url>/<image_id>/full/<width>,/0/default.jpg. A
 // room is two pages of a hundred, asked for together (http.all).
+//
+// The image server answers 403 to a request without the museum's site as
+// Referer, so the source says so in imageHeaders, for the app to send
+// when it downloads the pictures.
 
 const API = "https://api.artic.edu/api/v1/artworks/search";
 const IIIF = "https://www.artic.edu/iiif/2";
@@ -110,6 +114,10 @@ return {
             detail: "The Art Institute of Chicago, as a picture frame",
             icon: "🖼",
             root: "/",
+            imageHeaders: {
+                "https://www.artic.edu/": Object.assign({ Referer: "https://www.artic.edu/" },
+                                                        HEADERS)
+            },
 
             browse(id) {
                 if (id === "/")

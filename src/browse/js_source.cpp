@@ -8,11 +8,13 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <map>
 
 #include "browse/js_util.h"
 #include "icons.h"
 #include "net/cancel.h"
+#include "net/http_client.h"
 #include "util/atomic_file.h"
 
 namespace browse {
@@ -137,6 +139,23 @@ bool ToListing(const JsPlugin& plugin, JSValue v, Listing& out, std::string& err
 // What resolve() returned, as something to play: the uri itself, or an
 // object { uri, headers: { name: value }, subtitles: [{ uri, lang, name }] }
 // (an entry object, as browse() returns them, is such an object too).
+// { name: value } into a header list; a header is one line, and anything
+// else is not passed on.
+void ReadHeaders(JSContext* ctx, JSValue obj,
+                 std::vector<std::pair<std::string, std::string>>& out) {
+  if (!JS_IsObject(obj))
+    return;
+  const bool ok = ForEachProperty(ctx, obj, [&](const char* name, JSValue value) {
+    const std::string text = ToStdString(ctx, value);
+    if (*name && std::strpbrk(name, "\r\n:") == nullptr &&
+        text.find_first_of("\r\n") == std::string::npos)
+      out.emplace_back(name, text);
+    return true;
+  });
+  if (!ok)
+    ClearException(ctx);
+}
+
 bool ToPlayable(JSContext* ctx, JSValue v, Playable& out, std::string& error) {
   if (JS_IsString(v)) {
     out.uri = ToStdString(ctx, v);
@@ -146,17 +165,7 @@ bool ToPlayable(JSContext* ctx, JSValue v, Playable& out, std::string& error) {
       out.uri = FieldString(ctx, v, "url");
 
     Ref headers(ctx, JS_GetPropertyStr(ctx, v, "headers"));
-    if (JS_IsObject(headers.get())) {
-      const bool ok = ForEachProperty(ctx, headers.get(), [&](const char* name, JSValue value) {
-        const std::string text = ToStdString(ctx, value);
-        // A header is one line; anything else is not passed on.
-        if (*name && text.find_first_of("\r\n") == std::string::npos)
-          out.headers.emplace_back(name, text);
-        return true;
-      });
-      if (!ok)
-        ClearException(ctx);
-    }
+    ReadHeaders(ctx, headers.get(), out.headers);
 
     Ref subtitles(ctx, JS_GetPropertyStr(ctx, v, "subtitles"));
     int64_t n = 0;
@@ -333,6 +342,21 @@ bool DiscoverJsSources(const JsPluginPtr& plugin, std::vector<SourcePtr>& out,
     // Looked up here, with the plugin's mutex held, so that asking
     // whether it can search later (on the main thread) never enters it.
     const bool can_search = HasFunction(ctx, item.get(), "search");
+
+    // imageHeaders: { "<URL prefix>": { name: value } }, sent when the app
+    // downloads artwork from there (see docs/plugins.md).
+    Ref image_headers(ctx, JS_GetPropertyStr(ctx, item.get(), "imageHeaders"));
+    if (JS_IsObject(image_headers.get())) {
+      const bool ok = ForEachProperty(ctx, image_headers.get(),
+                                      [&](const char* prefix, JSValue rule) {
+        net::HeaderList headers;
+        ReadHeaders(ctx, rule, headers);
+        net::SetPrefixHeaders(prefix, std::move(headers));
+        return true;
+      });
+      if (!ok)
+        ClearException(ctx);
+    }
 
     found.push_back(std::make_shared<JsSource>(plugin, item.release(), name, detail, icon, root,
                                                can_search));

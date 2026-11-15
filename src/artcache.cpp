@@ -455,6 +455,7 @@ std::string Fetch(const std::string& uri) {
 
   net::HttpClient::Request req;
   req.url = uri;
+  req.headers = net::PrefixHeaders(uri); // what the plugin said the server wants
   req.stall_timeout_ms = kStallTimeoutMs;
   req.max_bytes = kMaxImageBytes;
 

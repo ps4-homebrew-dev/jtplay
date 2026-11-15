@@ -73,6 +73,20 @@ return {
 the Plugins tab is searched, so it should not fetch anything: return the
 description and do the work in `browse()`.
 
+A source may also have `imageHeaders`, headers the app sends when it
+downloads artwork (an entry's `image`, or the picture of an `image` entry)
+from addresses that start with a prefix. It is for an image server that
+answers only requests carrying, say, its own site as Referer:
+
+```js
+imageHeaders: {
+  "https://images.example.com/": { Referer: "https://example.com/" },
+},
+```
+
+A prefix names one site at the least (`https://host/`). Media that plays
+takes its headers from `resolve()` instead (see below).
+
 `browse(id)` lists one folder, starting with the root. In every function of
 a source, `this` is the source object, so a plugin can keep per-source
 state on it.

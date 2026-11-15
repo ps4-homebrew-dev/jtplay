@@ -98,6 +98,16 @@ private:
   CURLM* multi_ = nullptr; // made by the first PerformAll()
 };
 
+// Headers to send with requests for URLs that start with a prefix: what a
+// plugin declares for its artwork, for an image server that answers only
+// requests carrying, say, its own site as Referer. The prefix must name a
+// site ("https://host/..."); a later rule for the same prefix replaces the
+// earlier one, and an empty list removes it. Thread safe.
+using HeaderList = std::vector<std::pair<std::string, std::string>>;
+void SetPrefixHeaders(const std::string& prefix, HeaderList headers);
+// The headers of every rule whose prefix 'url' starts with.
+HeaderList PrefixHeaders(const std::string& url);
+
 } // namespace net
 
 #endif

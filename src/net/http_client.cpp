@@ -455,4 +455,31 @@ namespace net {
     return results;
   }
 
+namespace {
+std::mutex g_prefix_mutex;
+std::map<std::string, HeaderList> g_prefix_headers;
+} // namespace
+
+void SetPrefixHeaders(const std::string& prefix, HeaderList headers) {
+  // "https://host/" at the least: a rule is for one site, never for all.
+  const size_t scheme = prefix.find("://");
+  if (scheme == std::string::npos || prefix.find('/', scheme + 3) == std::string::npos ||
+      prefix.find('/', scheme + 3) == scheme + 3)
+    return;
+  std::lock_guard<std::mutex> lock(g_prefix_mutex);
+  if (headers.empty())
+    g_prefix_headers.erase(prefix);
+  else
+    g_prefix_headers[prefix] = std::move(headers);
+}
+
+HeaderList PrefixHeaders(const std::string& url) {
+  HeaderList out;
+  std::lock_guard<std::mutex> lock(g_prefix_mutex);
+  for (const auto& rule : g_prefix_headers)
+    if (url.compare(0, rule.first.size(), rule.first) == 0)
+      out.insert(out.end(), rule.second.begin(), rule.second.end());
+  return out;
+}
+
 } // namespace net
