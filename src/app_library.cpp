@@ -73,6 +73,23 @@ void App::ToggleFavorite(const browse::Entry& entry) {
   ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
 }
 
+library::Ref App::SourceRef(const browse::SourcePtr& source) const {
+  library::Ref ref;
+  ref.source_key = source->Key();
+  ref.source_name = source->Name();
+  ref.entry.id = source->RootId();
+  ref.entry.type = browse::Entry::Type::Folder;
+  ref.entry.name = source->Name();
+  ref.entry.description = source->Detail();
+  return ref;
+}
+
+void App::ToggleSourceFavorite(const browse::SourcePtr& source) {
+  const bool now = library_.ToggleFavorite(SourceRef(source));
+  library_.Save();
+  ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
+}
+
 bool App::IsSnapshot(const std::string& image) const {
   const std::string prefix = "file://" + cache_dir_ + "/snap-";
   return !cache_dir_.empty() && image.compare(0, prefix.size(), prefix) == 0;

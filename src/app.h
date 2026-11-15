@@ -230,6 +230,9 @@ private:
   bool IdentifyIn(const browse::Entry& entry, const browse::SourcePtr& source,
                   library::Ref& out) const;
   void ToggleFavorite(const browse::Entry& entry);
+  // A source as a favorite: its top folder, kept against the source's key.
+  library::Ref SourceRef(const browse::SourcePtr& source) const;
+  void ToggleSourceFavorite(const browse::SourcePtr& source);
   // Snapshots of where a video was stopped (see RecordProgress) live in the
   // cache directory and go when their resume point does.
   bool IsSnapshot(const std::string& image) const;

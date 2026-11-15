@@ -727,6 +727,9 @@ void App::OpenMenu() {
     const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_];
     Set("menu_title", bind_menu_title_, source->Name());
     menu_items_.push_back({"Open", nullptr, [this, source](int) { OpenSource(source); }});
+    const bool fav = library_.IsFavorite(source->Key(), source->RootId());
+    menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites", nullptr,
+      [this, source](int) { ToggleSourceFavorite(source); }});
     const browse::Source::Group group = source->RailGroup();
     menu_items_.push_back({"Search again", nullptr,
       [this, group](int) { StartDiscovery(group); }});
