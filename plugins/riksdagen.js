@@ -20,16 +20,21 @@
 //   https://data.riksdagen.se/dokumentlista/?avd=webbtv&webbtv=1
 //       &utformat=podd&sort=debattdagtid&sz=50&p=<page>[&doktyp=..]
 //       [&utskott=..][&sok=..]
-// Playing a recording as video asks the media API for its files,
-//   https://data.riksdagen.se/api/mhs-vodapi?<document id>
-//       -> { videodata: [{ streams: { files: [...] }, ... }] }
-// and takes the stream or the largest MP4 among them; with nothing found
-// there, or with the Play setting at Sound only, the MP3 plays instead.
-// (svtplay-dl, lib/svtplay_dl/service/riksdagen.py, reads the same video
-// from the web page.)
+// Every recording's files are named after one media id, the one in the
+// feed's sound file, and the web player's page lists them as
+//   https://mhdownload.riksdagen.se/VOD1/HD/<id>_aud.mp3        sound
+//   https://mhdownload.riksdagen.se/VOD1/HD/<id>_720p.mp4       video
+//   https://mamstream.riksdagen.se/VOD1/_definst_/smil:HD/<id>.smil/playlist.m3u8
+//   https://mhdownload.riksdagen.se/SUB/<id>_swe.vtt            subtitles
+// so playing a recording as video needs no lookup, only a check of which
+// of them are there: the MP4 is published about an hour after the
+// broadcast, the stream at once, and subtitles not for everything. With
+// neither video, or with the Play setting at Sound only, the MP3 plays.
+// (The open data media API, mhs-vodapi, answers 404 for recent
+// recordings by any of their ids.)
 
 const LIST = "https://data.riksdagen.se/dokumentlista/";
-const MEDIA = "https://data.riksdagen.se/api/mhs-vodapi?";
+const STREAM = "https://mamstream.riksdagen.se/VOD1/_definst_/smil:";
 const PAGE_SIZE = 50;
 const PAGES = 2;
 const CACHE_SEC = 10 * 60;
@@ -120,40 +125,47 @@ function recordings(extra) {
     return out;
 }
 
-// Every URL anywhere in a JSON value.
-function urls(value, out) {
-    if (typeof value === "string") {
-        if (/^https?:\/\//.test(value))
-            out.push(value);
-    } else if (Array.isArray(value)) {
-        value.forEach(v => urls(v, out));
-    } else if (value && typeof value === "object") {
-        Object.keys(value).forEach(k => urls(value[k], out));
-    }
-    return out;
+// The files of a recording, from the address of its sound; null when the
+// address isn't of the usual shape.
+function filesOf(audio) {
+    const m = /^(https?:\/\/[^\/]+)\/VOD1\/((?:[^\/?#]+\/)*)(\d{12,})_aud\.mp3(?:[?#]|$)/i
+        .exec(audio || "");
+    if (!m)
+        return null;
+    const host = m[1], folder = m[2], id = m[3];
+    return {
+        id: id,
+        mp4: host + "/VOD1/" + folder + id + "_720p.mp4",
+        hls: STREAM + folder + id + ".smil/playlist.m3u8",
+        vtt: host + "/SUB/" + id + "_swe.vtt"
+    };
 }
 
-// The video of a recording: an HLS stream if there is one, else the MP4
-// with the most lines ("..._720p.mp4" over "..._360p.mp4"). Null if the
-// media API has neither.
-function videoOf(doc) {
-    const res = http.get(MEDIA + encodeURIComponent(doc), { timeout: 20 });
-    if (!res.ok)
-        return null;
-    let json;
-    try {
-        json = res.json();
-    } catch (e) {
+// Which of some addresses answer, asked for together and a byte each.
+function present(uris) {
+    return http.all(uris.map(u => ({
+        url: u, headers: { Range: "bytes=0-0" }, maxBytes: 1, timeout: 15
+    }))).map(res => res.ok);
+}
+
+// The video of a recording, with its subtitles, or null.
+function videoOf(audio) {
+    const files = filesOf(audio);
+    if (!files) {
+        console.warn("no media id in " + audio);
         return null;
     }
-    const found = urls(json.videodata || json, []);
-    const stream = found.find(u => /\.m3u8(\?|$)/i.test(u));
-    if (stream)
-        return stream;
-    const lines = u => Number((/(\d{3,4})p/i.exec(u) || [])[1]) || 0;
-    const mp4 = found.filter(u => /\.mp4(\?|$)/i.test(u) && !/_aud\./i.test(u))
-        .sort((a, b) => lines(b) - lines(a));
-    return mp4[0] || null;
+    const [mp4, hls, vtt] = present([files.mp4, files.hls, files.vtt]);
+    // An MP4 file starts and seeks over plain HTTP; the stream is there
+    // before it is.
+    const uri = mp4 ? files.mp4 : hls ? files.hls : null;
+    console.log(files.id + ": " + (uri || "no video") + (vtt ? ", with subtitles" : ""));
+    if (!uri)
+        return null;
+    const playable = { uri: uri };
+    if (vtt)
+        playable.subtitles = [{ uri: files.vtt, lang: "sv", name: "Svenska" }];
+    return playable;
 }
 
 return {
@@ -207,16 +219,15 @@ return {
 
             resolve(id, entry) {
                 const audio = entry && entry.uri;
-                if (settings.get("play") !== "audio" && id.startsWith("d:")) {
+                if (settings.get("play") !== "audio" && audio) {
                     try {
-                        const video = videoOf(id.slice(2));
+                        const video = videoOf(audio);
                         if (video)
                             return video;
                     } catch (e) {
                         console.warn("video of " + id + ": " + e.message);
                     }
-                    if (audio)
-                        console.warn(id + ": no video found; playing the sound");
+                    console.warn(id + ": no video found; playing the sound");
                 }
                 if (audio)
                     return audio;

@@ -32,8 +32,7 @@
 //   - The GraphQL queries are Retrospect's (github.com/retrospect-addon/
 //     plugin.video.retrospect, channels/channel.se/tv4se, GPL-3.0-or-later),
 //     generated from its source and kept as they are, since the gateway
-//     answers the queries its own clients send. tools/tv4play-queries.py
-//     refreshes them from a newer Retrospect.
+//     answers the queries its own clients send.
 //   - Sign-in and playback follow svtplay-dl (github.com/spaam/svtplay-dl,
 //     lib/svtplay_dl/service/tv4play.py, MIT).
 //

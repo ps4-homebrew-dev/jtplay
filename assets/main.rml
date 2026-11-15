@@ -199,8 +199,11 @@
 					<!-- The letter a left / right jump landed on, briefly and large. -->
 					<div id="jump-letter" data-if="jump_letter != ''">{{jump_letter}}</div>
 					<div id="entry-list" class="list">
+						<!-- Only the rows around the selection are here; these stand
+						     in for the rest (see App::SyncEntryWindow). -->
+						<div class="entry-spacer" data-if="spacer_top != '0px'" data-style-height="spacer_top"/>
 						<div class="entry-row" data-for="e : entries"
-						     data-class-selected="it_index == sel_entry">
+						     data-class-selected="it_index == sel_window">
 							<div class="art-tile"
 							     data-class-k-folder="e.kind == 'folder'"
 							     data-class-k-audio="e.kind == 'audio'"
@@ -217,7 +220,7 @@
 							</div>
 							<div class="etitle" data-class-folder="e.folder">{{e.name}}</div>
 							<!-- Being opened, and taking its time (see App::Update). -->
-							<span class="row-busy" data-if="row_busy && it_index == sel_entry">
+							<span class="row-busy" data-if="row_busy && it_index == sel_window">
 								<span class="busy-dot busy-dot1"/>
 								<span class="busy-dot busy-dot2"/>
 								<span class="busy-dot busy-dot3"/>
@@ -227,6 +230,7 @@
 							<span class="emark watched" data-if="e.watched">&#xE070;</span>
 							<div class="emeta" data-if="e.meta != ''">{{e.meta}}</div>
 						</div>
+						<div class="entry-spacer" data-if="spacer_bottom != '0px'" data-style-height="spacer_bottom"/>
 						<div class="empty" data-if="entry_count == 0 && !browse_loading && filter_text == '' && browse_error == ''">
 							This folder is empty.
 						</div>

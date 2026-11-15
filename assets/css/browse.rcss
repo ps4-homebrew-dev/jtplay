@@ -203,6 +203,14 @@
 	padding: 10px 6px 0px 6px;
 }
 
+/* Stands in for the rows of the list that are not in the document: a
+   line of its own, also among the tiles of the grid. */
+.entry-spacer {
+	display: block;
+	width: 100%;
+	flex: 0 0 100%;
+}
+
 /* A tile: art on top, title under it. 252px tall plus the 24px gap. */
 #browse.grid .entry-row {
 	flex-direction: column;

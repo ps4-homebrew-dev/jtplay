@@ -531,7 +531,7 @@ private:
   // scheduled to be) fetched in the background, or if it failed.
   // 'thumb': the small copy, for tiles and rows.
   std::string ImagePathFor(const std::string& uri, bool thumb = false);
-  void ArtworkMain();             // the artwork thread
+  void ArtworkMain();             // an artwork thread
   // The artwork URI for an entry: its own, or else a snapshot the library
   // remembers for it.
   std::string ArtUri(const browse::Entry& entry) const;
@@ -729,6 +729,19 @@ private:
   std::vector<int> shelf_card_sel_;    // remembered column per shelf
 
   std::vector<EntryRow> entry_rows_;
+  // The rows the document has: those around the selection. A folder of a
+  // thousand entries as a thousand rows is a thousand rows to lay out and
+  // draw every frame, which a console does at a few frames a second; the
+  // rows above and below the window are stood in for by two spacers of
+  // their height, so scrolling and the scroll bar are as before.
+  std::vector<EntryRow> window_rows_;
+  int window_first_ = 0;
+  int window_mode_ = -1;              // ViewMode the window was made for
+  bool entry_rows_dirty_ = false;     // entry_rows_ changed; the window follows
+  int bind_sel_window_ = 0;           // sel_entry_ within the window
+  Rml::String bind_spacer_top_ = "0px"; // "<n>px"; "0px" for none
+  Rml::String bind_spacer_bottom_ = "0px";
+  void SyncEntryWindow();
   int sel_entry_ = 0;
   int entry_count_ = 0;                // rows shown
   int entry_total_ = 0;                // entries of the folder, filtered or not
@@ -809,7 +822,7 @@ private:
   // many sweeps in a row found nothing referring to them.
   std::unordered_map<std::string, int> textures_;
   double textures_swept_at_ = 0.0;
-  std::thread art_thread_;
+  std::vector<std::thread> art_threads_;
   std::mutex art_mutex_;
   std::condition_variable art_cv_;
   std::deque<std::pair<std::string, bool>> art_queue_; // (uri, thumb)

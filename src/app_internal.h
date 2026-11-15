@@ -25,7 +25,17 @@ inline constexpr float kCardPitch = 384.0f + 24.0f;       // .card + gap
 inline constexpr int kSourcesPerRow = 4;
 inline constexpr float kEntryRowPitch = 72.0f + 6.0f;     // list .entry-row
 inline constexpr int kGridColumns = 6;                    // grid .entry-row
-inline constexpr float kGridRowPitch = 252.0f + 24.0f;    // tile + gap
+inline constexpr float kGridGap = 24.0f;                  // grid #entry-list gap
+inline constexpr float kGridRowPitch = 252.0f + kGridGap;  // tile + gap
+// The entry list's window (App::SyncEntryWindow): rows in it, and how near
+// its edge the selection may come before it moves. A screen holds about
+// twelve list rows, or three of tiles.
+inline constexpr int kWindowRows = 80;
+inline constexpr int kWindowMargin = 20;
+inline constexpr int kWindowGridRows = 14;
+inline constexpr int kWindowGridMargin = 4;
+// Artwork downloads under way at once.
+inline constexpr int kArtThreads = 4;
 inline constexpr float kMenuRowPitch = 72.0f + 6.0f;      // .menu-row
 // What a search may be; the search field says so too (maxlength).
 inline constexpr size_t kSearchMaxLength = 100;

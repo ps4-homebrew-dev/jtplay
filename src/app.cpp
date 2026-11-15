@@ -122,7 +122,11 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
     std::lock_guard<std::mutex> lock(art_mutex_);
     art_running_ = true;
   }
-  art_thread_ = std::thread(&App::ArtworkMain, this);
+  // Artwork comes from wherever a source's pictures are, often a server
+  // that scales each one as it is asked: several at once, or a listing
+  // fills in at the pace of the slowest.
+  for (int i = 0; i < kArtThreads; i++)
+    art_threads_.emplace_back(&App::ArtworkMain, this);
 
   Set("view_mode", bind_view_mode_,
       Rml::String(view_mode_ == ViewMode::Grid ? "grid" : "list"));
@@ -156,8 +160,10 @@ void App::Shutdown() {
     art_queue_.clear();
   }
   art_cv_.notify_all();
-  if (art_thread_.joinable())
-    art_thread_.join();
+  for (std::thread& thread : art_threads_)
+    if (thread.joinable())
+      thread.join();
+  art_threads_.clear();
   {
     // Nothing is left to apply them to.
     std::lock_guard<std::mutex> lock(replies_mutex_);
@@ -452,7 +458,10 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("setting_title", &bind_setting_title_);
   ctor.Bind("setting_about", &bind_setting_about_);
 
-  ctor.Bind("entries", &entry_rows_);
+  ctor.Bind("entries", &window_rows_); // see SyncEntryWindow()
+  ctor.Bind("sel_window", &bind_sel_window_);
+  ctor.Bind("spacer_top", &bind_spacer_top_);
+  ctor.Bind("spacer_bottom", &bind_spacer_bottom_);
   ctor.Bind("entry_count", &entry_count_);
   ctor.Bind("entry_total", &entry_total_);
   ctor.Bind("sel_entry", &sel_entry_);
@@ -700,6 +709,7 @@ void App::Update() {
     art_scan_pending_ = false;
     UpdateVisibleArt();
   }
+  SyncEntryWindow();
 }
 
 void App::RenderVideo(int width, int height) {

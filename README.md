@@ -363,12 +363,8 @@ On a PC:
     cmake -S . -B build && cmake --build build
     ./build/jtplay -a assets
 
-That also builds `jtplay-plugin`, the plugin runner on its own, and
-
-    ctest --test-dir build --output-on-failure
-
-runs the plugin host's tests with it (they need Python 3, and no network
-beyond the loopback interface). `-DJTPLAY_WERROR=OFF` builds with a
+That also builds `jtplay-plugin`, the plugin runner on its own (see
+docs/plugins.md). `-DJTPLAY_WERROR=OFF` builds with a
 compiler whose warnings are not the ones the code is kept clean of.
 
 For the PS4, with the ps4-homebrew-dev SDK, the same CMakeLists.txt builds

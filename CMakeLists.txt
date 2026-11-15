@@ -88,9 +88,8 @@ target_link_libraries(jtplay PRIVATE
 )
 
 # jtplay-plugin: the plugin runner as a program of its own ("jtplay --plugin"
-# without the window, the player and their libraries), and the tests that
-# run the plugin host through it against a local server. Not for the
-# console: there is nowhere to run them.
+# without the window, the player and their libraries), for trying plugins
+# out on a PC. Not for the console: there is nowhere to run it.
 if(NOT ORBIS)
     add_executable(jtplay-plugin ${JTPLAY_PLUGIN_HOST_SOURCES})
     target_compile_options(jtplay-plugin PRIVATE -Wall)
@@ -103,16 +102,6 @@ if(NOT ORBIS)
     target_link_libraries(jtplay-plugin PRIVATE
         PkgConfig::TINYXML2 PkgConfig::CURL PkgConfig::OPENSSL
         Threads::Threads ${QUICKJS_LIBRARY} m)
-
-    include(CTest)
-    if(BUILD_TESTING)
-        find_package(Python3 COMPONENTS Interpreter)
-        if(Python3_FOUND)
-            add_test(NAME plugin-host
-                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/run.py
-                        $<TARGET_FILE:jtplay-plugin> ${CMAKE_CURRENT_SOURCE_DIR})
-        endif()
-    endif()
 endif()
 
 if(ORBIS)

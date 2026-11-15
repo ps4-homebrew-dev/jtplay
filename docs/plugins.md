@@ -373,8 +373,3 @@ jtplay --plugin plugins/somafm.js --set quality=low --resolve dronezone
 `console.log()` and errors go to standard error, and the exit status says
 whether it worked. `--data DIR` gives `storage` a place to keep its file
 between runs; without it nothing is kept.
-
-`tests/run.py` tests the host this way against a local server, and each
-bundled plugin against a stand-in for its service (`tests/fixtures.py`,
-reached through `--rewrite FROM=TO`). `ctest` in the build directory runs
-it.

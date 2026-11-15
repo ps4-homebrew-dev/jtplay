@@ -281,7 +281,8 @@ void App::RebuildEntryRows() {
   Set("filter_text", bind_filter_text_, shown ? shown->filter : std::string());
   Set("browse_error", bind_browse_error_, shown ? shown->error : std::string());
   sel_entry_ = std::clamp(sel_entry_, 0, std::max(0, entry_count_ - 1));
-  model_.DirtyVariable("entries");
+  entry_rows_dirty_ = true;
+  SyncEntryWindow();
   model_.DirtyVariable("entry_count");
   model_.DirtyVariable("entry_total");
   model_.DirtyVariable("sel_entry");
@@ -830,6 +831,52 @@ void App::SetViewMode(ViewMode mode) {
   art_scan_pending_ = true;
 }
 
+// Brings the rows the document has (window_rows_) in line with entry_rows_
+// and the selection. Cheap when nothing moved: the window follows the
+// selection only when it comes near the window's edge, and then jumps so
+// that the selection is in its middle.
+void App::SyncEntryWindow() {
+  const int n = (int)entry_rows_.size();
+  const bool grid = view_mode_ == ViewMode::Grid;
+  const int unit = grid ? kGridColumns : 1;
+  const int span = grid ? kWindowGridRows * kGridColumns : kWindowRows;
+  const int margin = grid ? kWindowGridMargin * kGridColumns : kWindowMargin;
+  const int sel = std::clamp(sel_entry_, 0, std::max(0, n - 1));
+
+  const int last_now = std::min(n, window_first_ + span);
+  const bool near_edge = (window_first_ > 0 && sel < window_first_ + margin) ||
+                         (last_now < n && sel >= last_now - margin);
+  if (entry_rows_dirty_ || near_edge || window_mode_ != (int)view_mode_ ||
+      (int)window_rows_.size() != last_now - window_first_ || window_first_ >= std::max(n, 1)) {
+    int first = 0;
+    if (n > span) {
+      first = (sel - span / 2) / unit * unit;
+      const int last_start = (n - span + unit - 1) / unit * unit;
+      first = std::clamp(first, 0, last_start);
+    }
+    const int last = std::min(n, first + span);
+    window_first_ = first;
+    window_mode_ = (int)view_mode_;
+    entry_rows_dirty_ = false;
+    window_rows_.assign(entry_rows_.begin() + first, entry_rows_.begin() + last);
+    model_.DirtyVariable("entries");
+
+    // What the rows outside take up. Grid rows are flex lines with a gap
+    // between them, a spacer's line among them.
+    auto height = [&](int rows) -> std::string {
+      if (rows <= 0)
+        return "0px"; // never empty: the style binding is applied even while hidden
+      const float px = grid ? rows * kGridRowPitch - kGridGap : rows * kEntryRowPitch;
+      return std::to_string((int)px) + "px";
+    };
+    const int rows_before = first / unit;
+    const int rows_after = (n + unit - 1) / unit - (last + unit - 1) / unit;
+    Set("spacer_top", bind_spacer_top_, Rml::String(height(rows_before)));
+    Set("spacer_bottom", bind_spacer_bottom_, Rml::String(height(rows_after)));
+  }
+  Set("sel_window", bind_sel_window_, sel - window_first_);
+}
+
 void App::UpdateVisibleArt() {
   if (view_ == View::Browse) {
     const BrowseLevel* level = CurrentLevel();
@@ -875,7 +922,7 @@ void App::UpdateVisibleArt() {
       }
     }
     if (changed)
-      model_.DirtyVariable("entries");
+      entry_rows_dirty_ = true;
     return;
   }
 

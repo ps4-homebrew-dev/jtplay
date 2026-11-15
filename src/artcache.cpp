@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -35,9 +36,13 @@ std::string g_dir;                // "" = cache unavailable
 std::map<std::string, std::string> g_index;  // uri -> path ("" = failed)
 std::map<std::string, std::string> g_ondisk; // "<hash>" -> path, from Initialize
 
-// Downloads are serialized: one shared connection is plenty for artwork and
-// it keeps TLS sessions warm across a listing.
-std::mutex g_fetch_mutex;
+// A name for a file being written, unique to this process and call: two
+// threads may be making the same file at once (a cover and its thumbnail
+// asked for together), and each renames its own into place.
+std::string TempSuffix() {
+  static std::atomic<unsigned> counter{0};
+  return ".tmp" + std::to_string(counter++);
+}
 
 // Tiny FNV-1a, good enough to key cache filenames by URI.
 uint64_t HashUri(const std::string& s) {
@@ -143,6 +148,12 @@ bool Initialize(const std::string& dir) {
   if (DIR* d = ::opendir(dir.c_str())) {
     while (struct dirent* de = ::readdir(d)) {
       const std::string name = de->d_name;
+      // Half of a write that never finished (the process was stopped
+      // before the rename): not artwork, and nothing will finish it.
+      if (name.find(".tmp") != std::string::npos) {
+        ::remove((dir + "/" + name).c_str());
+        continue;
+      }
       const std::string hash = HashFromFilename(name);
       if (!hash.empty())
         g_ondisk[hash] = dir + "/" + name;
@@ -372,7 +383,7 @@ std::string FetchScaled(const std::string& uri, int size) {
           const bool jpeg = size != kThumbSize;
           const std::string final_path = dir + "/art-" + HashKey(ScaledKey(uri, size)) +
                                          (jpeg ? ".jpg" : ".png");
-          const std::string tmp_path = final_path + ".tmp";
+          const std::string tmp_path = final_path + TempSuffix();
           int rc = -1;
           if (!dir.empty()) {
 #if SDL_IMAGE_VERSION_ATLEAST(2, 0, 2)
@@ -437,11 +448,10 @@ std::string Fetch(const std::string& uri) {
   if (dir.empty())
     return {};
 
-  std::lock_guard<std::mutex> fetching(g_fetch_mutex);
-
-  // One client for the life of the process; the mutex above is what makes
-  // that safe, since HttpClient itself is not.
-  static net::HttpClient client;
+  // A client per artwork thread, for the life of the thread: it keeps its
+  // connections and TLS sessions warm across a listing (HttpClient is not
+  // for sharing between threads).
+  thread_local net::HttpClient client;
 
   net::HttpClient::Request req;
   req.url = uri;
@@ -459,7 +469,7 @@ std::string Fetch(const std::string& uri) {
 
       // Write beside the target and rename: Lookup() runs on the UI thread
       // and must never see a half-written file.
-      const std::string tmp_path = final_path + ".tmp";
+      const std::string tmp_path = final_path + TempSuffix();
       bool ok = false;
       if (FILE* f = std::fopen(tmp_path.c_str(), "wb")) {
         ok = std::fwrite(res.body.data(), 1, res.body.size(), f) == res.body.size();
