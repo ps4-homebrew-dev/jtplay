@@ -5,6 +5,10 @@
 #include <cstring>
 #include <string>
 
+#include <sys/stat.h>
+
+#include <SDL.h>
+
 #include <RmlUi/Core.h>
 
 #include "RmlUi/RmlUi_Backend.h"
@@ -28,8 +32,8 @@ static void PrintUsage(const char* argv0) {
     "  -u, --user-plugins DIR\n"
     "                     your own plugins, loaded after those above; a file\n"
     "                     of the same name replaces the bundled one\n"
-    "                     (default: $XDG_CONFIG_HOME/jtplay/plugins,\n"
-    "                      i.e. ~/.config/jtplay/plugins)\n"
+    "                     (default: plugins in SDL's preference directory,\n"
+    "                      i.e. ~/.local/share/jtplay/plugins)\n"
     "  -c, --cache DIR    artwork cache directory\n"
     "                     (default: $XDG_CACHE_HOME/jtplay,\n"
     "                      i.e. ~/.cache/jtplay)\n"
@@ -52,9 +56,6 @@ extern "C" int SDL_main(int argc, char* argv[]) {
 #if defined(__SCE__)
   options.assets_dir = "/app0/assets";
   options.plugins_dir = "/app0/plugins";
-  // The package is read-only; plugins of one's own go on the console's
-  // disk, where FTP reaches them.
-  options.user_plugins_dir = "/data/jtplay/plugins";
   options.fonts_dir = "/app0/fonts";
   options.cache_dir = ::getenv("XDG_CACHE_HOME");
   ::setenv("SSL_CERT_FILE", "/app0/ca-bundle.crt", 0);
@@ -96,14 +97,23 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   if (options.plugins_dir.empty())
     options.plugins_dir = options.assets_dir + "/../plugins";
 
+  // Plugins of one's own, and the settings.ini that gives plugins'
+  // settings, go in the app's preference directory, wherever the platform
+  // keeps it (and FTP reaches it on a console). SDL makes the directory;
+  // the plugins one is made here so that it is there to be found.
   if (options.user_plugins_dir.empty()) {
-    const char* config = std::getenv("XDG_CONFIG_HOME");
-    const char* home = std::getenv("HOME");
-    if (config && *config)
-      options.user_plugins_dir = std::string(config) + "/jtplay/plugins";
-    else if (home && *home)
-      options.user_plugins_dir = std::string(home) + "/.config/jtplay/plugins";
+    if (char* pref = SDL_GetPrefPath("", "jtplay")) {
+      options.user_plugins_dir = std::string(pref) + "plugins";
+      SDL_free(pref);
+      ::mkdir(options.user_plugins_dir.c_str(), 0755);
+    } else {
+      std::fprintf(stderr, "No preference directory (%s); no plugins of your own\n",
+                   SDL_GetError());
+    }
   }
+  if (!options.user_plugins_dir.empty())
+    std::fprintf(stderr, "Your own plugins and their settings.ini: %s\n",
+                 options.user_plugins_dir.c_str());
 
   if (!Backend::Initialize("jtplay", SCREEN_WIDTH, SCREEN_HEIGHT, false))
     return -1;

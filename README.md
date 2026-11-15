@@ -261,8 +261,9 @@ for choices that appear on the Settings page. The host gives it blocking
 `storage`, and a library of what every plugin otherwise writes for itself
 (`util`, `xml`).
 
-Plugins of your own go in `/data/jtplay/plugins` on a console
-(`~/.config/jtplay/plugins` on a PC, or `--user-plugins DIR`), where a file
+Plugins of your own go in `plugins` in jtplay's preference directory, as
+SDL gives it: in the title's data on a console, `~/.local/share/jtplay/plugins`
+on a PC (or `--user-plugins DIR`); the log names it at start. A file
 with the name of a bundled plugin replaces it. They are picked up, and
 changed ones loaded afresh, whenever the Plugins tab is searched (square):
 no restart, no new package.
@@ -287,9 +288,9 @@ token the website keeps, as svtplay-dl does:
    Cookies, `https://www.tv4play.se`, and copy the value of
    `tv4-refresh-token`: a long text starting with `ey`.
 3. On a PC, paste it under Settings, TV4 Play, Sign-in token. On a console,
-   put this line in a file `settings.ini` in `/data/jtplay/plugins` over
-   FTP (the folder of your own plugins), then search the Plugins tab
-   (square):
+   put this line in a file `settings.ini` in the folder of your own
+   plugins (see Plugins; the log names it at start) over FTP, then search
+   the Plugins tab (square):
 
        tv4play.token=ey...
 

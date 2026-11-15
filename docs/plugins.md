@@ -20,8 +20,13 @@ file system, no modules, no timers.
 
 | | Bundled | Your own |
 |---|---|---|
-| PS4 / PS5 | `/app0/plugins` (in the package) | `/data/jtplay/plugins` |
-| PC | `<assets>/../plugins`, or `--plugins DIR` | `~/.config/jtplay/plugins`, or `--user-plugins DIR` |
+| PS4 / PS5 | `/app0/plugins` (in the package) | `plugins` in the preference directory |
+| PC | `<assets>/../plugins`, or `--plugins DIR` | `~/.local/share/jtplay/plugins`, or `--user-plugins DIR` |
+
+The preference directory is the one SDL gives the app (`SDL_GetPrefPath`):
+in the title's data on a console, `$XDG_DATA_HOME/jtplay` on Linux. The
+log names the plugins directory at start, and it is made if it isn't
+there.
 
 Every `*.js` file in either directory is a plugin; a `settings.ini` beside
 them gives plugins' settings (see [Settings](#settings)). A file of your own with
@@ -190,7 +195,7 @@ set afterwards, and the plugin runner prints it as `(set)`.
 
 Typing a long token with a controller is no fun, so any setting can also
 be given in a file `settings.ini` in the plugin directory of your own
-(`/data/jtplay/plugins` on a console, reachable over FTP), one per line:
+(reachable over FTP on a console), one per line:
 
 ```ini
 # <plugin file name>.<key>=<value>

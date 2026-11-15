@@ -609,8 +609,9 @@ return {
             "at tv4play.se in a computer's browser, open the developer tools (F12), and " +
             "under Application (Storage in Firefox), Cookies, copy the value of " +
             "tv4-refresh-token: a long text starting with ey. Paste it here. On a " +
-            "console, put the line tv4play.token=ey... in a file settings.ini in " +
-            "/data/jtplay/plugins over FTP, then search the Plugins tab. Left or right " +
+            "console, put the line tv4play.token=ey... in a file settings.ini in the " +
+            "folder of your own plugins over FTP (the log names it at start), then " +
+            "search the Plugins tab. Left or right " +
             "signs out."
     }],
     discover() {
