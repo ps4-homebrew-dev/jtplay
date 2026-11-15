@@ -585,6 +585,13 @@ bool Player::Open(const Media& media, std::string& error, int64_t start_seconds)
   // playlist"). The list is made by a plugin, not read from a server, so it
   // is trusted; other files keep the default.
   mpv_set_property_string(mpv_, "load-unsafe-playlists", clips ? "yes" : "no");
+  // A seek keeps the subtitles mpv has already read, and it drops what it
+  // reads again only by file position and time. The WebVTT segments of an
+  // HLS or DASH stream are read again after a seek, and those don't match
+  // reliably, so every line showed twice (TV4 Play). Here what was read is
+  // let go on a seek and read once more. Plain files keep mpv's default:
+  // its documentation warns the option can upset their subtitles.
+  mpv_set_property_string(mpv_, "sub-clear-on-seek", adaptive ? "yes" : "no");
 
   int64_t starts_before;
   {
