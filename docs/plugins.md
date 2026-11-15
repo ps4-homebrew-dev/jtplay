@@ -23,7 +23,8 @@ file system, no modules, no timers.
 | PS4 / PS5 | `/app0/plugins` (in the package) | `/data/jtplay/plugins` |
 | PC | `<assets>/../plugins`, or `--plugins DIR` | `~/.config/jtplay/plugins`, or `--user-plugins DIR` |
 
-Every `*.js` file in either directory is a plugin. A file of your own with
+Every `*.js` file in either directory is a plugin; a `settings.ini` beside
+them gives plugins' settings (see [Settings](#settings)). A file of your own with
 the name of a bundled one replaces it, which is how to try a fix to a
 bundled plugin on a console without rebuilding the package.
 
@@ -141,6 +142,11 @@ resolve(id, entry) {
 A subtitle in the language set under Settings > Subtitle language is
 switched on by itself; the others are in the playback menu.
 
+`avoidAudio: ["qas"]` names audio languages not to start with, though the
+stream marks one of them as its default; another track plays instead,
+unless Settings > Audio language asks for this one. (TV4 Play marks a
+dubbed track as the default of its foreign titles.)
+
 Throw an `Error` when there is nothing to play; its message is what the
 viewer is told (`throw new Error("not available from here")`).
 
@@ -168,8 +174,33 @@ return {
 ```
 
 An option can also be a plain string, which is then both value and label.
-A setting is always one of a list; there is no free text. A long list (a
-country) is fine: select on it opens the list.
+A long list (a country) is fine: select on it opens the list.
+
+A setting can also be a line of text, such as a sign-in token or a server
+address:
+
+```js
+{ key: "token", type: "text", secret: true, label: "Sign-in token",
+  about: "Where to find it, in a sentence or two." }
+```
+
+Select types it in (on a console, with the system keyboard); left or right
+clears it. A `secret` one shows as dots while typed and only as Set / Not
+set afterwards, and the plugin runner prints it as `(set)`.
+
+Typing a long token with a controller is no fun, so any setting can also
+be given in a file `settings.ini` in the plugin directory of your own
+(`/data/jtplay/plugins` on a console, reachable over FTP), one per line:
+
+```ini
+# <plugin file name>.<key>=<value>
+tv4play.token=eyJhbGciOi...
+```
+
+It is read with the scripts (at the first search of the Plugins tab, and
+at a later one when it has changed), and its values replace what the
+settings were. Say so in the setting's `about`. Clearing a setting in the
+app lasts until the next start while the file still has it.
 
 Read a setting where it is used rather than once at the top of the file, so
 a change takes effect at once. What `util.memo()` has cached is dropped

@@ -6,6 +6,7 @@
 #define BROWSE_JS_SOURCE_H
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -68,6 +69,12 @@ private:
 //
 // A script that fails to load does not hold up the others: what it said is
 // part of 'error', and Discover() still returns the sources of the rest.
+//
+// A file 'settings.ini' in a plugin directory gives plugins' settings, one
+// per line as "<plugin>.<key>=<value>" (a sign-in token, which nobody wants
+// to type with a controller, put there over FTP). It is read with the
+// scripts, when it is new or has changed, and its values replace what the
+// settings were.
 class JsProvider : public Provider {
 public:
   // 'dirs' are searched in order; a file name found in a later directory
@@ -89,11 +96,14 @@ private:
     JsPluginPtr plugin;
   };
   void Reload();
+  void ReadSettingsFile(const std::string& path);
 
   std::vector<std::string> dirs_;
   std::shared_ptr<const JsEnvironment> env_;
   mutable std::mutex mutex_; // guards loaded_
   std::vector<Loaded> loaded_;
+  // Settings files as last read: path -> (mtime, size). Discovery lane only.
+  std::map<std::string, std::pair<int64_t, int64_t>> settings_files_;
 };
 
 // The sources of one plugin, as its discover() describes them. False with

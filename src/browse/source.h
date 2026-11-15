@@ -80,6 +80,10 @@ struct Playable {
     std::string title;    // "Swedish (hearing impaired)"; "" = none
   };
   std::vector<Subtitle> subtitles;
+
+  // Audio languages not to start with, though the stream marks them as its
+  // default (see Player::Media).
+  std::vector<std::string> avoid_audio;
 };
 
 // The type as a word ("folder", "audio", "video", "image", "other"): what

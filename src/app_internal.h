@@ -27,6 +27,11 @@ inline constexpr float kEntryRowPitch = 72.0f + 6.0f;     // list .entry-row
 inline constexpr int kGridColumns = 6;                    // grid .entry-row
 inline constexpr float kGridRowPitch = 252.0f + 24.0f;    // tile + gap
 inline constexpr float kMenuRowPitch = 72.0f + 6.0f;      // .menu-row
+// What a search may be; the search field says so too (maxlength).
+inline constexpr size_t kSearchMaxLength = 100;
+// What a plugin's text setting may be: a sign-in token runs to a couple of
+// thousand characters.
+inline constexpr size_t kTextSettingMaxLength = 8192;
 // A setting with more choices than this lists them in a menu on select
 // (left / right still step through them).
 inline constexpr size_t kChoiceMenuFrom = 4;

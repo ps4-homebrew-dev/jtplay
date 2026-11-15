@@ -235,6 +235,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
       media.headers = playable.headers;
       for (const browse::Playable::Subtitle& sub : playable.subtitles)
         media.subtitles.push_back({sub.uri, sub.language, sub.title});
+      media.avoid_audio = playable.avoid_audio;
       ok = player_->Open(media, error, start_seconds);
     } else if (error.empty()) {
       error = "this item has nothing to play";

@@ -1054,8 +1054,29 @@ void App::OpenSearch() {
   Set("search_open", bind_search_open_, true);
 }
 
+void App::OpenTextEntry(const std::string& title, const std::string& initial,
+                        size_t max_length, bool secret,
+                        std::function<void(const std::string&)> done) {
+  text_entry_ = std::move(done);
+  Set("search_title", bind_search_title_, Rml::String(title));
+  if (Rml::Element* input = document_->GetElementById("search-input")) {
+    input->SetAttribute("maxlength", std::to_string(max_length));
+    input->SetAttribute("type", secret ? "password" : "text");
+    static_cast<Rml::ElementFormControl*>(input)->SetValue(initial);
+  }
+  search_focus_pending_ = true;
+  Set("search_open", bind_search_open_, true);
+}
+
 void App::CloseSearch() {
   search_focus_pending_ = false;
+  if (text_entry_) {
+    text_entry_ = nullptr;
+    if (Rml::Element* input = document_->GetElementById("search-input")) {
+      input->SetAttribute("maxlength", std::to_string(kSearchMaxLength));
+      input->SetAttribute("type", "text");
+    }
+  }
   // Losing the focus is what takes the system keyboard down again.
   if (Rml::Element* input = document_->GetElementById("search-input"))
     input->Blur();
@@ -1082,6 +1103,12 @@ void App::HandleKeySearch(Rml::Event& event, int key) {
         input->Blur();
         input->Focus();
       }
+      return;
+    }
+    if (text_entry_) {
+      const auto done = text_entry_;
+      CloseSearch();
+      done(text);
       return;
     }
     CloseSearch();

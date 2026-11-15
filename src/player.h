@@ -72,6 +72,10 @@ public:
       std::string title;    // "" = none
     };
     std::vector<Subtitle> subtitles;
+    // Audio languages not to start with, though the stream marks them as
+    // its default: the other track plays, unless the preferred audio
+    // language asks for this one.
+    std::vector<std::string> avoid_audio;
   };
 
   // Opens 'media' and starts playback at 'start_seconds', replacing whatever
@@ -254,6 +258,8 @@ private:
   std::vector<ChapterInfo> chapters_;   // guarded by tracks_mutex_
   std::string stream_title_;            // guarded by tracks_mutex_
   std::string sub_languages_;           // preferred, as mpv's slang; same guard
+  std::string audio_languages_;         // ... and as its alang
+  void AvoidAudio(const std::vector<std::string>& languages);
 
   // Adjustments (main thread).
   Fit fit_ = Fit::Fit;

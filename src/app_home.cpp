@@ -147,6 +147,11 @@ void App::StartDiscovery(browse::Source::Group group,
         setting_items_.clear();
         if (bind_settings_page_)
           RebuildSettingRows();
+        // A plugins' settings.ini may have brought new values.
+        if (plugin_settings_->Revision() != saved_plugin_settings_) {
+          saved_plugin_settings_ = plugin_settings_->Revision();
+          SaveSettings();
+        }
       }
 
       GroupScan& scan = scans_[(int)group];
@@ -893,6 +898,38 @@ void App::BuildSettings() {
               return (int)i;
           return 0;
         };
+        if (spec.text) {
+          setting_items_.push_back({first ? plugin->ProviderName() : std::string(), spec.label,
+            spec.about,
+            [this, id, spec] {
+              const std::string value = plugin_settings_->Get(id, spec.key, spec.fallback);
+              if (value.empty())
+                return std::string("Not set");
+              return spec.secret ? std::string("Set") : value;
+            },
+            [this, id, spec, name = plugin->ProviderName()](int d) {
+              // Left or right forgets it (signing out, for a token).
+              if (d != 0) {
+                if (plugin_settings_->Get(id, spec.key).empty())
+                  return;
+                plugin_settings_->Set(id, spec.key, "");
+                SaveSettings();
+                ShowToast(name + ": " + spec.label + " cleared", icon::kClear);
+                return;
+              }
+              // A secret is typed afresh; it is not shown back.
+              const std::string initial =
+                spec.secret ? std::string() : plugin_settings_->Get(id, spec.key, spec.fallback);
+              OpenTextEntry(spec.label, initial, kTextSettingMaxLength, spec.secret,
+                            [this, id, spec](const std::string& text) {
+                              plugin_settings_->Set(id, spec.key, text);
+                              SaveSettings();
+                              RebuildSettingRows();
+                            });
+            }});
+          first = false;
+          continue;
+        }
         setting_items_.push_back({first ? plugin->ProviderName() : std::string(), spec.label,
           spec.about,
           [spec, index] { return spec.options[index()].second; },

@@ -687,6 +687,9 @@ bool Player::Open(const Media& media, std::string& error, int64_t start_seconds)
     mpv_command_async(mpv_, 0, add);
   }
 
+  if (!media.avoid_audio.empty())
+    AvoidAudio(media.avoid_audio);
+
   // Nothing to look at: draw the sound instead.
   if (vtrack_count_ == 0 && atrack_count_ > 0)
     SetVisualizer(audio_id_ >= 0 ? audio_id_.load() : AudioTracks().front().stream_index);
@@ -913,6 +916,56 @@ void Player::UpdateMetadata(const mpv_node* map) {
   text = begin == std::string::npos ? std::string() : text.substr(begin, end - begin + 1);
   std::lock_guard<std::mutex> lock(tracks_mutex_);
   stream_title_ = text;
+}
+
+// See Media::avoid_audio. Called once the file is open, when mpv has made
+// its pick.
+void Player::AvoidAudio(const std::vector<std::string>& languages) {
+  std::string preferred;
+  {
+    std::lock_guard<std::mutex> lock(tracks_mutex_);
+    preferred = audio_languages_;
+  }
+  auto avoided = [&](const std::string& lang) {
+    for (const std::string& a : languages)
+      if (!::strcasecmp(a.c_str(), lang.c_str()))
+        return true;
+    return false;
+  };
+
+  mpv_node list;
+  if (mpv_get_property(mpv_, "track-list", MPV_FORMAT_NODE, &list) < 0)
+    return;
+  const mpv_node* selected = nullptr;
+  if (list.format == MPV_FORMAT_NODE_ARRAY && list.u.list) {
+    for (int i = 0; i < list.u.list->num; i++) {
+      const mpv_node* track = &list.u.list->values[i];
+      if (NodeString(MapGet(track, "type")) == "audio" && NodeFlag(MapGet(track, "selected")))
+        selected = track;
+    }
+  }
+  const std::string lang = selected ? NodeString(MapGet(selected, "lang")) : std::string();
+  if (selected && avoided(lang) && !LanguageListed(preferred, lang)) {
+    // Another language, from the same variant of the stream if it has one.
+    const int64_t program = NodeInt(MapGet(selected, "program-id"), -1);
+    int64_t pick = -1;
+    for (int pass = 0; pass < 2 && pick < 0; pass++) {
+      for (int i = 0; i < list.u.list->num && pick < 0; i++) {
+        const mpv_node* track = &list.u.list->values[i];
+        if (NodeString(MapGet(track, "type")) != "audio" ||
+            avoided(NodeString(MapGet(track, "lang"))))
+          continue;
+        if (pass == 0 && program >= 0 && NodeInt(MapGet(track, "program-id"), -1) != program)
+          continue;
+        pick = NodeInt(MapGet(track, "id"), -1);
+      }
+    }
+    if (pick >= 0) {
+      const std::string id = std::to_string(pick);
+      mpv_set_property_string(mpv_, "aid", id.c_str());
+    }
+  }
+  mpv_free_node_contents(&list);
 }
 
 std::string Player::StreamTitle() const {
@@ -1281,4 +1334,5 @@ void Player::SetPreferredLanguages(const std::string& audio, const std::string& 
   mpv_set_property_string(mpv_, "slang", subs.c_str());
   std::lock_guard<std::mutex> lock(tracks_mutex_);
   sub_languages_ = subs;
+  audio_languages_ = audio;
 }

@@ -236,11 +236,19 @@ int PluginCli(int argc, char* argv[]) {
       Object o("    ");
       o.String("key", s.key, true);
       o.String("label", s.label, true);
-      o.String("value", plugin->SettingValue(s.key), true);
-      std::vector<std::string> options;
-      for (const auto& option : s.options)
-        options.push_back(Quote(option.first));
-      o.Member("options", Array(options, "      "));
+      const std::string value = plugin->SettingValue(s.key);
+      if (s.text) {
+        o.String("type", "text", true);
+        // A token on standard output would end up in a terminal's
+        // scrollback, or a bug report.
+        o.String("value", s.secret && !value.empty() ? "(set)" : value, true);
+      } else {
+        o.String("value", value, true);
+        std::vector<std::string> options;
+        for (const auto& option : s.options)
+          options.push_back(Quote(option.first));
+        o.Member("options", Array(options, "      "));
+      }
       settings.push_back(o.Text());
     }
     out.Member("settings", Array(settings, "  "));
@@ -296,6 +304,12 @@ int PluginCli(int argc, char* argv[]) {
       for (const auto& h : playable.headers)
         headers.String(h.first.c_str(), h.second, true);
       out.Member("headers", headers.Text());
+    }
+    if (!playable.avoid_audio.empty()) {
+      std::vector<std::string> langs;
+      for (const std::string& lang : playable.avoid_audio)
+        langs.push_back(Quote(lang));
+      out.Member("avoidAudio", Array(langs, "  "));
     }
     if (!playable.subtitles.empty()) {
       std::vector<std::string> subs;

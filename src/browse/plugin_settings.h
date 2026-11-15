@@ -17,14 +17,18 @@
 
 namespace browse {
 
-// One setting as a plugin declares it: a choice among a few options.
+// One setting as a plugin declares it: a choice among a few options, or a
+// line of text (a sign-in token, a server address).
 struct PluginSetting {
   std::string key;      // what the script asks for
   std::string label;    // "Country"
   std::string about;    // a sentence for the panel beside the list
-  // (value, label) pairs, in the order they are stepped through.
+  // (value, label) pairs, in the order they are stepped through. Empty for
+  // a text setting.
   std::vector<std::pair<std::string, std::string>> options;
   std::string fallback; // the value until the user picks one
+  bool text = false;    // typed in rather than picked
+  bool secret = false;  // text that is never shown, only whether it is set
 };
 
 // Thread safe. Keys are "<plugin id>.<setting key>", which is also how the

@@ -304,6 +304,12 @@ private:
   // with the index of the one chosen.
   void OpenChoiceMenu(const std::string& title, const std::vector<std::string>& choices,
                       int current, std::function<void(int)> pick);
+  // Asks for a line of text in the search dialog (on a console, the system
+  // keyboard), from wherever the user is. 'done' gets what was typed;
+  // nothing at all when the dialog is closed without typing.
+  // With 'secret', what is typed shows as dots.
+  void OpenTextEntry(const std::string& title, const std::string& initial, size_t max_length,
+                     bool secret, std::function<void(const std::string&)> done);
   void ApplyLanguages();              // preferred languages -> player
   const browse::Entry* SelectedCard() const;
   // The card the banner shows: the focused one, or with the focus on the
@@ -364,6 +370,9 @@ private:
   // back returns to the folder, selection and all. Unlike the filter it
   // reaches content that is not listed.
   void OpenSearch();
+  // The search dialog asking for something else (OpenTextEntry): who gets
+  // the text. Empty while it asks for a search.
+  std::function<void(const std::string&)> text_entry_;
   void CloseSearch();
   // What has been typed, trimmed; "" if nothing.
   std::string SearchText() const;
@@ -733,6 +742,7 @@ private:
   // from their worker threads.
   std::shared_ptr<browse::PluginSettings> plugin_settings_ =
     std::make_shared<browse::PluginSettings>();
+  uint64_t saved_plugin_settings_ = 0; // plugin_settings_->Revision() last written
   browse::SourcePtr current_source_;   // source being browsed, or null
   std::vector<BrowseLevel> path_;      // root first
   browse::Entry playing_;              // item in the player right now

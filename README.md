@@ -26,6 +26,12 @@ plugins, in the spirit of Kodi.
     hundred other conferences, with their subtitles.
   - *Art gallery*: the Art Institute of Chicago's open collection, room by
     room; start the slideshow and the TV is a picture frame.
+  - *TV4 Play*: TV4, Sjuan, TV12: series, films, news, clips. Browsing
+    needs no account; playing needs a sign-in token (see below). What TV4
+    protects with DRM, most films and live sport among it, cannot be
+    played.
+  - *Riksdagen*: the Swedish parliament's web TV: debates, interpellations,
+    hearings, by committee, with search; as video or sound only.
   - *Sveriges Radio*, *SVT Play* and *Pluto TV* (free live channels, films
     and series; the catalogue is whatever Pluto serves your region).
 
@@ -269,6 +275,27 @@ A plugin runs in a runtime of its own, 32 MiB at most, and a call that
 spends more than ten seconds *executing* (waiting on the network does not
 count) is interrupted. Backing out of a folder that is still loading drops
 the request it was waiting for.
+
+### TV4 Play: signing in
+
+TV4 Play plays only for a signed-in account, even what is free (a free
+account will do). There is no sign-in from a TV yet, so the plugin uses the
+token the website keeps, as svtplay-dl does:
+
+1. Sign in at tv4play.se in a computer's browser.
+2. Open the developer tools (F12), then Application (Storage in Firefox),
+   Cookies, `https://www.tv4play.se`, and copy the value of
+   `tv4-refresh-token`: a long text starting with `ey`.
+3. On a PC, paste it under Settings, TV4 Play, Sign-in token. On a console,
+   put this line in a file `settings.ini` in `/data/jtplay/plugins` over
+   FTP (the folder of your own plugins), then search the Plugins tab
+   (square):
+
+       tv4play.token=ey...
+
+The token lasts for months; when TV4 stops accepting it, the plugin says so,
+and a new one goes in the same way. Left or right on the setting signs out
+(and removing the line from the file, for good).
 
 If the build's libcurl has no default CA bundle, point it at one with the
 `SSL_CERT_FILE` (or `CURL_CA_BUNDLE`) environment variable, otherwise https

@@ -7,11 +7,13 @@
 #include <sys/stat.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <map>
 
 #include "browse/js_util.h"
 #include "icons.h"
 #include "net/cancel.h"
+#include "util/atomic_file.h"
 
 namespace browse {
 namespace {
@@ -181,6 +183,18 @@ bool ToPlayable(JSContext* ctx, JSValue v, Playable& out, std::string& error) {
     }
   }
 
+  if (JS_IsObject(v)) {
+    Ref avoid(ctx, JS_GetPropertyStr(ctx, v, "avoidAudio"));
+    int64_t n = 0;
+    if (ArrayLength(ctx, avoid.get(), n))
+      for (int64_t i = 0; i < n && i < 16; i++) {
+        const std::string lang =
+          ToStdString(ctx, Ref(ctx, JS_GetPropertyUint32(ctx, avoid.get(), (uint32_t)i)).get());
+        if (!lang.empty())
+          out.avoid_audio.push_back(lang);
+      }
+  }
+
   if (out.uri.empty()) {
     error = "resolve() did not return a uri";
     return false;
@@ -345,8 +359,61 @@ std::vector<JsPluginPtr> JsProvider::Plugins() const {
   return out;
 }
 
+void JsProvider::ReadSettingsFile(const std::string& path) {
+  int64_t mtime = 0, size = 0;
+  if (!FileStamp(path, mtime, size)) {
+    settings_files_.erase(path);
+    return;
+  }
+  const auto stamp = std::make_pair(mtime, size);
+  const auto known = settings_files_.find(path);
+  if (known != settings_files_.end() && known->second == stamp)
+    return;
+  settings_files_[path] = stamp;
+
+  std::string text;
+  if (!util::ReadFile(path, text, 1u << 20))
+    return;
+  size_t at = 0, applied = 0;
+  while (at < text.size()) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos)
+      end = text.size();
+    std::string line = text.substr(at, end - at);
+    at = end + 1;
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t'))
+      line.pop_back();
+    const size_t begin = line.find_first_not_of(" \t");
+    if (begin == std::string::npos || line[begin] == '#' || line[begin] == ';')
+      continue;
+    const size_t eq = line.find('=', begin);
+    if (eq == std::string::npos)
+      continue;
+    std::string key = line.substr(begin, eq - begin);
+    while (!key.empty() && (key.back() == ' ' || key.back() == '\t'))
+      key.pop_back();
+    // As the app's own settings.ini has them, too.
+    if (key.compare(0, 7, "plugin.") == 0)
+      key.erase(0, 7);
+    const size_t value_at = line.find_first_not_of(" \t", eq + 1);
+    const std::string value = value_at == std::string::npos ? std::string()
+                                                            : line.substr(value_at);
+    if (key.find('.') == std::string::npos || key.front() == '.' || key.back() == '.')
+      continue;
+    if (env_->settings->Get(key.substr(0, key.find('.')), key.substr(key.find('.') + 1)) !=
+        value)
+      env_->settings->SetNamed(key, value);
+    applied++;
+  }
+  std::fprintf(stderr, "plugins: %zu setting%s from %s\n", applied, applied == 1 ? "" : "s",
+               path.c_str());
+}
+
 // Brings loaded_ up to date with the *.js files of the plugin directories.
 void JsProvider::Reload() {
+  for (const std::string& dir : dirs_)
+    ReadSettingsFile(dir + "/settings.ini");
+
   // File name -> path; a later directory wins. A missing or unreadable
   // directory is not an error; it just adds nothing.
   std::map<std::string, std::string> scripts;

@@ -414,6 +414,8 @@ JsPlugin::~JsPlugin() {
 
 // The provider's 'settings': an array of
 //   { key, label, about, options: ["a", { value: "b", label: "B" }], default }
+// or, for a line of text,
+//   { key, label, about, type: "text", secret: true, default }
 // Anything malformed is left out with a warning rather than failing the
 // plugin: a setting is a nicety, the plugin is not.
 void JsPlugin::ReadSettings() {
@@ -430,6 +432,19 @@ void JsPlugin::ReadSettings() {
     setting.key = FieldString(ctx, item.get(), "key");
     setting.label = FieldString(ctx, item.get(), "label", setting.key);
     setting.about = FieldString(ctx, item.get(), "about");
+
+    if (FieldString(ctx, item.get(), "type") == "text") {
+      setting.text = true;
+      setting.secret = FieldBool(ctx, item.get(), "secret", false);
+      setting.fallback = FieldString(ctx, item.get(), "default");
+      if (setting.key.empty() || setting.key.find_first_of("=\r\n") != std::string::npos ||
+          setting.fallback.find_first_of("\r\n") != std::string::npos) {
+        Log(JsLogLevel::Warning, "setting " + std::to_string(i + 1) + " needs a key; ignored");
+        continue;
+      }
+      settings_.push_back(std::move(setting));
+      continue;
+    }
 
     Ref options(ctx, JS_GetPropertyStr(ctx, item.get(), "options"));
     int64_t count = 0;
@@ -452,7 +467,8 @@ void JsPlugin::ReadSettings() {
     if (setting.key.empty() || setting.key.find_first_of("=\r\n") != std::string::npos ||
         setting.options.size() < 2) {
       Log(JsLogLevel::Warning, "setting " + std::to_string(i + 1) +
-                                 " needs a key and at least two options; ignored");
+                                 " needs a key and at least two options (or type: \"text\");"
+                                 " ignored");
       continue;
     }
     setting.fallback = FieldString(ctx, item.get(), "default", setting.options.front().first);
