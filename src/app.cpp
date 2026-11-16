@@ -640,6 +640,10 @@ void App::Update() {
     if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
         now > info_deadline_)
       HideWatchInfo();
+    // On the card the focus leaves its buttons the same way.
+    if (bind_watch_audio_ && bind_control_focus_ && !bind_menu_open_ &&
+        now > info_deadline_)
+      FocusControls(false);
     if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
       Set("watch_seek", bind_watch_seek_, Rml::String());
     // Back held long enough in full screen: stop (see HandleKeyUp).

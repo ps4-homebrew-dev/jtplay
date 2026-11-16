@@ -4,14 +4,15 @@
 // decoded frames fill the screen behind a transparent document body, with
 // an auto-hiding info/transport bar; for audio a persistent now-playing
 // card is shown instead. Either has a row of buttons for what playback is
-// controlled with (previous, rewind, pause, forward, next, stop, tracks,
-// shuffle, repeat), and whenever they are on screen the focus is on them.
+// controlled with (previous, pause, next, stop, tracks, shuffle, repeat).
+// The keys steer playback directly (left and right seek, up and down seek
+// further) until select puts the focus on the buttons, on play / pause;
+// then left and right go along them and select presses one, until back,
+// or a while without a key, takes the focus off them again.
 //
-// The video bar comes up when an item starts and when the user asks for
-// it (select, up, down, options), and always goes again once no key has
-// been pressed for a while (or at once, with back or options). With the
-// bar away, left and right seek, with just the timeline up for as long as
-// that goes on.
+// The video bar comes up when an item starts, with a seek and when select
+// asks for its buttons, and always goes again once no key has been
+// pressed for a while (or at once, with back or options).
 //
 // Back leaves full screen without stopping, as in Kodi: the menus come
 // back over the video, on a see-through background, and can be used as
@@ -42,6 +43,8 @@ constexpr int64_t kUpNextMinDurationSec = 5 * 60;
 // succession: three presses of each, then the largest step from there on.
 constexpr int64_t kSeekSteps[] = {10, 10, 10, 30, 30, 30, 60, 60, 120, 300};
 constexpr int kSeekStepCount = (int)(sizeof(kSeekSteps) / sizeof(kSeekSteps[0]));
+// Up and down: one large step.
+constexpr int64_t kSeekLargeSec = 5 * 60;
 
 const char* RepeatName(int repeat) {
   static const char* const kNames[] = {"Off", "All", "One"};
@@ -312,10 +315,13 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
     model_.DirtyVariable("chapter_marks");
   }
   RefreshImageBindings();
-  // The bar shows the new item for a moment. The focus is where it was:
-  // "next", pressed again, is the one after.
+  // The bar shows the new item for a moment. A focus on its buttons stays
+  // where it was: "next", pressed again, is the one after.
   if (fullscreen) {
-    ShowControls();
+    if (bind_control_focus_)
+      ShowControls();
+    else
+      PeekWatchInfo();
   } else {
     HideWatchInfo();
     FocusControls(false);
@@ -355,7 +361,7 @@ void App::SetFullscreen(bool on) {
   Set("fullscreen", bind_fullscreen_, on);
   Set("video_behind", bind_video_behind_, !on && !bind_watch_audio_);
   if (on) {
-    ShowControls();
+    PeekWatchInfo();
   } else {
     Set("upnext", bind_upnext_, false);
     HideWatchInfo();
@@ -384,44 +390,43 @@ void App::StopPlayback() {
   PostTask(Lane::Playback, [this] { player_->Stop(); }, false);
 }
 
-// The bar (or the now-playing card), the focus on its buttons. The bar
-// goes by itself once no key has been pressed for a while (see
-// App::Update); every key that is one of its own starts the wait again.
+// The focus onto the buttons of the bar (or of the now-playing card),
+// which select asks for; the bar comes with it. The focus, and the bar,
+// go by themselves once no key has been pressed for a while (see
+// App::Update); every key that is the buttons' own starts the wait again.
 void App::ShowControls() {
   info_deadline_ = Now() + kWatchInfoSec;
   Set("info_visible", bind_info_visible_, true);
   FocusControls(true);
 }
 
-// Something happened that the bar shows (a seek, a track picked with a
-// remote's key). Up already, it is left as it is, a while longer; away,
-// it comes for a moment without the focus on its buttons, so that left
-// and right go on seeking.
+// The bar, for a while (longer): an item started, a seek, a track picked
+// with a remote's key. The focus is left where it is, which with the bar
+// away is not on its buttons, so the keys go on steering playback.
 void App::PeekWatchInfo() {
   info_deadline_ = Now() + kWatchInfoSec;
-  if (bind_watch_audio_ || bind_info_visible_)
-    return; // (the card is always there)
   Set("info_visible", bind_info_visible_, true);
-  FocusControls(false);
 }
 
+// Away with the bar, and the focus off its buttons. (The now-playing card
+// stays; only the focus goes.)
 void App::HideWatchInfo() {
   Set("info_visible", bind_info_visible_, false);
-  if (!bind_watch_audio_)
-    FocusControls(false); // the card stays, and the focus on it
+  FocusControls(false);
 }
 
 // One step of a seek, back (-1) or on (+1). A run of them in one direction
 // (a held button, a button pressed again and again) speeds up: 10 s steps
-// at first, then 30 s, a minute, two, five.
-void App::SeekStep(int sign) {
+// at first, then 30 s, a minute, two, five. 'large': five minutes at once.
+void App::SeekStep(int sign, bool large) {
   if (!player_->CanSeek())
     return;
   if (Now() > seek_bubble_until_ || (seek_accum_us_ < 0) != (sign < 0)) {
     seek_accum_us_ = 0;
     seek_run_ = 0;
   }
-  const int64_t step_s = kSeekSteps[std::min(seek_run_, kSeekStepCount - 1)];
+  const int64_t step_s =
+    large ? kSeekLargeSec : kSeekSteps[std::min(seek_run_, kSeekStepCount - 1)];
   seek_run_++;
   const int64_t delta = sign * step_s * 1000000;
   player_->SeekRelative(delta);
@@ -585,17 +590,16 @@ void App::CycleSubtitleTrack(int direction, bool toast) {
 // ---------------------------------------------------------------------------
 //
 // What playback is steered with is a row of buttons in the info bar (and
-// on the now-playing card), not entries of a menu: previous item, rewind,
-// play / pause, forward, next item and stop; then audio track and
-// subtitles, where there is a choice; then shuffle and repeat. Whenever
-// they are on screen the focus is on them, on play / pause to begin with. The focus is by what a button is, not
+// on the now-playing card), not entries of a menu: previous item, play /
+// pause, next item and stop; then audio track and subtitles, where there
+// is a choice; then shuffle and repeat. Select puts the focus on them, on
+// play / pause to begin with; without it the keys steer playback directly. The focus is by what a button is, not
 // where: buttons come and go with what plays (subtitles, a second audio
 // track), and the focus stays on the one it was on.
 
 void App::UpdateControls() {
   if (!bind_fullscreen_)
     return; // out of sight
-  const bool seekable = player_->CanSeek();
   std::vector<Control> controls;
   std::vector<ControlRow> rows;
   auto add = [&](Control control, const char* icon, bool on = false, bool dim = false,
@@ -610,14 +614,9 @@ void App::UpdateControls() {
   };
   // Previous and next (item: chapters are L1 / R1) are always there, so
   // that the others keep their place from one item to the next; with
-  // nowhere to go they are dimmed. Rewind and forward are what left and
-  // right are while the bar is away; a live stream has neither.
+  // nowhere to go they are dimmed.
   add(Control::Previous, icon::kPrevious, false, NeighborIndex(-1) < 0);
-  if (seekable)
-    add(Control::Rewind, icon::kRewind);
   add(Control::PlayPause, player_->IsPaused() ? icon::kPlay : icon::kPause);
-  if (seekable)
-    add(Control::Forward, icon::kForward);
   add(Control::Next, icon::kNext, false, NeighborIndex(+1) < 0);
   add(Control::Stop, icon::kStop);
   bool gap = true; // the first there is of the next two starts their group
@@ -644,7 +643,7 @@ void App::UpdateControls() {
     sel++;
   if (sel == controls.size()) {
     control_sel_ = Control::PlayPause;
-    sel = seekable ? 2 : 1;
+    sel = 1;
   }
   controls_ = std::move(controls);
   if (rows != control_rows_) {
@@ -674,10 +673,6 @@ std::string App::ControlLabel(Control control) const {
     const int i = NeighborIndex(-1);
     return i < 0 ? "Previous" : with("Previous", DisplayName(queue_.entries[i]));
   }
-  case Control::Rewind:
-    return "Rewind";
-  case Control::Forward:
-    return "Fast forward";
   case Control::PlayPause:
     return player_->IsPaused() ? "Play" : "Pause";
   case Control::Next: {
@@ -708,14 +703,8 @@ void App::ActivateControl(Control control) {
   case Control::Previous:
     PlayNeighbor(-1);
     break;
-  case Control::Rewind:
-    SeekStep(-1);
-    break;
   case Control::PlayPause:
     player_->TogglePause();
-    break;
-  case Control::Forward:
-    SeekStep(+1);
     break;
   case Control::Next:
     PlayNeighbor(+1);
@@ -764,9 +753,9 @@ void App::ActivateControl(Control control) {
   }
 }
 
-// Keys with the focus on the controls, which is whenever they are on
-// screen. Any of them tells the bar that somebody is there: it stays a
-// while longer.
+// Keys with the focus on the controls (select put it there). Any of them
+// tells the bar that somebody is there: it, and the focus, stay a while
+// longer.
 bool App::HandleKeyControls(int key) {
   if (controls_.empty())
     return false;
@@ -774,9 +763,6 @@ bool App::HandleKeyControls(int key) {
   const bool select = key == Rml::Input::KI_RETURN || key == Rml::Input::KI_NUMPADENTER;
   const bool back = key == Rml::Input::KI_BACK || key == Rml::Input::KI_ESCAPE;
   if (bind_upnext_ && (select || back))
-    return false;
-  // The card has nowhere to go: back leaves full screen, as it did.
-  if (back && bind_watch_audio_)
     return false;
 
   switch (key) {
@@ -795,7 +781,7 @@ bool App::HandleKeyControls(int key) {
   case Rml::Input::KI_UP:
   case Rml::Input::KI_DOWN:
     break; // nothing above or below them
-  case Rml::Input::KI_BACK:
+  case Rml::Input::KI_BACK:  // off the buttons (and away with the bar)
   case Rml::Input::KI_ESCAPE:
     HideWatchInfo();
     return true;
@@ -1014,14 +1000,14 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     key = Rml::Input::KI_RIGHT;
 
   switch (key) {
-  case Rml::Input::KI_UP:    // the bar
-  case Rml::Input::KI_DOWN:
-    ShowControls();
-    break;
-
-  case Rml::Input::KI_LEFT:  // the bar is away (or the key a remote's): seek
+  case Rml::Input::KI_LEFT:  // seek, faster and faster
   case Rml::Input::KI_RIGHT:
     SeekStep(key == Rml::Input::KI_LEFT ? -1 : +1);
+    PeekWatchInfo();
+    break;
+  case Rml::Input::KI_UP:    // seek five minutes on, or back
+  case Rml::Input::KI_DOWN:
+    SeekStep(key == Rml::Input::KI_DOWN ? -1 : +1, true);
     PeekWatchInfo();
     break;
 
@@ -1033,13 +1019,13 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     break;
 
   case Rml::Input::KI_RETURN:
-  case Rml::Input::KI_NUMPADENTER: // the bar; on the up-next card: play it
+  case Rml::Input::KI_NUMPADENTER: // onto the buttons; on the up-next card: play it
     if (bind_upnext_) {
       PlayNeighbor(+1);
       break;
     }
-    // (Not a pause: the bar comes with the focus on that button, and it
-    // takes a second press.)
+    // (Not a pause: the focus goes to that button, and it takes a second
+    // press.)
     ShowControls();
     break;
 
@@ -1052,10 +1038,10 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
   case Rml::Input::KI_F4:    // (a remote's display / info key likewise)
     if (bind_watch_audio_)
       break;                 // the card is always there
-    if (bind_info_visible_ && bind_control_focus_)
+    if (bind_info_visible_)
       HideWatchInfo();
     else
-      ShowControls();
+      PeekWatchInfo();
     break;
 
   case Rml::Input::KI_BACK:  // back: the menus, playing on; held: stop
@@ -1115,7 +1101,7 @@ bool App::HandleMediaKey(int key) {
     const bool was_paused = player_->IsPaused();
     player_->TogglePause();
     if (bind_fullscreen_)
-      ShowControls();
+      PeekWatchInfo();
     else
       ShowToast(was_paused ? "Playing" : "Paused", was_paused ? icon::kPlay : icon::kPause);
     return true;

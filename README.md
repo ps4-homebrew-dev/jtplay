@@ -197,21 +197,20 @@ flashes on beats. mpv has no PCM tap, so the player has it render a small
 mpv keeps those frames in step with what is audible.
 
 The last row of the bar (and of the now-playing card) is the **controls**,
-a button each: previous item, rewind, play / pause, fast forward, next item
-and stop; audio track and subtitles, each where there is a choice, picked
-from a list; shuffle and repeat (all / one). Whenever they are on screen
-the focus is on them, on play / pause to begin with: left and right go
-along them, select presses the one in focus, and what that one is (the
-name of the previous or next item, what a track is set to) stands beside
-the row. Rewind and fast forward speed up when pressed again and again.
+a button each: previous item, play / pause, next item and stop; audio
+track and subtitles, each where there is a choice, picked from a list;
+shuffle and repeat (all / one). Select puts the focus on them, on play /
+pause: left and right then go along them, select presses the one in focus,
+and what that one is (the name of the previous or next item, what a track
+is set to) stands beside the row. Back, or five seconds without a key,
+takes the focus off them again. Without the focus the keys steer playback
+directly: left and right seek, up and down seek five minutes on or back.
 
-The video bar comes up when an item starts and when it is asked for
-(select, up, down or options), and always goes again five seconds after
-the last key (back or options send it away at once), paused or not.
-While it is away, left and right seek, with just
-the timeline up for as long as that goes on; select does not pause, it
-brings the bar with the focus on play / pause, so a second press does. Artwork, where
-an item has any, is at the left of the bar, as tall as its rows.
+The video bar comes up when an item starts, with a seek and with select,
+and always goes again five seconds after the last key (back or options
+send it away at once), paused or not. Select does not pause: a second
+press, on play / pause, does. Artwork, where an item has any, is at the
+left of the bar, as tall as its rows.
 
 Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s
 steps, then 30 s, a minute, two and five. Files with chapters show them
@@ -333,10 +332,10 @@ options button is the way into everything that is not on the d-pad.
 
 | Controller            | Key             | Home                         | Browsing                             | Playing (full screen)              | Photos               |
 |-----------------------|-----------------|------------------------------|--------------------------------------|------------------------------------|----------------------|
-| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | the info bar | caption |
-| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | along the controls; bar away: seek (speeds up) | previous / next |
-| cross (A)             | Return          | open / play                  | open / play                          | press the button in focus; bar away: the info bar; up next: play now | slideshow on / off |
-| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | info bar away; without it: the menus, playing on; held: stop; up next: dismiss | close |
+| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | seek +5 / -5 min | caption |
+| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up); on the controls: along them | previous / next |
+| cross (A)             | Return          | open / play                  | open / play                          | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
+| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
 | options (start)       | Menu, F10       | options for the card or tile | options menu                         | info bar / away | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |

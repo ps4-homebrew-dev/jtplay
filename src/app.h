@@ -454,11 +454,11 @@ private:
   void Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue = false);
   void CycleSubtitleTrack(int direction, bool toast = false);
   // The playback controls: a row of buttons in the info bar (video) and on
-  // the now-playing card (audio). On screen, they have the focus: left and
-  // right go along them, select presses one. With the video bar away, left
-  // and right seek.
+  // the now-playing card (audio). Select puts the focus on them: left and
+  // right then go along them, select presses one. Without the focus the
+  // keys steer playback directly (left, right, up and down seek).
   enum class Control {
-    Previous, Rewind, PlayPause, Forward, Next, Stop, Audio, Subtitles, Shuffle, Repeat
+    Previous, PlayPause, Next, Stop, Audio, Subtitles, Shuffle, Repeat
   };
   void UpdateControls();              // the buttons there are, and their state
   void FocusControls(bool on);
@@ -486,12 +486,12 @@ private:
   bool HandleMediaKey(int key);
   void HandleKeyUp(int key);
   // The video info bar (see app_watch.cpp): up with the focus on its
-  // buttons, until no key has come for a while; up to show a seek;
-  // away.
+  // buttons, until no key has come for a while; up without it, to show
+  // an item or a seek; away.
   void ShowControls();
   void PeekWatchInfo();
   void HideWatchInfo();
-  void SeekStep(int sign);
+  void SeekStep(int sign, bool large = false);
   void UpdateWatchOverlay();
   // AtEnd(): audio advances to the next track in the folder, video exits.
   void HandlePlaybackEnd();

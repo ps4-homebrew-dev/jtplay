@@ -269,9 +269,9 @@ body.behind #shell {
 /* ------------------------------------------------------------------ */
 
 /* A row of round buttons, an icon each: under the bar's text (video) and
- * at the foot of the now-playing card (audio). They have the focus (the
- * one in focus is in the accent, and what it is stands beside the row),
- * and are quiet only while the bar is up to show a seek. A mode that is on (shuffle, subtitles) is in
+ * at the foot of the now-playing card (audio). Quiet until select puts
+ * the focus on them; then the one in focus is in the accent, and what it
+ * is stands beside the row. A mode that is on (shuffle, subtitles) is in
  * the accent colour, a button with nothing to do is dimmed. */
 .controls {
 	display: flex;
