@@ -180,9 +180,7 @@ body.behind #shell {
 	text-overflow: ellipsis;
 }
 
-/* "12:34 / 45:00": where we are, large; the length quieter. A row of its
- * own, centred, so the much smaller LIVE badge sits level with the
- * digits rather than hanging off their baseline. */
+/* "12:34 / 45:00": where we are, large; the length quieter. */
 .osd-time {
 	display: flex;
 	flex-direction: row;
@@ -201,11 +199,12 @@ body.behind #shell {
 	color: #8593ab;
 }
 
+/* LIVE, the first of the badges in the bar's last row, left of the
+ * tracks: of their size, in red. */
 .osd-live {
-	margin-left: 18px;
+	margin-left: 10px;
 	padding: 3px 9px 3px 12px; /* the letter spacing pads the right already */
-	font-size: 20px;
-	line-height: 26px;
+	font-size: 19px;
 	font-weight: bold;
 	letter-spacing: 3px;
 	color: #ffffff;

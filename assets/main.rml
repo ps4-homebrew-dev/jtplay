@@ -317,7 +317,6 @@
 						<div class="osd-time">
 							<span>{{watch_pos}}</span>
 							<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
-							<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 						</div>
 					</div>
 					<!-- (Always there, if empty: the bar keeps its height, and the
@@ -336,6 +335,9 @@
 							<span class="control-label">{{control_label}}</span>
 						</div>
 						<div class="osd-tracks">
+							<!-- A stream that cannot seek says so here, first of the
+							     badges: what it is, with what it is made of. -->
+							<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 							<span class="osd-track" data-if="watch_vtrack != ''">{{watch_vtrack}}</span>
 							<span class="osd-track" data-if="watch_atrack != ''">{{watch_atrack}}</span>
 						</div>
