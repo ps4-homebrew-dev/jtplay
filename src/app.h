@@ -484,6 +484,7 @@ private:
   // A remote's (or keyboard's) media keys, wherever playback is. True if
   // 'key' was one.
   bool HandleMediaKey(int key);
+  bool HandleTransportKey(int key);     // the transport keys among them
   void HandleKeyUp(int key);
   // The video info bar (see app_watch.cpp): up with the focus on its
   // buttons, until no key has come for a while; up without it, to show

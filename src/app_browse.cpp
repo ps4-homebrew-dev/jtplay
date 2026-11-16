@@ -918,6 +918,19 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
     model_.DirtyVariable("sel_menu");
     scroll_menu_pending_ = true;
     break;
+  // A long menu (every country there is) pages and jumps as a list does.
+  case Rml::Input::KI_PRIOR:
+  case Rml::Input::KI_NEXT:
+    sel_menu_ = StepIndex(sel_menu_, key == Rml::Input::KI_PRIOR ? -kPageRows : +kPageRows, count);
+    model_.DirtyVariable("sel_menu");
+    scroll_menu_pending_ = true;
+    break;
+  case Rml::Input::KI_HOME:
+  case Rml::Input::KI_END:
+    sel_menu_ = key == Rml::Input::KI_HOME ? 0 : count - 1;
+    model_.DirtyVariable("sel_menu");
+    scroll_menu_pending_ = true;
+    break;
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:
     if (menu_items_[sel_menu_].value)
@@ -958,6 +971,7 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
     CloseMenu();
     break;
   default:
+    HandleTransportKey(key); // a remote's pause and stop reach what plays
     break;
   }
 }
@@ -1209,6 +1223,8 @@ void App::HandleKeyFilter(Rml::Event& event, int key) {
     MoveSelection(+kPageRows);
     return;
   default:
+    if (HandleTransportKey(key))
+      event.StopPropagation();
     return; // typing and moving the caret: the field's business
   }
 }
@@ -1320,6 +1336,8 @@ void App::HandleKeySearch(Rml::Event& event, int key) {
     }
     return;
   default:
+    if (HandleTransportKey(key))
+      event.StopPropagation();
     return; // typing and moving the caret: the field's business
   }
 }

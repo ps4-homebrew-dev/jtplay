@@ -5,10 +5,12 @@
 // exactly as it handles the keys it already knows:
 //
 //   d-pad, left stick     arrows (held: repeats)
-//   cross / A             Return       open, play, pause
+//   cross / A             Return       open, play; in full screen: onto
+//                                      the playback controls
 //   circle / B            Backspace    back; in full screen: the menus,
 //                                      playing on (held: stop)
-//   square / X            Space        search a source group again, next sort key
+//   square / X            Space        search a source group again, next sort
+//                                      key; in full screen: play / pause
 //   triangle / Y          T            full screen and back (Kodi's FullScreen);
 //                                      browsing: reverse the order
 //   L1 / R1               PageUp/Down  page; in full screen: previous / next

@@ -327,40 +327,62 @@ requests fail with a certificate error.
 ## Controls
 
 Keyboard, game controller (any pad SDL knows, and the DualShock 4 on a PS4)
-and media remote do the same things. The UI shows no button hints; the
-options button is the way into everything that is not on the d-pad.
+and media remote do the same things: each button below is the same button
+whichever device it is on, and does the same kind of thing in every view.
+The UI shows no button hints; the options button is the way into everything
+that is not on the d-pad.
 
-| Controller            | Key             | Home                         | Browsing                             | Playing (full screen)              | Photos               |
-|-----------------------|-----------------|------------------------------|--------------------------------------|------------------------------------|----------------------|
-| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | seek +5 / -5 min | caption |
-| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up); on the controls: along them | previous / next |
-| cross (A)             | Return          | open / play                  | open / play                          | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
-| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
-| options (start)       | Menu, F10       | options for the card or tile | options menu                         | info bar / away | photo menu           |
-| square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
-| triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
-| L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item (PageUp / PageDown: next / previous item) | previous / next      |
-| L2 / R2               | Home / End      | first / last                 | first / last                         |                                    | first / last         |
-| back (select)         | Escape          | to the tabs; from them, back to full screen* | back                                 | the menus, playing on              | close                |
-|                       | X               | stop*                        | stop*                                | stop                               |                      |
+| Button      | Controller            | Keyboard          | Remote (HDMI-CEC)       |
+|-------------|-----------------------|-------------------|-------------------------|
+| directions  | d-pad, left stick     | arrows            | arrows                  |
+| select      | cross (A)             | Return            | OK                      |
+| back        | circle (B)            | Backspace         | back                    |
+| options     | options (start)       | Menu, F10         | options, menu, disc menu; OK held |
+| square      | square (X)            | Space             |                         |
+| triangle    | triangle (Y)          | T, Tab            |                         |
+| previous / next | L1 / R1           |                   |                         |
+| page / channel  |                   | PageUp / PageDown | channel up / down       |
+| first / last    | L2 / R2           | Home / End        |                         |
+| leave       | back (select)         | Escape            |                         |
+| stop        |                       | X                 | stop                    |
+
+| Button          | Home                        | Lists, menus, Settings            | Playing (full screen)                       | Photos             |
+|-----------------|-----------------------------|-----------------------------------|---------------------------------------------|--------------------|
+| up / down       | tabs ↔ rows; between rows   | move (lists and menus wrap)       | seek +5 / -5 min                            | caption            |
+| left / right    | along the tabs or a row     | list: page or letter; grid: move; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
+| select          | open / play                 | open / play / choose              | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
+| back            | to the tabs; from them, back to full screen* | back (Home from a source root); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
+| options         | options for the card or tile | options menu; closes a menu      | info bar / away                             | photo menu         |
+| square          | search the group again      | next sort key                     | play / pause                                | slideshow on / off |
+| triangle        | back to full screen*        | reverse sort order; back to full screen* | the menus, playing on                | rotate             |
+| previous / next | a page of rows              | page up / down                    | previous / next chapter or item             | previous / next    |
+| page / channel  | a page of rows              | page up / down                    | up: next item; down: previous item          | up: next; down: previous |
+| first / last    | first / last in the row     | first / last                      | on the controls: first / last button        | first / last       |
+| leave           | as back                     | as back                           | the menus, playing on                       | close              |
+| stop            | stop*                       | stop*                             | stop                                        | stop*; else close  |
 
 \* While something plays behind the menus.
 
-A media remote's (or keyboard's) play/pause, pause, stop, previous/next,
-rewind / fast forward (as left / right in full screen, 10 s steps behind the
-menus), audio (the next audio track) and subtitle (the next subtitle track,
-F1 on a keyboard) keys work on playback wherever it is; in full screen its
-channel up and down keys (PageUp and PageDown on a keyboard) play the next
-and the previous item, and page through lists elsewhere; its display key
-shows or hides the bar in full screen, and its back key is circle. Its
-options (or menu) and disc menu keys are options, as are a keyboard's menu
-key and F10; and since not every remote has one, nor every TV passes it
+L1 / R1 and PageUp / PageDown are the same thing in lists (a page up, a page
+down) and opposite things where there is a previous and a next: L1 is
+previous and R1 next, by their place on the pad, while channel up (which
+arrives as PageUp) is next and channel down previous, as channels go.
+
+A media remote's (or keyboard's) play/pause, pause, stop and previous/next
+keys work on playback wherever it is, also over an open menu or a text
+field; with nothing playing, in the photo viewer they are the slideshow's
+(play / pause, previous / next picture, close). Its rewind / fast forward
+(as left / right in full screen, 10 s steps behind the menus), audio (the
+next audio track) and subtitle (the next subtitle track, F1 on a keyboard)
+keys work on playback too; its display key
+shows or hides the bar in full screen. Since not every remote has an
+options key, nor every TV passes it
 on, holding OK (Return) for a moment is options too. What a TV remote connected over HDMI-CEC sends depends on
 the console and the TV; Settings > Show input shows it.
 
 Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
 Ctrl+S searches the source.
-The mapping lives in `src/gamepad.cpp`.
+The mapping lives in `src/gamepad.cpp` and `RmlSDL::ConvertKey`.
 
 ## Playback
 

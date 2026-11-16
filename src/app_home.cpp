@@ -737,6 +737,15 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
   }
   case Rml::Input::KI_HOME:  select(sel_shelf_, 0); break;
   case Rml::Input::KI_END:   select(sel_shelf_, cards - 1); break;
+  // A page of rows up or down (a group with many sources is many rows).
+  case Rml::Input::KI_PRIOR:
+  case Rml::Input::KI_NEXT: {
+    const int to = std::clamp(sel_shelf_ + (key == Rml::Input::KI_PRIOR ? -kPageShelves : +kPageShelves),
+                              0, (int)shelves_.size() - 1);
+    if (to != sel_shelf_)
+      select(to, column(to));
+    break;
+  }
   case gamepad::kKeyOptions: OpenMenu(); break;
   case Rml::Input::KI_RETURN:
   case Rml::Input::KI_NUMPADENTER:
@@ -1064,6 +1073,12 @@ void App::HandleKeySettings(Rml::Event& event, int key) {
     break;
   case Rml::Input::KI_HOME: select(0); break;
   case Rml::Input::KI_END:  select(count - 1); break;
+  case Rml::Input::KI_PRIOR:
+  case Rml::Input::KI_NEXT:
+    if (count > 0)
+      select(std::clamp(sel_setting_ + (key == Rml::Input::KI_PRIOR ? -kPageSettings : +kPageSettings),
+                        0, count - 1));
+    break;
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:
     if (sel_setting_ < count && !setting_items_[sel_setting_].action) {

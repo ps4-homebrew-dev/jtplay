@@ -778,6 +778,10 @@ bool App::HandleKeyControls(int key) {
   case Rml::Input::KI_NUMPADENTER:
     ActivateControl(control_sel_);
     break;
+  case Rml::Input::KI_HOME:  // the first and the last of them, as in a list
+  case Rml::Input::KI_END:
+    control_sel_ = key == Rml::Input::KI_HOME ? controls_.front() : controls_.back();
+    break;
   case Rml::Input::KI_UP:
   case Rml::Input::KI_DOWN:
     break; // nothing above or below them
@@ -1038,6 +1042,13 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     ShowControls();
     break;
 
+  // Square, and a keyboard's space bar: play / pause at once, which
+  // select no longer is (it goes to the buttons).
+  case Rml::Input::KI_SPACE:
+    player_->TogglePause();
+    PeekWatchInfo();
+    break;
+
   case Rml::Input::KI_T:     // triangle: the menus, playing on (Kodi's FullScreen)
   case Rml::Input::KI_TAB:
     SetFullscreen(false);
@@ -1098,6 +1109,22 @@ bool App::HandleKeyBehind(int key) {
     return true;
   default:
     return HandleMediaKey(key);
+  }
+}
+
+// The keys of those that only ever mean playback (pause, stop, previous,
+// next), for where the other keys mean something else: an open menu, a
+// text field. True if 'key' was one, and something plays.
+bool App::HandleTransportKey(int key) {
+  switch (key) {
+  case Rml::Input::KI_PAUSE:
+  case Rml::Input::KI_MEDIA_PLAY_PAUSE:
+  case Rml::Input::KI_MEDIA_STOP:
+  case Rml::Input::KI_MEDIA_NEXT_TRACK:
+  case Rml::Input::KI_MEDIA_PREV_TRACK:
+    return HandleMediaKey(key);
+  default:
+    return false;
   }
 }
 

@@ -288,14 +288,50 @@ void App::OpenPhotoMenu() {
 }
 
 void App::HandleKeyPhoto(Rml::Event& event, int key) {
+  // A remote's transport keys are for what plays behind the pictures, if
+  // anything does (music under a slideshow); otherwise for the slideshow:
+  // play / pause starts and pauses it, previous / next (and rewind / fast
+  // forward) step, stop closes the viewer.
+  if (bind_watching_) {
+    if (HandleMediaKey(key)) {
+      event.StopPropagation();
+      return;
+    }
+  } else {
+    switch (key) {
+    case Rml::Input::KI_PAUSE:
+    case Rml::Input::KI_MEDIA_PLAY_PAUSE: key = Rml::Input::KI_RETURN; break;
+    case Rml::Input::KI_MEDIA_PREV_TRACK:
+    case gamepad::kKeyRewind:             key = Rml::Input::KI_LEFT; break;
+    case Rml::Input::KI_MEDIA_NEXT_TRACK:
+    case gamepad::kKeyFastForward:        key = Rml::Input::KI_RIGHT; break;
+    default: break;
+    }
+  }
+  // A keyboard's X is its stop key (see HandleKeyBehind).
+  if (key == Rml::Input::KI_X)
+    key = Rml::Input::KI_MEDIA_STOP;
+  if (key == Rml::Input::KI_MEDIA_STOP) {
+    if (bind_watching_)
+      HandleMediaKey(key);
+    else
+      ClosePhotos();
+    event.StopPropagation();
+    return;
+  }
+
   switch (key) {
+  // L1 is the previous picture and R1 the next; a remote's channel up
+  // (PageUp) the next and channel down the previous, as in the player.
   case Rml::Input::KI_LEFT:
-  case Rml::Input::KI_PRIOR:
+  case gamepad::kKeyShoulderLeft:
+  case Rml::Input::KI_NEXT:
     StepPhoto(-1);
     photo_next_at_ = Now() + photo_interval_; // a manual step restarts the clock
     break;
   case Rml::Input::KI_RIGHT:
-  case Rml::Input::KI_NEXT:
+  case gamepad::kKeyShoulderRight:
+  case Rml::Input::KI_PRIOR:
     StepPhoto(+1);
     photo_next_at_ = Now() + photo_interval_;
     break;
@@ -303,6 +339,7 @@ void App::HandleKeyPhoto(Rml::Event& event, int key) {
   case Rml::Input::KI_END:  ShowPhoto((int)photo_list_.size() - 1); break;
   case Rml::Input::KI_RETURN:
   case Rml::Input::KI_NUMPADENTER:
+  case Rml::Input::KI_SPACE: // square, the space bar: as in the player
     if (photo_list_.size() > 1) {
       SetSlideshow(!bind_photo_playing_);
       ShowToast(bind_photo_playing_ ? "Slideshow" : "Slideshow paused",

@@ -56,6 +56,10 @@ inline constexpr int kScrollMarginRows = 2;
 
 // Rows jumped by page up/down (L1/R1, left/right in the browse list).
 inline constexpr int kPageRows = 10;
+// ... and by them on Home's rows of cards and on the Settings page, where
+// a screen holds fewer.
+inline constexpr int kPageShelves = 3;
+inline constexpr int kPageSettings = 5;
 
 inline constexpr double kToastSec = 3.0;
 // A local file opens in a few milliseconds; showing a spinner for one frame

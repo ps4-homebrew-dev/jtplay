@@ -850,10 +850,13 @@ void App::ProcessEvent(Rml::Event& event) {
 
   int key = event.GetParameter<int>("key_identifier", 0);
 
-  // A pad's L1 and R1 are PageUp and PageDown everywhere but in full
-  // screen playback, which tells them from a remote's channel keys (see
-  // gamepad.h, and HandleKeyWatch).
-  if (!FullscreenPlayback() || bind_menu_open_ || bind_photo_) {
+  // A pad's L1 and R1 are PageUp and PageDown, except to full screen
+  // playback and the photo viewer, which tell them from a remote's channel
+  // keys (see gamepad.h): there L1 / R1 are previous / next, and channel up
+  // / down (PageUp / PageDown) next / previous.
+  const bool own_shoulders = !bind_filter_open_ && !bind_search_open_ && !bind_menu_open_ &&
+                             (bind_photo_ || FullscreenPlayback());
+  if (!own_shoulders) {
     if (key == gamepad::kKeyShoulderLeft)
       key = Rml::Input::KI_PRIOR;
     else if (key == gamepad::kKeyShoulderRight)
