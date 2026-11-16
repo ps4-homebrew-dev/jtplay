@@ -879,10 +879,9 @@ void App::CloseMenu() {
   menu_items_.clear();
   menu_section_.clear();
   menu_parent_ = nullptr;
-  // The info bar was held up for the menu: it stays a while yet, and with
-  // it the focus on its buttons.
-  if (FullscreenPlayback() && bind_info_visible_)
-    ShowWatchInfo(kWatchInfoSec);
+  // The info bar was held up for the menu: it stays a while yet.
+  if (FullscreenPlayback())
+    info_deadline_ = Now() + kWatchInfoSec;
 }
 
 void App::RebuildMenuRows() {

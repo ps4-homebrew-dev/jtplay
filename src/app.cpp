@@ -633,13 +633,12 @@ void App::Update() {
     // the folder and left the player at its end.
     if (!launch_request_ && player_->IsPlaying() && player_->AtEnd())
       HandlePlaybackEnd();
-    // The info bar goes after a while without a key, and with it the
-    // focus on its buttons. (The now-playing card stays, and so does that.)
-    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
-        now > info_deadline_) {
-      Set("info_visible", bind_info_visible_, false);
-      FocusControls(false);
-    }
+    // The info bar that came by itself (an item started, a pause ended, a
+    // seek) goes after a while without a key; not while paused, and not
+    // the one the user brought up. (The now-playing card always stays.)
+    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ && !info_stay_ &&
+        !player_->IsPaused() && now > info_deadline_)
+      HideWatchInfo();
     if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
       Set("watch_seek", bind_watch_seek_, Rml::String());
     // Back held long enough in full screen: stop (see HandleKeyUp).

@@ -139,20 +139,34 @@ body.behind #shell {
 	border-radius: 10px;
 }
 
+/* The artwork, as tall as the three rows beside it together (a poster is
+ * narrower, a frame of the video wider), and the rows, which take the rest
+ * of the bar. */
+.osd-body {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+
+.osd-art {
+	display: block;
+	height: 144px;
+	max-width: 256px;
+	margin-right: 28px;
+	border-radius: 8px;
+}
+
+.osd-rows {
+	flex: 1;
+	overflow: hidden;
+}
+
 /* First row: what plays, and how far. */
 .osd-row {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
 	height: 44px;
-}
-
-.osd-art {
-	display: block;
-	width: 78px;
-	max-height: 44px;
-	margin-right: 20px;
-	border-radius: 6px;
 }
 
 .osd-title {
@@ -274,9 +288,9 @@ body.behind #shell {
 /* ------------------------------------------------------------------ */
 
 /* A row of round buttons, an icon each: under the bar's text (video) and
- * at the foot of the now-playing card (audio). Quiet until down moves the
- * focus onto them; then the one in focus is in the accent, and what it
- * is stands beside the row. A mode that is on (shuffle, subtitles) is in
+ * at the foot of the now-playing card (audio). They have the focus (the
+ * one in focus is in the accent, and what it is stands beside the row),
+ * and are quiet only while the bar is up to show a seek. A mode that is on (shuffle, subtitles) is in
  * the accent colour, a button with nothing to do is dimmed. */
 .controls {
 	display: flex;
@@ -331,12 +345,6 @@ body.behind #shell {
 	text-overflow: ellipsis;
 }
 
-.control-hint {
-	margin-left: 18px;
-	font-size: 20px;
-	color: #6d7a92;
-	white-space: nowrap;
-}
 
 /* On the card: smaller, centred, with the words on a line of their own
  * (there whether it says anything or not, so the card keeps its height). */
@@ -368,11 +376,6 @@ body.behind #shell {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-.np-control-label .control-hint {
-	margin-left: 0px;
-	font-weight: normal;
-}
-
 /* ------------------------------------------------------------------ */
 /* Audio: the now-playing card                                        */
 /* ------------------------------------------------------------------ */

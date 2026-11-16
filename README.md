@@ -197,14 +197,20 @@ flashes on beats. mpv has no PCM tap, so the player has it render a small
 mpv keeps those frames in step with what is audible.
 
 The last row of the bar (and of the now-playing card) is the **controls**,
-a button each: previous, play / pause, next and stop; audio track and
-subtitles, each where there is a choice, picked from a list; shuffle and
-repeat (all / one). Down (or the options button) moves the focus onto
-them, left and right along them, select presses
-the one in focus, and what that one is (and is set to) stands beside the
-row; up or back returns to the timeline. Previous and next go by chapter
-where there are chapters, as L1 / R1 do. The bar stays up while the focus
-is on its buttons and a key was pressed in the last few seconds.
+a button each: previous item, rewind, play / pause, fast forward, next item
+and stop; audio track and subtitles, each where there is a choice, picked
+from a list; shuffle and repeat (all / one). Whenever they are on screen
+the focus is on them, on play / pause to begin with: left and right go
+along them, select presses the one in focus, and what that one is (the
+name of the previous or next item, what a track is set to) stands beside
+the row. Rewind and fast forward speed up when pressed again and again.
+
+The video bar comes up by itself when an item starts and when a pause
+ends, and goes again after five seconds unless a key is pressed meanwhile.
+Brought up by hand (up, down or options) it stays until back or options
+sends it away. While it is away, left and right seek, with just the
+timeline up for as long as that goes on, and select pauses. Artwork, where
+an item has any, is at the left of the bar, as tall as its rows.
 
 Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s
 steps, then 30 s, a minute, two and five. Files with chapters show them
@@ -326,11 +332,11 @@ options button is the way into everything that is not on the d-pad.
 
 | Controller            | Key             | Home                         | Browsing                             | Playing (full screen)              | Photos               |
 |-----------------------|-----------------|------------------------------|--------------------------------------|------------------------------------|----------------------|
-| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | down: onto the controls; up: back to the timeline | caption |
-| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up); on the controls: along them | previous / next |
-| cross (A)             | Return          | open / play                  | open / play                          | pause; on the controls: press the button; up next: play now | slideshow on / off |
-| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | the menus, playing on; held: stop; on the controls: back to the timeline; up next: dismiss | close |
-| options (start)       | Menu, F10       | options for the card or tile | options menu                         | onto the controls (as down)        | photo menu           |
+| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | the info bar, to stay | caption |
+| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | along the controls; bar away: seek (speeds up) | previous / next |
+| cross (A)             | Return          | open / play                  | open / play                          | press the button in focus; bar away: pause; up next: play now | slideshow on / off |
+| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | info bar away; without it: the menus, playing on; held: stop; up next: dismiss | close |
+| options (start)       | Menu, F10       | options for the card or tile | options menu                         | info bar, to stay / away | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |

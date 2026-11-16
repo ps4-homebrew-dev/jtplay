@@ -454,11 +454,11 @@ private:
   void Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue = false);
   void CycleSubtitleTrack(int direction, bool toast = false);
   // The playback controls: a row of buttons in the info bar (video) and on
-  // the now-playing card (audio). Down moves the focus onto them, left and
-  // right along them, select presses one, up or back lets go of them
-  // again; until then left and right seek, as ever.
+  // the now-playing card (audio). On screen, they have the focus: left and
+  // right go along them, select presses one. With the video bar away, left
+  // and right seek.
   enum class Control {
-    Previous, PlayPause, Next, Stop, Audio, Subtitles, Shuffle, Repeat
+    Previous, Rewind, PlayPause, Forward, Next, Stop, Audio, Subtitles, Shuffle, Repeat
   };
   void UpdateControls();              // the buttons there are, and their state
   void FocusControls(bool on);
@@ -485,7 +485,13 @@ private:
   // 'key' was one.
   bool HandleMediaKey(int key);
   void HandleKeyUp(int key);
-  void ShowWatchInfo(double seconds);
+  // The video info bar (see app_watch.cpp): up with the focus on its
+  // buttons, to stay or to go by itself; up for a moment to show a seek;
+  // away.
+  void ShowControls(bool stay);
+  void PeekWatchInfo();
+  void HideWatchInfo();
+  void SeekStep(int sign);
   void UpdateWatchOverlay();
   // AtEnd(): audio advances to the next track in the folder, video exits.
   void HandlePlaybackEnd();
@@ -634,7 +640,8 @@ private:
   // Playback was stopped by holding back: what the keyboard repeats of it
   // until it is let go is not more presses of back.
   bool back_swallow_ = false;
-  bool bind_info_visible_ = false; // watch info bar shown (auto-hides)
+  bool bind_info_visible_ = false; // watch info bar shown
+  bool info_stay_ = false;         // ... until sent away, not by itself
   // The playback controls (see UpdateControls): the buttons shown, which
   // of them has the focus and what that one is, in words.
   std::vector<ControlRow> control_rows_;
