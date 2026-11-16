@@ -176,8 +176,11 @@ keyboard), or the options menu's **Back to full screen**. The stop button
 of the controls, holding back in full screen, the options menu's **Stop
 playback**, a remote's stop key or X on a keyboard stops it.
 
-The bar along the bottom shows title, tracks, elapsed and total time and,
-for anything longer than five minutes, the time it will end; its top edge
+The bar along the bottom is two rows: the title, with one line under it
+(chapter, what is up next, description), and on the right elapsed and total
+time and, for anything longer than five minutes, the time it will end;
+then the controls, and on the right the tracks being played, the speed
+when it is not 1× and a moon while the sleep timer runs. Its top edge
 is the timeline, with the played part in the accent colour,
 what a network stream has buffered ahead in a lighter shade, and a knob at
 the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a

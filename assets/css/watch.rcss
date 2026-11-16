@@ -3,8 +3,11 @@
  * layer) shows through, with the OSD bar along the bottom. The bar's top
  * edge is the timeline: played in the accent, buffered ahead in a lighter
  * shade, a knob at the playhead, and a bubble with the target time while
- * seeking. For audio the bar stays up, with large cover art, over the
- * spectrum.
+ * seeking. Under it the bar is two rows and no more, so that it takes a
+ * sixth of the picture rather than a third: what plays (title, one line
+ * about it, the time), then what to do about it (the controls, and the
+ * tracks). For audio a card stays up instead, with large cover art, over
+ * the spectrum.
  */
 
 /* Let the video drawn beneath the UI show through. */
@@ -73,7 +76,7 @@ body.behind #shell {
 	right: 0px;
 	bottom: 0px;
 	box-sizing: border-box;
-	padding: 38px 72px 44px 72px;
+	padding: 26px 72px 26px 72px;
 	background-color: #0a0e18f2;
 	animation: 0.2s cubic-out osd-in;
 }
@@ -137,18 +140,22 @@ body.behind #shell {
 	border-radius: 10px;
 }
 
+/* First row: what plays, and how far. As tall as its two lines of text
+ * whether the second is there or not, so the bar does not change height
+ * from one item to the next. */
 .osd-row {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
+	height: 72px;
 }
 
 .osd-art {
 	display: block;
-	width: 176px;
-	max-height: 100px;
-	margin-right: 32px;
-	border-radius: 10px;
+	width: 128px;
+	max-height: 72px;
+	margin-right: 24px;
+	border-radius: 8px;
 }
 
 .osd-main {
@@ -159,7 +166,8 @@ body.behind #shell {
 }
 
 .osd-title {
-	font-size: 40px;
+	font-size: 34px;
+	line-height: 42px;
 	font-weight: bold;
 	color: #ffffff;
 	white-space: nowrap;
@@ -168,53 +176,41 @@ body.behind #shell {
 }
 
 .osd-state {
+	margin-right: 10px;
+	font-size: 28px;
+	color: #4dd6b8;
+}
+
+/* One line about it, in the order it matters while watching: where in it
+ * we are, what comes after it, what it is. Cut short where the line ends. */
+.osd-meta {
+	font-size: 22px;
+	line-height: 30px;
+	color: #aab6cc;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.osd-chapter {
+	margin-right: 28px;
+	color: #4dd6b8;
+}
+
+.osd-next {
+	margin-right: 28px;
+}
+
+.osd-next-label {
 	margin-right: 12px;
-	font-size: 32px;
+	font-size: 16px;
+	font-weight: bold;
+	letter-spacing: 3px;
 	color: #4dd6b8;
 }
 
 .osd-desc {
-	margin-top: 4px;
-	font-size: 24px;
-	color: #aab6cc;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.osd-tracks {
-	display: flex;
-	flex-direction: row;
-	margin-top: 8px;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-.osd-track {
-	margin-right: 14px;
-	padding: 3px 12px;
-	font-size: 19px;
-	color: #aab6cc;
-	background-color: #ffffff12;
-	border-radius: 6px;
-	white-space: nowrap;
-}
-
-.osd-next {
-	margin-top: 12px;
-	font-size: 22px;
-	color: #aab6cc;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.osd-next-label {
-	margin-right: 14px;
-	font-size: 17px;
-	font-weight: bold;
-	letter-spacing: 3px;
-	color: #4dd6b8;
+	color: #8593ab;
 }
 
 .osd-side {
@@ -231,7 +227,8 @@ body.behind #shell {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	font-size: 38px;
+	font-size: 34px;
+	line-height: 42px;
 	font-weight: bold;
 	color: #ffffff;
 	white-space: nowrap;
@@ -245,8 +242,8 @@ body.behind #shell {
 
 /* "Ends at 21:40", under the time. */
 .osd-ends {
-	margin-top: 6px;
 	font-size: 22px;
+	line-height: 30px;
 	color: #aab6cc;
 	white-space: nowrap;
 }
@@ -255,6 +252,7 @@ body.behind #shell {
 	margin-left: 18px;
 	padding: 3px 9px 3px 12px; /* the letter spacing pads the right already */
 	font-size: 20px;
+	line-height: 26px;
 	font-weight: bold;
 	letter-spacing: 3px;
 	color: #ffffff;
@@ -262,8 +260,36 @@ body.behind #shell {
 	border-radius: 6px;
 }
 
-.osd-speed {
-	margin-top: 8px;
+/* Second row: the controls on the left, taking what room there is (the
+ * words beside them are cut short before the tracks are); on the right,
+ * under the time, the tracks being played and the modes that are on. */
+.osd-foot {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-top: 16px;
+}
+
+.osd-tracks {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-left: 32px;
+	white-space: nowrap;
+}
+
+.osd-tracks .badge {
+	margin-left: 10px;
+}
+
+.osd-track {
+	margin-left: 10px;
+	padding: 3px 12px;
+	font-size: 19px;
+	color: #aab6cc;
+	background-color: #ffffff12;
+	border-radius: 6px;
+	white-space: nowrap;
 }
 
 .badge {
@@ -289,22 +315,25 @@ body.behind #shell {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	margin-top: 22px;
+}
+#osd .controls {
+	flex: 1;
+	overflow: hidden;
 }
 
 .control {
-	width: 64px;
-	height: 64px;
-	margin-right: 10px;
-	font-size: 30px;
-	line-height: 64px;
+	width: 52px;
+	height: 52px;
+	margin-right: 8px;
+	font-size: 25px;
+	line-height: 52px;
 	text-align: center;
 	color: #8593ab;
 	background-color: #ffffff0f;
-	border-radius: 32px;
+	border-radius: 26px;
 }
 .control.gap {
-	margin-left: 22px;
+	margin-left: 18px;
 }
 .controls.focus .control {
 	color: #e8edf7;
@@ -326,8 +355,8 @@ body.behind #shell {
 
 .control-label {
 	flex: 1;
-	margin-left: 22px;
-	font-size: 26px;
+	margin-left: 18px;
+	font-size: 24px;
 	font-weight: bold;
 	color: #ffffff;
 	white-space: nowrap;
@@ -336,7 +365,7 @@ body.behind #shell {
 }
 
 .control-hint {
-	margin-left: 22px;
+	margin-left: 18px;
 	font-size: 20px;
 	color: #6d7a92;
 	white-space: nowrap;
@@ -670,15 +699,6 @@ body.behind #shell {
 	height: 16px;
 	border-radius: 2px;
 	background-color: #e8edf7c0;
-}
-
-.osd-chapter {
-	margin-top: 6px;
-	font-size: 22px;
-	color: #4dd6b8;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .np-chapter {

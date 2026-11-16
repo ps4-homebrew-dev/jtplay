@@ -513,15 +513,11 @@ void App::UpdateWatchOverlay() {
   }
   Set("watch_chapter", bind_watch_chapter_, chapter);
 
+  // Shuffle and repeat show on their buttons; what has none is the sleep
+  // timer, which is a badge by the tracks while it runs.
   Rml::String modes;
-  if (shuffle_)
-    modes += icon::kShuffle;
-  if (repeat_ == Repeat::All)
-    modes += modes.empty() ? std::string(icon::kRepeat) : std::string(" ") + icon::kRepeat;
-  else if (repeat_ == Repeat::One)
-    modes += modes.empty() ? std::string(icon::kRepeatOne) : std::string(" ") + icon::kRepeatOne;
   if (sleep_at_ > 0 || sleep_end_of_item_)
-    modes += modes.empty() ? std::string(icon::kSleep) : std::string(" ") + icon::kSleep;
+    modes = icon::kSleep;
   Set("watch_modes", bind_watch_modes_, modes);
 
   UpdateControls();

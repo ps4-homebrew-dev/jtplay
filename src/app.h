@@ -679,7 +679,7 @@ private:
     bool operator!=(const MarkRow& o) const { return at != o.at; }
   };
   std::vector<MarkRow> chapter_marks_;
-  Rml::String bind_watch_modes_;   // "🔀 🔁" badges: shuffle, repeat
+  Rml::String bind_watch_modes_;   // a badge while the sleep timer runs
   bool bind_upnext_ = false;       // the up-next card is up
   Rml::String bind_upnext_name_;
   Rml::String bind_upnext_art_ = "none";

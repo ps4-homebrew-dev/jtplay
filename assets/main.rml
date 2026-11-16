@@ -292,11 +292,14 @@
 		<!-- Paused video: a large badge in the middle, Kodi style. -->
 		<div id="pause-badge" data-if="watching && fullscreen && watch_paused && !watch_audio && !menu_open">&#xE132;</div>
 
-		<!-- The bar along the bottom. Its top edge is the timeline: played,
-		     buffered ahead, and a knob at the playhead; its last row the
-		     playback controls (src/app_watch.cpp), which down moves the focus
-		     onto. Video: auto-hides. Audio: stays, with large cover art, over
-		     the spectrum. -->
+		<!-- The bar along the bottom, two rows under the timeline that is its
+		     top edge (played, buffered ahead, a knob at the playhead). First
+		     what plays: its title, and under it on one line where it is (the
+		     chapter), what comes next and what it is about; the time on the
+		     right. Then what can be done: the playback controls
+		     (src/app_watch.cpp), which down moves the focus onto, and on the
+		     right the tracks being played. Video: auto-hides. Audio has the
+		     now-playing card instead. -->
 		<div id="osd" data-if="watching && fullscreen && !watch_audio && info_visible">
 			<div class="osd-edge" data-if="watch_seekable">
 				<div class="osd-buffered" data-style-width="watch_buffered"/>
@@ -313,15 +316,10 @@
 						<span class="osd-state" data-if="!watch_paused">&#xE140;</span>
 						{{watch_name}}
 					</div>
-					<div class="osd-desc" data-if="watch_description != ''">{{watch_description}}</div>
-					<div class="osd-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</div>
-					<div class="osd-tracks">
-						<span class="osd-track" data-if="watch_vtrack != ''">{{watch_vtrack}}</span>
-						<span class="osd-track" data-if="watch_atrack != ''">{{watch_atrack}}</span>
-						<span class="osd-track osd-modes" data-if="watch_modes != ''">{{watch_modes}}</span>
-					</div>
-					<div class="osd-next" data-if="watch_next != ''">
-						<span class="osd-next-label">UP NEXT</span>{{watch_next}}
+					<div class="osd-meta" data-if="watch_chapter != '' || watch_next != '' || watch_description != ''">
+						<span class="osd-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</span>
+						<span class="osd-next" data-if="watch_next != ''"><span class="osd-next-label">UP NEXT</span>{{watch_next}}</span>
+						<span class="osd-desc" data-if="watch_description != ''">{{watch_description}}</span>
 					</div>
 				</div>
 				<div class="osd-side">
@@ -331,19 +329,24 @@
 						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 					</div>
 					<div class="osd-ends" data-if="watch_ends != ''">{{watch_ends}}</div>
-					<div class="osd-speed" data-if="watch_speed != ''">
-						<span class="badge">{{watch_speed}}</span>
-					</div>
 				</div>
 			</div>
-			<div class="controls" data-class-focus="control_focus">
-				<!-- (Bindings to c go on what is inside: see the shelves.) -->
-				<div class="control-slot" data-for="c, ci : controls">
-					<div class="control" data-class-gap="c.gap" data-class-on="c.on" data-class-dim="c.dim"
-					     data-class-selected="control_focus && ci == sel_control">{{c.icon}}</div>
+			<div class="osd-foot">
+				<div class="controls" data-class-focus="control_focus">
+					<!-- (Bindings to c go on what is inside: see the shelves.) -->
+					<div class="control-slot" data-for="c, ci : controls">
+						<div class="control" data-class-gap="c.gap" data-class-on="c.on" data-class-dim="c.dim"
+						     data-class-selected="control_focus && ci == sel_control">{{c.icon}}</div>
+					</div>
+					<span class="control-label" data-if="control_focus">{{control_label}}</span>
+					<span class="control-hint" data-if="!control_focus">Down for the controls</span>
 				</div>
-				<span class="control-label" data-if="control_focus">{{control_label}}</span>
-				<span class="control-hint" data-if="!control_focus">Down for the controls</span>
+				<div class="osd-tracks">
+					<span class="badge" data-if="watch_speed != ''">{{watch_speed}}</span>
+					<span class="osd-track osd-modes" data-if="watch_modes != ''">{{watch_modes}}</span>
+					<span class="osd-track" data-if="watch_vtrack != ''">{{watch_vtrack}}</span>
+					<span class="osd-track" data-if="watch_atrack != ''">{{watch_atrack}}</span>
+				</div>
 			</div>
 		</div>
 
