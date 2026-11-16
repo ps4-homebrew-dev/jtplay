@@ -66,8 +66,8 @@ KeyIdentifier ButtonKey(Uint8 button) {
   case SDL_CONTROLLER_BUTTON_Y:             return Rml::Input::KI_T;
   case SDL_CONTROLLER_BUTTON_START:         return kKeyOptions;
   case SDL_CONTROLLER_BUTTON_BACK:          return Rml::Input::KI_ESCAPE;
-  case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  return Rml::Input::KI_PRIOR;
-  case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return Rml::Input::KI_NEXT;
+  case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:  return kKeyShoulderLeft;
+  case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return kKeyShoulderRight;
   case SDL_CONTROLLER_BUTTON_DPAD_UP:       return Rml::Input::KI_UP;
   case SDL_CONTROLLER_BUTTON_DPAD_DOWN:     return Rml::Input::KI_DOWN;
   case SDL_CONTROLLER_BUTTON_DPAD_LEFT:     return Rml::Input::KI_LEFT;
@@ -82,8 +82,8 @@ bool Repeats(KeyIdentifier key) {
   case Rml::Input::KI_DOWN:
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:
-  case Rml::Input::KI_PRIOR:
-  case Rml::Input::KI_NEXT:
+  case kKeyShoulderLeft:
+  case kKeyShoulderRight:
     return true;
   default:
     return false;

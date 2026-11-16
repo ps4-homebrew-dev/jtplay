@@ -848,7 +848,17 @@ void App::ProcessEvent(Rml::Event& event) {
   if (event.GetId() != Rml::EventId::Keydown)
     return;
 
-  const int key = event.GetParameter<int>("key_identifier", 0);
+  int key = event.GetParameter<int>("key_identifier", 0);
+
+  // A pad's L1 and R1 are PageUp and PageDown everywhere but in full
+  // screen playback, which tells them from a remote's channel keys (see
+  // gamepad.h, and HandleKeyWatch).
+  if (!FullscreenPlayback() || bind_menu_open_ || bind_photo_) {
+    if (key == gamepad::kKeyShoulderLeft)
+      key = Rml::Input::KI_PRIOR;
+    else if (key == gamepad::kKeyShoulderRight)
+      key = Rml::Input::KI_NEXT;
+  }
 
   if (back_swallow_ && key == Rml::Input::KI_BACK) {
     event.StopPropagation();

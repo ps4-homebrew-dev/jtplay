@@ -11,7 +11,8 @@
 //   square / X            Space        search a source group again, next sort key
 //   triangle / Y          T            full screen and back (Kodi's FullScreen);
 //                                      browsing: reverse the order
-//   L1 / R1               PageUp/Down  page, previous/next item (repeats)
+//   L1 / R1               PageUp/Down  page; in full screen: previous / next
+//                                      chapter or item (repeats)
 //   L2 / R2               Home / End   first / last row
 //   options / start       Menu         options menu
 //   back / select         Escape       back; in full screen: the menus,
@@ -47,6 +48,15 @@ namespace gamepad {
 // produces (a keyboard's browser back is Backspace there).
 inline constexpr Rml::Input::KeyIdentifier kKeyRewind = Rml::Input::KI_BROWSER_BACK;
 inline constexpr Rml::Input::KeyIdentifier kKeyFastForward = Rml::Input::KI_BROWSER_FORWARD;
+
+// A pad's L1 and R1. They are PageUp and PageDown, except to full screen
+// playback (App::ProcessEvent turns them into those for everything else):
+// there the left one is "previous" and the right one "next", while a
+// remote's channel up, which arrives as PageUp, is "next" and channel down
+// "previous" (as PageUp and PageDown are in Kodi). So the two cannot be
+// the same key. Two identifiers no key produces.
+inline constexpr Rml::Input::KeyIdentifier kKeyShoulderLeft = Rml::Input::KI_F23;
+inline constexpr Rml::Input::KeyIdentifier kKeyShoulderRight = Rml::Input::KI_F24;
 
 // The options button, whatever it comes from: a pad's options / start, a
 // held OK, a remote's options, menu or disc menu key, a keyboard's menu key

@@ -1011,11 +1011,20 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     PeekWatchInfo();
     break;
 
-  case Rml::Input::KI_PRIOR: // left shoulder: previous chapter or item
+  case gamepad::kKeyShoulderLeft:  // L1: previous chapter or item
     SkipChapter(-1);
     break;
-  case Rml::Input::KI_NEXT:  // right shoulder: next chapter or item
+  case gamepad::kKeyShoulderRight: // R1: next chapter or item
     SkipChapter(+1);
+    break;
+  // A remote's channel up and down, which arrive as PageUp and PageDown:
+  // up is the next item, down the one before, as channels go (and as
+  // PageUp and PageDown are in Kodi). By item, not chapter.
+  case Rml::Input::KI_PRIOR:
+    PlayNeighbor(+1);
+    break;
+  case Rml::Input::KI_NEXT:
+    PlayNeighbor(-1);
     break;
 
   case Rml::Input::KI_RETURN:

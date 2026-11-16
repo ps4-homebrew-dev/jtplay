@@ -339,7 +339,7 @@ options button is the way into everything that is not on the d-pad.
 | options (start)       | Menu, F10       | options for the card or tile | options menu                         | info bar / away | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
-| L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |
+| L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item (PageUp / PageDown: next / previous item) | previous / next      |
 | L2 / R2               | Home / End      | first / last                 | first / last                         |                                    | first / last         |
 | back (select)         | Escape          | to the tabs; from them, back to full screen* | back                                 | the menus, playing on              | close                |
 |                       | X               | stop*                        | stop*                                | stop                               |                      |
@@ -349,7 +349,9 @@ options button is the way into everything that is not on the d-pad.
 A media remote's (or keyboard's) play/pause, pause, stop, previous/next,
 rewind / fast forward (as left / right in full screen, 10 s steps behind the
 menus), audio (the next audio track) and subtitle (the next subtitle track,
-F1 on a keyboard) keys work on playback wherever it is; its display key
+F1 on a keyboard) keys work on playback wherever it is; in full screen its
+channel up and down keys (PageUp and PageDown on a keyboard) play the next
+and the previous item, and page through lists elsewhere; its display key
 shows or hides the bar in full screen, and its back key is circle. Its
 options (or menu) and disc menu keys are options, as are a keyboard's menu
 key and F10; and since not every remote has one, nor every TV passes it
