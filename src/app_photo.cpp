@@ -236,16 +236,19 @@ void App::UpdatePhotos(double now) {
 
 void App::OpenPhotoMenu() {
   menu_items_.clear();
+  menu_section_.clear();
+  menu_parent_ = nullptr;
   Set("menu_title", bind_menu_title_,
       photo_index_ < (int)photo_list_.size() ? DisplayName(photo_list_[photo_index_])
                                              : Rml::String("Photos"));
   Set("menu_dialog", bind_menu_dialog_, false);
 
   if (photo_list_.size() > 1) {
-    menu_items_.push_back({"Slideshow",
+    MenuSection("Slideshow");
+    AddMenuItem({"Slideshow",
       [this] { return std::string(bind_photo_playing_ ? "Playing" : "Paused"); },
       [this](int) { SetSlideshow(!bind_photo_playing_); }});
-    menu_items_.push_back({"Seconds per picture",
+    AddMenuItem({"Seconds per picture",
       [this] { return std::to_string(photo_interval_) + " s"; },
       [this](int d) {
         int i = 0;
@@ -257,7 +260,7 @@ void App::OpenPhotoMenu() {
         photo_next_at_ = Now() + photo_interval_;
         SaveSettings();
       }});
-    menu_items_.push_back({"Transition",
+    AddMenuItem({"Transition",
       [this] { return std::string(EffectName((int)photo_effect_)); },
       [this](int d) {
         const int n = (int)PhotoEffect::Count;
@@ -265,25 +268,23 @@ void App::OpenPhotoMenu() {
         Set("photo_fade", bind_photo_fade_, photo_effect_ != PhotoEffect::None);
         SaveSettings();
       }});
-    menu_items_.push_back({"Shuffle",
+    AddMenuItem({"Shuffle",
       [this] { return std::string(photo_shuffle_ ? "On" : "Off"); },
       [this](int) { photo_shuffle_ = !photo_shuffle_; SaveSettings(); }});
   }
-  menu_items_.push_back({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
+  MenuSection("Picture");
+  AddMenuItem({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
   if (photo_index_ < (int)photo_list_.size()) {
     const browse::Entry entry = photo_list_[photo_index_];
     library::Ref ref;
     if (Identify(entry, ref)) {
       const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-      menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
+      AddMenuItem({fav ? "Remove from favorites" : "Add to favorites",
         nullptr, [this, entry](int) { ToggleFavorite(entry); }});
     }
   }
-  menu_items_.push_back({"Close", nullptr, [this](int) { ClosePhotos(); }});
-
-  sel_menu_ = 0;
-  RebuildMenuRows();
-  Set("menu_open", bind_menu_open_, true);
+  AddMenuItem({"Close", nullptr, [this](int) { ClosePhotos(); }});
+  ShowMenu();
 }
 
 void App::HandleKeyPhoto(Rml::Event& event, int key) {

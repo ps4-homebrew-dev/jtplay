@@ -3,6 +3,8 @@
  * button; or (#menu.dialog) a small dialog in the middle of the screen for
  * a question that needs an answer before anything else (resume?). Left /
  * right change a setting in place, select runs an action, back closes.
+ * The rows come in groups, each under a heading, in the same order in
+ * every menu.
  */
 
 /* Stacking, bottom to top: backdrop 0, shell 1, OSD 5, menu 10,
@@ -49,7 +51,7 @@
 	text-overflow: ellipsis;
 }
 
-/* Long menus (the playback menu) scroll; the app keeps the selection in
+/* Long menus (a folder's options) scroll; the app keeps the selection in
  * view. */
 #menu-rows {
 	flex: 1;
@@ -57,6 +59,21 @@
 }
 #menu.dialog #menu-rows {
 	flex: none;
+}
+
+/* The heading of a group of rows. As tall, margins and all, as the app
+ * takes it to be when it scrolls (kMenuSectionPitch): 56px. */
+.menu-section {
+	height: 26px;
+	margin: 20px 0px 10px 24px;
+	font-size: 19px;
+	line-height: 26px;
+	font-weight: bold;
+	letter-spacing: 3px;
+	text-transform: uppercase;
+	color: #6d7a92;
+	white-space: nowrap;
+	overflow: hidden;
 }
 
 .menu-row {

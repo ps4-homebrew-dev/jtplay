@@ -803,7 +803,7 @@ void App::ApplyLanguages() {
 
 // The page under the Settings tab. Built once: the values are read back
 // from the app each time the rows are made, so a setting changed elsewhere
-// (night mode in the playback menu) shows as it is.
+// (night mode in the playback options) shows as it is.
 void App::BuildSettings() {
   setting_items_.clear();
   auto step = [](int index, int d, int count) {
@@ -884,73 +884,13 @@ void App::BuildSettings() {
     },
     [this](int) { ConfirmForgetContinue(); }, true});
   // What the plugins ask for (a provider's 'settings', see docs/plugins.md):
-  // a section each, under the plugin's name. The values live in
-  // plugin_settings_, where the scripts read them.
+  // a section each, under the plugin's name.
   if (js_provider_) {
     for (const browse::JsPluginPtr& plugin : js_provider_->Plugins()) {
-      bool first = true;
-      for (const browse::PluginSetting& spec : plugin->Settings()) {
-        const std::string id = plugin->Id();
-        auto index = [this, id, spec] {
-          const std::string value = plugin_settings_->Get(id, spec.key, spec.fallback);
-          for (size_t i = 0; i < spec.options.size(); i++)
-            if (spec.options[i].first == value)
-              return (int)i;
-          return 0;
-        };
-        if (spec.text) {
-          setting_items_.push_back({first ? plugin->ProviderName() : std::string(), spec.label,
-            spec.about,
-            [this, id, spec] {
-              const std::string value = plugin_settings_->Get(id, spec.key, spec.fallback);
-              if (value.empty())
-                return std::string("Not set");
-              return spec.secret ? std::string("Set") : value;
-            },
-            [this, id, spec, name = plugin->ProviderName()](int d) {
-              // Left or right forgets it (signing out, for a token).
-              if (d != 0) {
-                if (plugin_settings_->Get(id, spec.key).empty())
-                  return;
-                plugin_settings_->Set(id, spec.key, "");
-                SaveSettings();
-                ShowToast(name + ": " + spec.label + " cleared", icon::kClear);
-                return;
-              }
-              // A secret is typed afresh; it is not shown back.
-              const std::string initial =
-                spec.secret ? std::string() : plugin_settings_->Get(id, spec.key, spec.fallback);
-              OpenTextEntry(spec.label, initial, kTextSettingMaxLength, spec.secret,
-                            [this, id, spec](const std::string& text) {
-                              plugin_settings_->Set(id, spec.key, text);
-                              SaveSettings();
-                              RebuildSettingRows();
-                            });
-            }});
-          first = false;
-          continue;
-        }
-        setting_items_.push_back({first ? plugin->ProviderName() : std::string(), spec.label,
-          spec.about,
-          [spec, index] { return spec.options[index()].second; },
-          [this, id, spec, index, step](int d) {
-            auto choose = [this, id, spec](int i) {
-              plugin_settings_->Set(id, spec.key, spec.options[i].first);
-              SaveSettings();
-            };
-            // Select on a long list of choices (every country there is)
-            // lists them, rather than stepping to the next.
-            if (d == 0 && spec.options.size() > kChoiceMenuFrom) {
-              std::vector<std::string> labels;
-              for (const auto& option : spec.options)
-                labels.push_back(option.second);
-              OpenChoiceMenu(spec.label, labels, index(), choose);
-              return;
-            }
-            choose(step(index(), d, (int)spec.options.size()));
-          }});
-        first = false;
-      }
+      const size_t first = setting_items_.size();
+      AddPluginSettings(plugin, setting_items_, nullptr);
+      if (setting_items_.size() > first)
+        setting_items_[first].section = plugin->ProviderName();
     }
   }
   // For finding out what a remote's buttons arrive as; not remembered.
@@ -959,6 +899,78 @@ void App::BuildSettings() {
     "For finding out what a remote's buttons do; off again at the next start.",
     [this] { return std::string(input_trace_ ? "On" : "Off"); },
     [this](int) { SetInputTrace(!input_trace_); }});
+}
+
+// One plugin's settings as rows: of the Settings page, or of the plugin's
+// own menu ('menu' opens it, see OpenPluginMenu). The values live in
+// plugin_settings_, where the scripts read them.
+void App::AddPluginSettings(const std::shared_ptr<browse::JsPlugin>& plugin,
+                            std::vector<SettingItem>& out, std::function<void()> menu) {
+  auto step = [](int index, int d, int count) {
+    return (index + (d < 0 ? count - 1 : 1)) % count;
+  };
+  const std::string id = plugin->Id();
+  for (const browse::PluginSetting& spec : plugin->Settings()) {
+    auto index = [this, id, spec] {
+      const std::string value = plugin_settings_->Get(id, spec.key, spec.fallback);
+      for (size_t i = 0; i < spec.options.size(); i++)
+        if (spec.options[i].first == value)
+          return (int)i;
+      return 0;
+    };
+    if (spec.text) {
+      out.push_back({std::string(), spec.label, spec.about,
+        [this, id, spec] {
+          const std::string value = plugin_settings_->Get(id, spec.key, spec.fallback);
+          if (value.empty())
+            return std::string("Not set");
+          return spec.secret ? std::string("Set") : value;
+        },
+        [this, id, spec, menu, name = plugin->ProviderName()](int d) {
+          // Left or right forgets it (signing out, for a token).
+          if (d != 0) {
+            if (plugin_settings_->Get(id, spec.key).empty())
+              return;
+            plugin_settings_->Set(id, spec.key, "");
+            SaveSettings();
+            ShowToast(name + ": " + spec.label + " cleared", icon::kClear);
+            return;
+          }
+          // A secret is typed afresh; it is not shown back.
+          const std::string initial =
+            spec.secret ? std::string() : plugin_settings_->Get(id, spec.key, spec.fallback);
+          OpenTextEntry(spec.label, initial, kTextSettingMaxLength, spec.secret,
+                        [this, id, spec, menu](const std::string& text) {
+                          plugin_settings_->Set(id, spec.key, text);
+                          SaveSettings();
+                          if (menu)
+                            menu(); // its rows, with the new value
+                          else
+                            RebuildSettingRows();
+                        });
+        }});
+      continue;
+    }
+    out.push_back({std::string(), spec.label, spec.about,
+      [spec, index] { return spec.options[index()].second; },
+      [this, id, spec, index, step, menu](int d) {
+        auto choose = [this, id, spec](int i) {
+          plugin_settings_->Set(id, spec.key, spec.options[i].first);
+          SaveSettings();
+        };
+        // Select on a long list of choices (every country there is)
+        // lists them, rather than stepping to the next.
+        if (d == 0 && spec.options.size() > kChoiceMenuFrom) {
+          std::vector<std::string> labels;
+          for (const auto& option : spec.options)
+            labels.push_back(option.second);
+          OpenChoiceMenu(spec.label, labels, index(), choose);
+          menu_parent_ = menu; // chosen or not: back to where it was asked
+          return;
+        }
+        choose(step(index(), d, (int)spec.options.size()));
+      }});
+  }
 }
 
 void App::RebuildSettingRows() {
@@ -989,6 +1001,8 @@ void App::ConfirmForgetContinue() {
     return;
   }
   menu_items_.clear();
+  menu_section_.clear();
+  menu_parent_ = nullptr;
   menu_items_.push_back({"Forget " + std::to_string(n) + (n == 1 ? " item" : " items"),
     nullptr, [this](int) {
       const auto items = library_.InProgress();
@@ -1012,6 +1026,8 @@ void App::ConfirmForgetContinue() {
 void App::OpenChoiceMenu(const std::string& title, const std::vector<std::string>& choices,
                          int current, std::function<void(int)> pick) {
   menu_items_.clear();
+  menu_section_.clear();
+  menu_parent_ = nullptr;
   for (size_t i = 0; i < choices.size(); i++)
     menu_items_.push_back({choices[i], nullptr, [this, pick, i](int) {
       pick((int)i);

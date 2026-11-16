@@ -3,8 +3,10 @@
 // Playback. It starts full screen: for video the UI chrome hides and the
 // decoded frames fill the screen behind a transparent document body, with
 // an auto-hiding info/transport bar; for audio a persistent now-playing
-// card is shown instead. The options button opens a playback menu (tracks,
-// subtitles, speed) over either.
+// card is shown instead. Either has a row of buttons for what playback is
+// controlled with (previous, pause, next, stop, tracks, speed, shuffle,
+// repeat): down from the timeline to reach them. The options button opens
+// a menu of the settings that are left (picture, delays, sleep timer).
 //
 // Back leaves full screen without stopping, as in Kodi: the menus come
 // back over the video, on a see-through background, and can be used as
@@ -37,6 +39,10 @@ constexpr int64_t kUpNextMinDurationSec = 5 * 60;
 // Sleep timer choices, minutes; -1 = at the end of what is playing.
 constexpr int kSleepChoices[] = {0, 15, 30, 45, 60, 90, 120, -1};
 constexpr int kSleepChoiceCount = (int)(sizeof(kSleepChoices) / sizeof(kSleepChoices[0]));
+
+// With the focus on its buttons the info bar stays a little longer after
+// the last key: there is something to read, and to decide.
+constexpr double kControlsInfoSec = 8.0;
 
 // Seek steps grow while the same direction is pressed (or held) in quick
 // succession: three presses of each, then the largest step from there on.
@@ -139,6 +145,8 @@ void App::PlayEntry(const browse::Entry& entry) {
       !p.watched && p.position > 0) {
     const int64_t at = p.position;
     menu_items_.clear();
+    menu_section_.clear();
+    menu_parent_ = nullptr;
     menu_items_.push_back({"Resume from " + FormatTime(at * 1000000), nullptr,
       [this, entry, at](int) { Launch(entry, at); }});
     menu_items_.push_back({"Play from beginning", nullptr,
@@ -348,10 +356,14 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
     model_.DirtyVariable("chapter_marks");
   }
   RefreshImageBindings();
-  if (fullscreen)
-    ShowWatchInfo(kWatchInfoSec);
-  else
+  // (The focus stays on the buttons from one item to the next: "next",
+  // pressed again, is the one after.)
+  if (fullscreen) {
+    ShowWatchInfo(bind_control_focus_ ? kControlsInfoSec : kWatchInfoSec);
+  } else {
+    FocusControls(false);
     Set("info_visible", bind_info_visible_, false);
+  }
   // Home's row of what is playing: there, or now this.
   if (view_ == View::Home)
     RebuildShelves();
@@ -369,7 +381,8 @@ void App::ExitWatch() {
   back_held_ = false;
   Set("upnext", bind_upnext_, false);
   Set("info_visible", bind_info_visible_, false);
-  // The playback menu goes with the player; one over the menus stays.
+  FocusControls(false);
+  // The playback options go with the player; a menu over the menus stays.
   if (bind_menu_open_ && was_fullscreen)
     CloseMenu();
   playing_identified_ = false;
@@ -382,7 +395,7 @@ void App::SetFullscreen(bool on) {
     return;
   back_held_ = false;
   if (bind_menu_open_)
-    CloseMenu(); // the playback menu, or the menu over the menus
+    CloseMenu(); // the playback options, or the menu over the menus
   Set("fullscreen", bind_fullscreen_, on);
   Set("video_behind", bind_video_behind_, !on && !bind_watch_audio_);
   if (on) {
@@ -390,6 +403,7 @@ void App::SetFullscreen(bool on) {
   } else {
     Set("upnext", bind_upnext_, false);
     Set("info_visible", bind_info_visible_, false);
+    FocusControls(false);
     Set("watch_seek", bind_watch_seek_, Rml::String());
     // The lists come back showing how far it has got.
     RecordProgress(false);
@@ -510,6 +524,7 @@ void App::UpdateWatchOverlay() {
     modes += modes.empty() ? std::string(icon::kSleep) : std::string(" ") + icon::kSleep;
   Set("watch_modes", bind_watch_modes_, modes);
 
+  UpdateControls();
   UpdateUpNext(pos, dur);
 }
 
@@ -561,7 +576,7 @@ std::string App::SleepLabel() const {
   return std::to_string(std::max(1, minutes)) + " min left";
 }
 
-// T (triangle) / the playback menu: next audio track, wrapping around.
+// A remote's audio key: the next audio track, wrapping around.
 void App::CycleAudioTrack(int direction) {
   const std::vector<AudioTrackInfo> tracks = player_->AudioTracks();
   if (tracks.size() < 2) {
@@ -577,7 +592,7 @@ void App::CycleAudioTrack(int direction) {
 }
 
 // Subtitles cycle through "off" and every track.
-// 'toast': say what it picked (a remote's subtitle key; the menu shows it).
+// 'toast': say what it picked (a remote's subtitle key).
 void App::CycleSubtitleTrack(int direction, bool toast) {
   std::vector<SubtitleTrackInfo> choices = player_->SubtitleTracks();
   if (choices.empty()) {
@@ -594,102 +609,261 @@ void App::CycleSubtitleTrack(int direction, bool toast) {
     ShowToast("Subtitles: " + choices[next].label);
 }
 
+// ---------------------------------------------------------------------------
+// Playback controls
+// ---------------------------------------------------------------------------
+//
+// What playback is steered with is a row of buttons in the info bar (and
+// on the now-playing card), not entries of a menu: previous, play / pause,
+// next and stop; then audio track, subtitles and speed, where there is a
+// choice; then shuffle and repeat; and last the way into the menu of
+// what is left (OpenWatchMenu). The focus is by what a button is, not
+// where: buttons come and go with what plays (subtitles, a second audio
+// track), and the focus stays on the one it was on.
+
+void App::UpdateControls() {
+  if (!bind_fullscreen_)
+    return; // out of sight
+  const bool chapters = player_->Chapters().size() > 1 && player_->CanSeek();
+  std::vector<Control> controls;
+  std::vector<ControlRow> rows;
+  auto add = [&](Control control, const char* icon, bool on = false, bool dim = false,
+                 bool gap = false) {
+    controls.push_back(control);
+    ControlRow row;
+    row.icon = icon;
+    row.on = on;
+    row.dim = dim;
+    row.gap = gap;
+    rows.push_back(row);
+  };
+  // Previous and next are always there, so that the others keep their
+  // place from one item to the next; with nowhere to go they are dimmed.
+  add(Control::Previous, icon::kPrevious, false, !chapters && NeighborIndex(-1) < 0);
+  add(Control::PlayPause, player_->IsPaused() ? icon::kPlay : icon::kPause);
+  add(Control::Next, icon::kNext, false, !chapters && NeighborIndex(+1) < 0);
+  add(Control::Stop, icon::kStop);
+  bool gap = true; // the first there is of the next three starts their group
+  if (player_->AudioTracks().size() > 1) {
+    add(Control::Audio, icon::kAudio, false, false, gap);
+    gap = false;
+  }
+  if (!player_->SubtitleTracks().empty()) {
+    add(Control::Subtitles, icon::kSubtitles, player_->CurrentSubtitleStream() >= 0, false, gap);
+    gap = false;
+  }
+  if (player_->CanSeek())
+    add(Control::Speed, icon::kSpeed, std::fabs(player_->Speed() - 1.0) >= 0.01, false, gap);
+  gap = true;
+  if (PlayOrder().size() > 1) {
+    add(Control::Shuffle, icon::kShuffle, shuffle_, false, gap);
+    gap = false;
+  }
+  add(Control::Repeat, repeat_ == Repeat::One ? icon::kRepeatOne : icon::kRepeat,
+      repeat_ != Repeat::Off, false, gap);
+  add(Control::Options, icon::kSettings, false, false, true);
+
+  // The button in focus went (the last file with subtitles is over): play /
+  // pause, which is always there, has it.
+  size_t sel = 0;
+  while (sel < controls.size() && controls[sel] != control_sel_)
+    sel++;
+  if (sel == controls.size()) {
+    control_sel_ = Control::PlayPause;
+    sel = 1;
+  }
+  controls_ = std::move(controls);
+  if (rows != control_rows_) {
+    control_rows_ = std::move(rows);
+    model_.DirtyVariable("controls");
+  }
+  Set("sel_control", bind_sel_control_, (int)sel);
+  Set("control_label", bind_control_label_,
+      bind_control_focus_ ? Rml::String(ControlLabel(control_sel_)) : Rml::String());
+}
+
+void App::FocusControls(bool on) {
+  if (on && !bind_control_focus_)
+    control_sel_ = Control::PlayPause; // where a press of select does what it did
+  Set("control_focus", bind_control_focus_, on);
+  if (bind_watching_)
+    UpdateControls();
+}
+
+// What the button in focus is, and where it stands: "Subtitles  ·  Off".
+std::string App::ControlLabel(Control control) const {
+  const std::vector<ChapterInfo> chapters = player_->Chapters();
+  const bool by_chapter = chapters.size() > 1 && player_->CanSeek();
+  const int chapter = player_->CurrentChapter();
+  auto with = [](const char* what, const std::string& value) {
+    return value.empty() ? std::string(what) : std::string(what) + "  ·  " + value;
+  };
+  switch (control) {
+  case Control::Previous: {
+    if (by_chapter && chapter >= 0)
+      return "Previous chapter";
+    const int i = NeighborIndex(-1);
+    return i < 0 ? "Previous" : with("Previous", DisplayName(queue_.entries[i]));
+  }
+  case Control::PlayPause:
+    return player_->IsPaused() ? "Play" : "Pause";
+  case Control::Next: {
+    if (by_chapter && chapter + 1 < (int)chapters.size())
+      return "Next chapter";
+    const int i = NeighborIndex(+1);
+    return i < 0 ? "Next" : with("Next", DisplayName(queue_.entries[i]));
+  }
+  case Control::Stop:
+    return "Stop";
+  case Control::Audio:
+    return with("Audio", player_->CurrentAudioLabel());
+  case Control::Subtitles: {
+    const int id = player_->CurrentSubtitleStream();
+    for (const SubtitleTrackInfo& t : player_->SubtitleTracks())
+      if (t.stream_index == id)
+        return with("Subtitles", t.label);
+    return with("Subtitles", "Off");
+  }
+  case Control::Speed:
+    return with("Speed", SpeedLabel(player_->Speed()));
+  case Control::Shuffle:
+    return with("Shuffle", shuffle_ ? "On" : "Off");
+  case Control::Repeat:
+    return with("Repeat", RepeatName((int)repeat_));
+  case Control::Options:
+    return "Playback options";
+  }
+  return {};
+}
+
+void App::ActivateControl(Control control) {
+  switch (control) {
+  case Control::Previous:
+    SkipChapter(-1);
+    break;
+  case Control::PlayPause:
+    player_->TogglePause();
+    break;
+  case Control::Next:
+    SkipChapter(+1);
+    break;
+  case Control::Stop:
+    StopPlayback();
+    break;
+  // Tracks and speeds are picked from a list of them all, on the one that
+  // is on: stepping through six audio tracks to hear which is which takes
+  // a reload of each.
+  case Control::Audio: {
+    const std::vector<AudioTrackInfo> tracks = player_->AudioTracks();
+    std::vector<std::string> labels;
+    int current = 0;
+    for (size_t i = 0; i < tracks.size(); i++) {
+      labels.push_back(tracks[i].label);
+      if (tracks[i].stream_index == player_->CurrentAudioStream())
+        current = (int)i;
+    }
+    OpenChoiceMenu("Audio", labels, current, [this, tracks](int i) {
+      player_->SelectAudioTrack(tracks[i].stream_index);
+    });
+    break;
+  }
+  case Control::Subtitles: {
+    const std::vector<SubtitleTrackInfo> tracks = player_->SubtitleTracks();
+    std::vector<std::string> labels = {"Off"};
+    int current = 0;
+    for (size_t i = 0; i < tracks.size(); i++) {
+      labels.push_back(tracks[i].label);
+      if (tracks[i].stream_index == player_->CurrentSubtitleStream())
+        current = (int)i + 1;
+    }
+    OpenChoiceMenu("Subtitles", labels, current, [this, tracks](int i) {
+      player_->SelectSubtitleTrack(i == 0 ? -1 : tracks[i - 1].stream_index);
+    });
+    break;
+  }
+  case Control::Speed: {
+    std::vector<std::string> labels;
+    int current = 0;
+    for (int i = 0; i < kSpeedCount; i++) {
+      labels.push_back(SpeedLabel(kSpeeds[i]));
+      if (kSpeeds[i] < player_->Speed() + 0.01)
+        current = i;
+    }
+    OpenChoiceMenu("Speed", labels, current, [this](int i) { player_->SetSpeed(kSpeeds[i]); });
+    break;
+  }
+  case Control::Shuffle:
+    SetShuffle(!shuffle_);
+    break;
+  case Control::Repeat:
+    repeat_ = (Repeat)(((int)repeat_ + 1) % (int)Repeat::Count);
+    SaveSettings();
+    break;
+  case Control::Options:
+    OpenWatchMenu();
+    break;
+  }
+}
+
+bool App::HandleKeyControls(int key) {
+  if (controls_.empty())
+    return false;
+  switch (key) {
+  case Rml::Input::KI_LEFT:
+  case Rml::Input::KI_RIGHT: {
+    // Along the row, stopping at its ends.
+    const int n = (int)controls_.size();
+    const int to = std::clamp(bind_sel_control_ + (key == Rml::Input::KI_LEFT ? -1 : +1), 0, n - 1);
+    control_sel_ = controls_[to];
+    break;
+  }
+  case Rml::Input::KI_RETURN:
+  case Rml::Input::KI_NUMPADENTER:
+    ActivateControl(control_sel_);
+    break;
+  case Rml::Input::KI_DOWN:
+    break; // nothing below them
+  case Rml::Input::KI_UP:    // back to the timeline
+  case Rml::Input::KI_BACK:
+  case Rml::Input::KI_ESCAPE:
+    FocusControls(false);
+    if (bind_fullscreen_)
+      ShowWatchInfo(kWatchInfoSec);
+    return true;
+  default:
+    return false;
+  }
+  // (Stop, or the end of the queue, has left the player.)
+  if (FullscreenPlayback()) {
+    ShowWatchInfo(kControlsInfoSec);
+    UpdateControls();
+  }
+  return true;
+}
+
+// The playback menu: what is set rather than done, and so not a button of
+// the controls. Sound and picture as they are adjusted for a room and a
+// file; they stay as they are left.
 void App::OpenWatchMenu() {
   menu_items_.clear();
-  Set("menu_title", bind_menu_title_, Rml::String("Playback"));
+  menu_section_.clear();
+  menu_parent_ = nullptr;
+  Set("menu_title", bind_menu_title_, Rml::String("Playback options"));
   Set("menu_dialog", bind_menu_dialog_, false);
 
-  if (player_->AudioTracks().size() > 1) {
-    menu_items_.push_back({"Audio",
-      [this] { return player_->CurrentAudioLabel(); },
-      [this](int d) { CycleAudioTrack(d < 0 ? -1 : +1); }});
-  }
-  if (!player_->SubtitleTracks().empty()) {
-    menu_items_.push_back({"Subtitles",
-      [this] {
-        const int id = player_->CurrentSubtitleStream();
-        for (const SubtitleTrackInfo& t : player_->SubtitleTracks())
-          if (t.stream_index == id)
-            return t.label;
-        return std::string("Off");
-      },
-      [this](int d) { CycleSubtitleTrack(d < 0 ? -1 : +1); }});
-  }
-  if (player_->Chapters().size() > 1) {
-    menu_items_.push_back({"Chapter",
-      [this] {
-        const std::vector<ChapterInfo> chapters = player_->Chapters();
-        const int i = player_->CurrentChapter();
-        if (i < 0 || i >= (int)chapters.size())
-          return std::string("-");
-        std::string label = std::to_string(i + 1) + "/" + std::to_string(chapters.size());
-        if (!chapters[i].title.empty())
-          label += " " + chapters[i].title;
-        return label.size() > 28 ? label.substr(0, 27) + "…" : label;
-      },
-      [this](int d) {
-        const int n = (int)player_->Chapters().size();
-        const int i = std::max(0, player_->CurrentChapter());
-        player_->SeekChapter(std::clamp(i + (d < 0 ? -1 : 1), 0, n - 1));
+  if (playing_identified_) {
+    // By what the library knows of it: the menus may have moved on to
+    // another source since it started.
+    const bool fav = library_.IsFavorite(playing_ref_.source_key,
+                                         playing_ref_.entry.id);
+    AddMenuItem({fav ? "Remove from favorites" : "Add to favorites",
+      nullptr, [this](int) {
+        const bool now = library_.ToggleFavorite(playing_ref_);
+        library_.Save();
+        ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
       }});
   }
-  if (player_->CanSeek()) {
-    menu_items_.push_back({"Speed",
-      [this] { return SpeedLabel(player_->Speed()); },
-      [this](int d) {
-        int i = 0;
-        while (i < kSpeedCount - 1 && kSpeeds[i] < player_->Speed() - 0.01)
-          i++;
-        i = d == 0 ? (i + 1) % kSpeedCount
-                   : std::clamp(i + (d < 0 ? -1 : 1), 0, kSpeedCount - 1);
-        player_->SetSpeed(kSpeeds[i]);
-      }});
-  }
-  if (PlayOrder().size() > 1) {
-    menu_items_.push_back({"Shuffle",
-      [this] { return std::string(shuffle_ ? "On" : "Off"); },
-      [this](int) { SetShuffle(!shuffle_); }});
-  }
-  menu_items_.push_back({"Repeat",
-    [this] { return std::string(RepeatName((int)repeat_)); },
-    [this](int d) {
-      const int n = (int)Repeat::Count;
-      repeat_ = (Repeat)(((int)repeat_ + (d < 0 ? n - 1 : 1)) % n);
-      SaveSettings();
-    }});
-  menu_items_.push_back({"Night mode",
-    [this] { return std::string(player_->NightMode() ? "On" : "Off"); },
-    [this](int) { player_->SetNightMode(!player_->NightMode()); SaveSettings(); }});
-  if (!bind_watch_audio_) {
-    menu_items_.push_back({"Picture",
-      [this] { return std::string(FitName(player_->GetFit())); },
-      [this](int d) {
-        const int n = (int)Player::Fit::Count;
-        player_->SetFit((Player::Fit)(((int)player_->GetFit() + (d < 0 ? n - 1 : 1)) % n));
-        SaveSettings();
-      }});
-  }
-  if (!player_->SubtitleTracks().empty()) {
-    menu_items_.push_back({"Subtitle delay",
-      [this] { return DelayLabel(player_->SubtitleDelay()); },
-      [this](int d) {
-        player_->SetSubtitleDelay(d == 0 ? 0.0 : player_->SubtitleDelay() + (d < 0 ? -0.1 : 0.1));
-      }});
-    menu_items_.push_back({"Subtitle size",
-      [this] { return std::to_string((int)std::lround(player_->SubtitleScale() * 100)) + "%"; },
-      [this](int d) {
-        const double scale = d == 0 ? 1.0 : player_->SubtitleScale() + (d < 0 ? -0.1 : 0.1);
-        player_->SetSubtitleScale(std::clamp(scale, 0.5, 2.5));
-        SaveSettings();
-      }});
-  }
-  menu_items_.push_back({"Audio delay",
-    [this] { return DelayLabel(player_->AudioDelay()); },
-    [this](int d) {
-      player_->SetAudioDelay(d == 0 ? 0.0 : player_->AudioDelay() + (d < 0 ? -0.05 : 0.05));
-      SaveSettings();
-    }});
-  menu_items_.push_back({"Sleep timer",
+  AddMenuItem({"Sleep timer",
     [this] { return SleepLabel(); },
     [this](int d) {
       // Where the timer is now among the choices, then one step on.
@@ -706,25 +880,46 @@ void App::OpenWatchMenu() {
       sleep_end_of_item_ = kSleepChoices[i] < 0;
       sleep_at_ = kSleepChoices[i] > 0 ? Now() + kSleepChoices[i] * 60.0 : 0.0;
     }});
-  if (playing_identified_) {
-    // By what the library knows of it: the menus may have moved on to
-    // another source since it started.
-    const bool fav = library_.IsFavorite(playing_ref_.source_key,
-                                         playing_ref_.entry.id);
-    menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
-      nullptr, [this](int) {
-        const bool now = library_.ToggleFavorite(playing_ref_);
-        library_.Save();
-        ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
+
+  if (!bind_watch_audio_) {
+    MenuSection("Picture");
+    AddMenuItem({"Scaling",
+      [this] { return std::string(FitName(player_->GetFit())); },
+      [this](int d) {
+        const int n = (int)Player::Fit::Count;
+        player_->SetFit((Player::Fit)(((int)player_->GetFit() + (d < 0 ? n - 1 : 1)) % n));
+        SaveSettings();
       }});
   }
-  if (NeighborIndex(+1) >= 0)
-    menu_items_.push_back({"Play next", nullptr, [this](int) { PlayNeighbor(+1); }});
-  menu_items_.push_back({"Stop", nullptr, [this](int) { StopPlayback(); }});
 
-  sel_menu_ = 0;
-  RebuildMenuRows();
-  Set("menu_open", bind_menu_open_, true);
+  if (!player_->SubtitleTracks().empty()) {
+    MenuSection("Subtitles");
+    AddMenuItem({"Size",
+      [this] { return std::to_string((int)std::lround(player_->SubtitleScale() * 100)) + "%"; },
+      [this](int d) {
+        const double scale = d == 0 ? 1.0 : player_->SubtitleScale() + (d < 0 ? -0.1 : 0.1);
+        player_->SetSubtitleScale(std::clamp(scale, 0.5, 2.5));
+        SaveSettings();
+      }});
+    AddMenuItem({"Delay",
+      [this] { return DelayLabel(player_->SubtitleDelay()); },
+      [this](int d) {
+        player_->SetSubtitleDelay(d == 0 ? 0.0 : player_->SubtitleDelay() + (d < 0 ? -0.1 : 0.1));
+      }});
+  }
+
+  MenuSection("Audio");
+  AddMenuItem({"Night mode",
+    [this] { return std::string(player_->NightMode() ? "On" : "Off"); },
+    [this](int) { player_->SetNightMode(!player_->NightMode()); SaveSettings(); }});
+  AddMenuItem({"Delay",
+    [this] { return DelayLabel(player_->AudioDelay()); },
+    [this](int d) {
+      player_->SetAudioDelay(d == 0 ? 0.0 : player_->AudioDelay() + (d < 0 ? -0.05 : 0.05));
+      SaveSettings();
+    }});
+
+  ShowMenu();
 }
 
 // The playable items of the play queue in play order: display order, or a
@@ -921,6 +1116,14 @@ void App::HandlePlaybackEnd() {
 }
 
 void App::HandleKeyWatch(Rml::Event& event, int key) {
+  // The focus is on the controls: the d-pad, select and back are theirs.
+  // (Not the keys of a remote that seek, skip or pause whatever has the
+  // focus: those go on below.)
+  if (bind_control_focus_ && HandleKeyControls(key)) {
+    event.StopPropagation();
+    return;
+  }
+
   // A remote's rewind and fast forward seek as left and right do, speeding
   // up the same way.
   if (key == gamepad::kKeyRewind)
@@ -929,21 +1132,25 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     key = Rml::Input::KI_RIGHT;
 
   switch (key) {
+  case Rml::Input::KI_DOWN:  // onto the controls, under the timeline
+    FocusControls(true);
+    ShowWatchInfo(kControlsInfoSec);
+    break;
+  case Rml::Input::KI_UP:    // nothing above the timeline: just the bar
+    ShowWatchInfo(kWatchInfoSec);
+    break;
+
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:
-  case Rml::Input::KI_UP:
-  case Rml::Input::KI_DOWN:
     if (player_->CanSeek()) {
       // A run of presses (or a held button) in one direction speeds up:
       // 10 s steps at first, then 30 s, a minute, two, five.
-      const bool horizontal = key == Rml::Input::KI_LEFT || key == Rml::Input::KI_RIGHT;
-      const int sign = (key == Rml::Input::KI_LEFT || key == Rml::Input::KI_DOWN) ? -1 : +1;
+      const int sign = key == Rml::Input::KI_LEFT ? -1 : +1;
       if (Now() > seek_bubble_until_ || (seek_accum_us_ < 0) != (sign < 0)) {
         seek_accum_us_ = 0;
         seek_run_ = 0;
       }
-      const int64_t step_s = horizontal ? kSeekSteps[std::min(seek_run_, kSeekStepCount - 1)]
-                                        : kSeekLargeUs / 1000000;
+      const int64_t step_s = kSeekSteps[std::min(seek_run_, kSeekStepCount - 1)];
       seek_run_++;
       const int64_t delta = sign * step_s * 1000000;
       player_->SeekRelative(delta);
@@ -989,15 +1196,16 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     SetFullscreen(false);
     break;
 
-  case gamepad::kKeyOptions: // playback menu
+  case gamepad::kKeyOptions: // playback options
     ShowWatchInfo(kWatchInfoSec);
     OpenWatchMenu();
     break;
 
   case Rml::Input::KI_F4:    // a remote's display / info key: the bar, or away with it
-    if (bind_info_visible_ && !bind_watch_audio_)
+    if (bind_info_visible_ && !bind_watch_audio_) {
       Set("info_visible", bind_info_visible_, false);
-    else
+      FocusControls(false);
+    } else
       ShowWatchInfo(kWatchInfoSec);
     break;
 

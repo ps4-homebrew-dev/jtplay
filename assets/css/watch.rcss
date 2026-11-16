@@ -277,6 +277,107 @@ body.behind #shell {
 }
 
 /* ------------------------------------------------------------------ */
+/* Playback controls                                                  */
+/* ------------------------------------------------------------------ */
+
+/* A row of round buttons, an icon each: under the bar's text (video) and
+ * at the foot of the now-playing card (audio). Quiet until down moves the
+ * focus onto them; then the one in focus is in the accent, and what it
+ * is stands beside the row. A mode that is on (shuffle, subtitles) is in
+ * the accent colour, a button with nothing to do is dimmed. */
+.controls {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-top: 22px;
+}
+
+.control {
+	width: 64px;
+	height: 64px;
+	margin-right: 10px;
+	font-size: 30px;
+	line-height: 64px;
+	text-align: center;
+	color: #8593ab;
+	background-color: #ffffff0f;
+	border-radius: 32px;
+}
+.control.gap {
+	margin-left: 22px;
+}
+.controls.focus .control {
+	color: #e8edf7;
+	background-color: #ffffff1c;
+}
+.control.on,
+.controls.focus .control.on {
+	color: #4dd6b8;
+}
+.control.dim,
+.controls.focus .control.dim {
+	color: #4a5468;
+}
+.controls.focus .control.selected {
+	color: #06231d;
+	background-color: #4dd6b8;
+	box-shadow: #4dd6b880 0px 0px 18px 0px;
+}
+
+.control-label {
+	flex: 1;
+	margin-left: 22px;
+	font-size: 26px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.control-hint {
+	margin-left: 22px;
+	font-size: 20px;
+	color: #6d7a92;
+	white-space: nowrap;
+}
+
+/* On the card: smaller, centred, with the words on a line of their own
+ * (there whether it says anything or not, so the card keeps its height). */
+#np-card .controls {
+	justify-content: center;
+	margin-top: 24px;
+}
+#np-card .control {
+	width: 50px;
+	height: 50px;
+	margin-right: 6px;
+	font-size: 24px;
+	line-height: 50px;
+	border-radius: 25px;
+}
+#np-card .control.gap {
+	margin-left: 12px;
+}
+.np-control-label {
+	height: 30px;
+	margin-top: 14px;
+	max-width: 624px;
+	font-size: 22px;
+	line-height: 30px;
+	font-weight: bold;
+	color: #ffffff;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.np-control-label .control-hint {
+	margin-left: 0px;
+	font-weight: normal;
+}
+
+/* ------------------------------------------------------------------ */
 /* Audio: the now-playing card                                        */
 /* ------------------------------------------------------------------ */
 

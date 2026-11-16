@@ -172,8 +172,9 @@ viewer is told (`throw new Error("not available from here")`).
 ## Settings
 
 A provider can ask the user for a choice or two. They appear on the
-Settings page under the plugin's name, are remembered, and are read back
-with `settings.get(key)`:
+Settings page under the plugin's name, and in the options menu of the
+plugin's tile and folders (*name* settings), are remembered, and are read
+back with `settings.get(key)`:
 
 ```js
 return {

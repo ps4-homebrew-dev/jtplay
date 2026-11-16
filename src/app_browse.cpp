@@ -12,6 +12,7 @@
 #include "app.h"
 #include "app_internal.h"
 #include "gamepad.h"
+#include "browse/js_source.h"
 #include "browse/natural_sort.h"
 #include "icons.h"
 
@@ -633,8 +634,8 @@ void App::AddEntryActions(const browse::Entry& entry) {
   if (!Identify(entry, ref))
     return;
   if (entry.IsImage()) {
-    menu_items_.push_back({"Open", nullptr, [this, entry](int) { PlayEntry(entry); }});
-    menu_items_.push_back({"Slideshow from here", nullptr, [this, entry](int) {
+    AddMenuItem({"Open", nullptr, [this, entry](int) { PlayEntry(entry); }});
+    AddMenuItem({"Slideshow from here", nullptr, [this, entry](int) {
       int index = 0;
       const browse::Listing photos = FolderPhotos(entry, index);
       OpenPhotos(photos, index, true);
@@ -644,47 +645,66 @@ void App::AddEntryActions(const browse::Entry& entry) {
     const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
     if (known && !p.watched && p.position > 0) {
       const int64_t at = p.position;
-      menu_items_.push_back({"Resume from " + FormatTime(at * 1000000), nullptr,
+      AddMenuItem({"Resume from " + FormatTime(at * 1000000), nullptr,
         [this, entry, at](int) { Launch(entry, at); }});
-      menu_items_.push_back({"Play from beginning", nullptr,
+      AddMenuItem({"Play from beginning", nullptr,
         [this, entry](int) { Launch(entry, 0); }});
     } else {
-      menu_items_.push_back({"Play", nullptr,
+      AddMenuItem({"Play", nullptr,
         [this, entry](int) { Launch(entry, 0); }});
     }
   }
   const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-  menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites",
+  AddMenuItem({fav ? "Remove from favorites" : "Add to favorites",
     nullptr, [this, entry](int) { ToggleFavorite(entry); }});
   if (entry.IsVideo() || entry.IsAudio()) {
     library::Progress p;
     const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
     const bool watched = known && p.watched;
-    menu_items_.push_back({watched ? "Mark as unwatched" : "Mark as watched",
+    AddMenuItem({watched ? "Mark as unwatched" : "Mark as watched",
       nullptr, [this, entry, watched](int) { SetWatched(entry, !watched); }});
   }
 }
 
+void App::MenuSection(const std::string& title) {
+  menu_section_ = title;
+}
+
+void App::AddMenuItem(MenuItem item) {
+  item.section = std::move(menu_section_);
+  menu_section_.clear();
+  menu_items_.push_back(std::move(item));
+}
+
+void App::ShowMenu(int selection) {
+  menu_section_.clear();
+  sel_menu_ = std::clamp(selection, 0, std::max(0, (int)menu_items_.size() - 1));
+  RebuildMenuRows();
+  Set("menu_open", bind_menu_open_, true);
+}
+
 void App::OpenMenu() {
   menu_items_.clear();
+  menu_parent_ = nullptr;
+  plugin_menu_open_ = false;
+  menu_section_.clear();
   Set("menu_dialog", bind_menu_dialog_, false);
-
-  // Over something playing: back to it, or an end to it.
-  if (bind_watching_) {
-    menu_items_.push_back({bind_watch_audio_ ? "Now playing" : "Back to full screen",
-      nullptr, [this](int) { SetFullscreen(true); }});
-    menu_items_.push_back({"Stop playback", nullptr, [this](int) { StopPlayback(); }});
-  }
+  Set("menu_title", bind_menu_title_, Rml::String("Options"));
 
   if (view_ == View::Browse) {
+    // The item in focus first: it is what the menu was most likely opened
+    // for, and its name is the menu's title.
     const browse::Entry* e = SelectedEntry();
-    Set("menu_title", bind_menu_title_, e ? DisplayName(*e) : Rml::String("Options"));
-    if (e)
+    if (e) {
+      Set("menu_title", bind_menu_title_, DisplayName(*e));
       AddEntryActions(*e);
+    }
+
+    MenuSection("Folder");
     // A folder of music or episodes plays as a whole, in order or shuffled.
     if (FolderPlayableCount() > 1) {
-      menu_items_.push_back({"Play all", nullptr, [this](int) { PlayFolder(false); }});
-      menu_items_.push_back({"Shuffle all", nullptr, [this](int) { PlayFolder(true); }});
+      AddMenuItem({"Play all", nullptr, [this](int) { PlayFolder(false); }});
+      AddMenuItem({"Shuffle all", nullptr, [this](int) { PlayFolder(true); }});
     }
     // A folder with pictures in it can be shown as a slideshow from the
     // start, whatever is selected.
@@ -694,44 +714,59 @@ void App::OpenMenu() {
         if (item.IsImage())
           photos.push_back(item);
       if (photos.size() > 1 && !(e && e->IsImage())) {
-        menu_items_.push_back({"Slideshow (" + std::to_string(photos.size()) + " pictures)",
+        AddMenuItem({"Slideshow (" + std::to_string(photos.size()) + " pictures)",
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
-    // Filter narrows what is listed; Search asks the source for more, and is
-    // only there for sources that can.
-    menu_items_.push_back({"Filter", nullptr, [this](int) { OpenFilter(); }});
-    if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
-      menu_items_.push_back({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
+    AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
+
+    // Search asks the source for more, and is only there for sources that
+    // can; Filter narrows what is listed.
+    MenuSection("Find");
     if (current_source_ && !path_.empty() &&
         current_source_->CanSearch(path_[SearchScope()].id))
-      menu_items_.push_back({"Search", nullptr, [this](int) { OpenSearch(); }});
-    menu_items_.push_back({"View",
+      AddMenuItem({"Search", nullptr, [this](int) { OpenSearch(); }});
+    AddMenuItem({"Filter", nullptr, [this](int) { OpenFilter(); }});
+    if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
+      AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
+
+    MenuSection("View");
+    AddMenuItem({"View",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
         SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
       }});
-    menu_items_.push_back({"Sort by",
+    AddMenuItem({"Sort by",
       [this] { return std::string(SortModeName((int)sort_mode_)); },
       [this](int d) { CycleSortMode(d == 0 ? +1 : d); }});
-    menu_items_.push_back({"Order",
+    AddMenuItem({"Order",
       [this] { return std::string(sort_desc_ ? "Descending" : "Ascending"); },
       [this](int) { SetSort(sort_mode_, !sort_desc_); }});
-    menu_items_.push_back({"Refresh", nullptr,
-      [this](int) { RefreshContainer(); }});
-    menu_items_.push_back({"Go to top", nullptr,
+
+    MenuSection("Go to");
+    AddMenuItem({"Top of the list", nullptr,
       [this](int) { MoveSelection(-entry_count_); }});
-    menu_items_.push_back({"Home", nullptr, [this](int) { GoHome(); }});
+    AddMenuItem({"Home", nullptr, [this](int) { GoHome(); }});
+
+    // The plugin this is from: of the source, or in Favorites and Continue
+    // watching, of the item in focus.
+    library::Ref ref;
+    if (e && Identify(*e, ref))
+      AddPluginSettingsEntry(ref.source_key);
+    else if (current_source_)
+      AddPluginSettingsEntry(current_source_->Key());
   } else if (bind_home_shelves_ && SourceShelf(sel_shelf_) && SelectedCard()) {
     // A source's tile: open it, or look for the group's sources again.
     const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_];
     Set("menu_title", bind_menu_title_, source->Name());
-    menu_items_.push_back({"Open", nullptr, [this, source](int) { OpenSource(source); }});
+    AddMenuItem({"Open", nullptr, [this, source](int) { OpenSource(source); }});
     const bool fav = library_.IsFavorite(source->Key(), source->RootId());
-    menu_items_.push_back({fav ? "Remove from favorites" : "Add to favorites", nullptr,
+    AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
       [this, source](int) { ToggleSourceFavorite(source); }});
+    AddPluginSettingsEntry(source->Key());
     const browse::Source::Group group = source->RailGroup();
-    menu_items_.push_back({"Search again", nullptr,
+    MenuSection("Sources");
+    AddMenuItem({"Search again", nullptr,
       [this, group](int) { StartDiscovery(group); }});
   } else if (bind_home_shelves_ && NowPlayingShelf(sel_shelf_)) {
     Set("menu_title", bind_menu_title_, bind_watch_name_); // back to it, or stop
@@ -739,38 +774,122 @@ void App::OpenMenu() {
     const browse::Entry card = *SelectedCard();
     Set("menu_title", bind_menu_title_, DisplayName(card));
     if (card.IsFolder())
-      menu_items_.push_back({"Open", nullptr, [this](int) { ActivateCard(); }});
+      AddMenuItem({"Open", nullptr, [this](int) { ActivateCard(); }});
     AddEntryActions(card);
     if (shelves_[sel_shelf_].source == continue_source_)
-      menu_items_.push_back({"Remove from Continue watching", nullptr,
+      AddMenuItem({"Remove from Continue watching", nullptr,
         [this, card](int) { SetWatched(card, false); }});
+    library::Ref ref;
+    if (Identify(card, ref))
+      AddPluginSettingsEntry(ref.source_key);
   } else if (browse::Source::Group group; view_ == View::Home && PlaceGroup(group)) {
-    Set("menu_title", bind_menu_title_, Rml::String("Options"));
-    menu_items_.push_back({"Search again", nullptr,
+    MenuSection("Sources");
+    AddMenuItem({"Search again", nullptr,
       [this, group](int) { StartDiscovery(group); }});
   } else if (bind_watching_) {
     // The top level of the rail: only what plays.
     Set("menu_title", bind_menu_title_, bind_watch_name_);
-  } else {
-    return; // nothing to offer on the top level of the rail
   }
 
-  sel_menu_ = 0;
-  RebuildMenuRows();
-  Set("menu_open", bind_menu_open_, true);
+  // Something plays behind the menus: back to it, or an end to it. Last,
+  // in every menu: the menu is for what is on screen first, and one step
+  // up from its first row is its last.
+  if (bind_watching_) {
+    MenuSection("Now playing");
+    AddMenuItem({bind_watch_audio_ ? "Show player" : "Back to full screen",
+      nullptr, [this](int) { SetFullscreen(true); }});
+    AddMenuItem({"Stop playback", nullptr, [this](int) { StopPlayback(); }});
+  }
+
+  if (menu_items_.empty())
+    return; // nothing to offer on the top level of the rail
+  ShowMenu();
+}
+
+// ---------------------------------------------------------------------------
+// A plugin's settings, from the options menu
+// ---------------------------------------------------------------------------
+
+std::shared_ptr<browse::JsPlugin> App::PluginOf(const std::string& source_key) const {
+  if (!js_provider_)
+    return nullptr;
+  // A plugin's sources are keyed "js:<provider name>/<source name>" (see
+  // JsSource::Key); the longest name that fits is the plugin's.
+  std::shared_ptr<browse::JsPlugin> found;
+  for (const browse::JsPluginPtr& plugin : js_provider_->Plugins()) {
+    const std::string prefix = "js:" + plugin->ProviderName() + "/";
+    if (source_key.compare(0, prefix.size(), prefix) == 0 &&
+        (!found || plugin->ProviderName().size() > found->ProviderName().size()))
+      found = plugin;
+  }
+  return found;
+}
+
+void App::AddPluginSettingsEntry(const std::string& source_key) {
+  const browse::JsPluginPtr plugin = PluginOf(source_key);
+  if (!plugin || plugin->Settings().empty())
+    return;
+  MenuSection("Plugin");
+  // (Select on an entry without a value closes the menu first: this opens
+  // the next one in its place.)
+  AddMenuItem({plugin->ProviderName() + " settings", nullptr, [this, plugin](int) {
+    plugin_menu_open_ = true;
+    plugin_menu_revision_ = plugin_settings_->Revision();
+    OpenPluginMenu(plugin);
+  }});
+}
+
+// The plugin's rows of the Settings page, as a menu: left / right change
+// the one in focus, select steps it on, lists its choices or asks for its
+// text. A list of choices takes the menu's place and gives it back.
+void App::OpenPluginMenu(const std::shared_ptr<browse::JsPlugin>& plugin, int selection) {
+  menu_items_.clear();
+  menu_section_.clear();
+  menu_parent_ = nullptr;
+  std::vector<SettingItem> settings;
+  AddPluginSettings(plugin, settings,
+                    [this, plugin] { OpenPluginMenu(plugin, sel_plugin_setting_); });
+  for (size_t i = 0; i < settings.size(); i++) {
+    AddMenuItem({settings[i].label, settings[i].value,
+      [this, change = settings[i].change, i](int d) {
+        sel_plugin_setting_ = (int)i; // where to come back to
+        change(d);
+      }});
+  }
+  Set("menu_title", bind_menu_title_, Rml::String(plugin->ProviderName() + " settings"));
+  Set("menu_meta", bind_menu_meta_, Rml::String());
+  Set("menu_dialog", bind_menu_dialog_, false);
+  ShowMenu(selection);
+}
+
+// The plugin's settings menu is done with. Over a folder, what is listed
+// was made with the settings as they were: with others, it is listed again.
+void App::ClosePluginMenu() {
+  if (!plugin_menu_open_)
+    return;
+  plugin_menu_open_ = false;
+  if (plugin_settings_->Revision() != plugin_menu_revision_ && view_ == View::Browse &&
+      !path_.empty() && !bind_photo_ && !FullscreenPlayback())
+    RefreshContainer();
 }
 
 void App::CloseMenu() {
   Set("menu_open", bind_menu_open_, false);
   Set("menu_meta", bind_menu_meta_, Rml::String());
   menu_items_.clear();
+  menu_section_.clear();
+  menu_parent_ = nullptr;
+  // The info bar was held up for the menu: it stays a while yet, and with
+  // it the focus on its buttons.
+  if (FullscreenPlayback() && bind_info_visible_)
+    ShowWatchInfo(kWatchInfoSec);
 }
 
 void App::RebuildMenuRows() {
   scroll_menu_pending_ = true;
   menu_rows_.clear();
   for (const MenuItem& item : menu_items_)
-    menu_rows_.push_back({item.label, item.value ? item.value() : ""});
+    menu_rows_.push_back({item.section, item.label, item.value ? item.value() : ""});
   model_.DirtyVariable("menu");
   model_.DirtyVariable("sel_menu");
 }
@@ -783,6 +902,16 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
     return;
   }
 
+  // Changing an entry may put another menu in this one's place (a list of
+  // choices): the entry is gone by the time its function returns, so that
+  // runs as a copy, and the rows are only made again for the same menu.
+  auto change = [this](int d) {
+    const std::function<void(int)> fn = menu_items_[sel_menu_].change;
+    fn(d);
+    if (bind_menu_open_)
+      RebuildMenuRows();
+  };
+
   switch (key) {
   case Rml::Input::KI_UP:
   case Rml::Input::KI_DOWN:
@@ -792,27 +921,41 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
     break;
   case Rml::Input::KI_LEFT:
   case Rml::Input::KI_RIGHT:
-    if (menu_items_[sel_menu_].value) {
-      menu_items_[sel_menu_].change(key == Rml::Input::KI_LEFT ? -1 : +1);
-      RebuildMenuRows();
-    }
+    if (menu_items_[sel_menu_].value)
+      change(key == Rml::Input::KI_LEFT ? -1 : +1);
     break;
   case Rml::Input::KI_RETURN:
   case Rml::Input::KI_NUMPADENTER: {
     if (menu_items_[sel_menu_].value) {
-      menu_items_[sel_menu_].change(0);
-      RebuildMenuRows();
+      change(0);
     } else {
-      // Close first: the action may replace the view the menu was for.
+      // Close first: the action may replace the view the menu was for, or
+      // open the next menu.
       const std::function<void(int)> action = menu_items_[sel_menu_].change;
+      const std::function<void()> parent = menu_parent_;
       CloseMenu();
       action(0);
+      // A choice made in a menu that was opened from another: back to
+      // that one, unless the choice opened something itself.
+      if (parent && !bind_menu_open_ && !bind_search_open_)
+        parent();
     }
     break;
   }
   case Rml::Input::KI_BACK:
   case Rml::Input::KI_ESCAPE:
+    // One menu back, where this one was opened from another.
+    if (menu_parent_) {
+      const std::function<void()> parent = menu_parent_;
+      CloseMenu();
+      parent();
+      break;
+    }
+    ClosePluginMenu();
+    CloseMenu();
+    break;
   case gamepad::kKeyOptions:
+    ClosePluginMenu();
     CloseMenu();
     break;
   default:

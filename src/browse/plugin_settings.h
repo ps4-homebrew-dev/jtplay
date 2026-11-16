@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Settings a plugin asks the user for: declared by the script (see
-// PluginSetting), shown on the app's Settings page, read back by the script
+// PluginSetting), shown on the app's Settings page and in the options menu
+// of what is the plugin's, read back by the script
 // with settings.get(). The values live here, between the two: the app
 // changes them on the main thread, plugins read them on worker threads.
 #ifndef BROWSE_PLUGIN_SETTINGS_H

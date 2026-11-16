@@ -37,6 +37,7 @@ inline constexpr int kWindowGridMargin = 4;
 // Artwork downloads under way at once.
 inline constexpr int kArtThreads = 4;
 inline constexpr float kMenuRowPitch = 72.0f + 6.0f;      // .menu-row
+inline constexpr float kMenuSectionPitch = 56.0f;         // .menu-section
 // What a search may be; the search field says so too (maxlength).
 inline constexpr size_t kSearchMaxLength = 100;
 // What a plugin's text setting may be: a sign-in token runs to a couple of
@@ -67,9 +68,6 @@ inline constexpr double kWatchInfoSec = 5.0;      // watch info bar auto-hide
 inline constexpr double kHoldStopSec = 0.6;
 inline constexpr double kScreensaverMoveSec = 20.0;
 inline constexpr int kDiscoveryWaitMs = 2500;
-
-inline constexpr int64_t kSeekSmallUs = 10 * 1000000LL;
-inline constexpr int64_t kSeekLargeUs = 5 * 60 * 1000000LL;
 
 // Seconds since startup, from RmlUi's system interface.
 inline double Now() {

@@ -401,7 +401,15 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   }
   ctor.RegisterArray<std::vector<PropRow>>();
 
+  if (auto row = ctor.RegisterStruct<ControlRow>()) {
+    row.RegisterMember("icon", &ControlRow::icon);
+    row.RegisterMember("on", &ControlRow::on);
+    row.RegisterMember("dim", &ControlRow::dim);
+    row.RegisterMember("gap", &ControlRow::gap);
+  }
+  ctor.RegisterArray<std::vector<ControlRow>>();
   if (auto row = ctor.RegisterStruct<MenuRow>()) {
+    row.RegisterMember("section", &MenuRow::section);
     row.RegisterMember("label", &MenuRow::label);
     row.RegisterMember("value", &MenuRow::value);
   }
@@ -514,6 +522,10 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("fullscreen", &bind_fullscreen_);
   ctor.Bind("video_behind", &bind_video_behind_);
   ctor.Bind("info_visible", &bind_info_visible_);
+  ctor.Bind("controls", &control_rows_);
+  ctor.Bind("sel_control", &bind_sel_control_);
+  ctor.Bind("control_focus", &bind_control_focus_);
+  ctor.Bind("control_label", &bind_control_label_);
   ctor.Bind("watch_audio", &bind_watch_audio_);
   ctor.Bind("watch_paused", &bind_watch_paused_);
   ctor.Bind("watch_seekable", &bind_watch_seekable_);
@@ -625,9 +637,13 @@ void App::Update() {
     // the folder and left the player at its end.
     if (!launch_request_ && player_->IsPlaying() && player_->AtEnd())
       HandlePlaybackEnd();
+    // The info bar goes after a while without a key, and with it the
+    // focus on its buttons. (The now-playing card stays, and so does that.)
     if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
-        now > info_deadline_)
+        now > info_deadline_) {
       Set("info_visible", bind_info_visible_, false);
+      FocusControls(false);
+    }
     if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
       Set("watch_seek", bind_watch_seek_, Rml::String());
     // Back held long enough in full screen: stop (see HandleKeyUp).
@@ -657,8 +673,16 @@ void App::Update() {
     scroll_entries_pending_ = false;
     art_scan_pending_ = true;
   }
+  // The menu has headings between its groups: rows are not all one pitch
+  // apart, so where the selected one is, is added up.
   if (scroll_menu_pending_) {
-    EnsureRowVisible("menu-rows", sel_menu_, kMenuRowPitch);
+    float top = 0.0f;
+    for (int i = 0; i < sel_menu_ && i < (int)menu_rows_.size(); i++)
+      top += kMenuRowPitch + (menu_rows_[i].section.empty() ? 0.0f : kMenuSectionPitch);
+    float bottom = top + kMenuRowPitch;
+    if (sel_menu_ < (int)menu_rows_.size() && !menu_rows_[sel_menu_].section.empty())
+      bottom += kMenuSectionPitch; // its heading comes into view with it
+    EnsureSpanVisible("menu-rows", top, bottom, kMenuRowPitch);
     scroll_menu_pending_ = false;
   }
   // The Settings page has headings between its rows, so it goes by the row
@@ -764,6 +788,10 @@ bool App::ScrollRows() {
 }
 
 void App::EnsureRowVisible(const char* list_id, int index, float row_pitch) {
+  EnsureSpanVisible(list_id, index * row_pitch, (index + 1) * row_pitch, row_pitch);
+}
+
+void App::EnsureSpanVisible(const char* list_id, float top, float bottom, float row_pitch) {
   if (!document_)
     return;
   Rml::Element* list = document_->GetElementById(list_id);
@@ -775,8 +803,8 @@ void App::EnsureRowVisible(const char* list_id, int index, float row_pitch) {
   const float view_h = list->GetClientHeight();
   const int fit = (int)(view_h / row_pitch);
   const int margin = std::max(0, std::min(kScrollMarginRows, (fit - 1) / 2));
-  const float row_top = (index - margin) * row_pitch;
-  const float row_bottom = (index + 1 + margin) * row_pitch;
+  const float row_top = top - margin * row_pitch;
+  const float row_bottom = bottom + margin * row_pitch;
   float scroll = list->GetScrollTop();
 
   if (row_top < scroll)

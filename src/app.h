@@ -36,6 +36,7 @@
 #include "visualizer.h"
 
 namespace browse {
+class JsPlugin;
 class JsProvider;
 }
 
@@ -143,17 +144,30 @@ private:
     Rml::String value;
   };
   struct MenuRow {
+    Rml::String section; // a heading above the first row of a group
     Rml::String label;
     Rml::String value;  // current setting, "" for plain actions
+  };
+  struct ControlRow {   // a button of the playback controls (see below)
+    Rml::String icon;
+    bool on = false;    // a mode that is on: shuffle, repeat, subtitles
+    bool dim = false;   // nothing to do right now: no previous item
+    bool gap = false;   // the first of a group: set apart from the one before
+    bool operator==(const ControlRow& o) const {
+      return icon == o.icon && on == o.on && dim == o.dim && gap == o.gap;
+    }
+    bool operator!=(const ControlRow& o) const { return !(*this == o); }
   };
 
   // An entry of the options menu. 'value' reports the current setting;
   // 'change' is called with -1/+1 for left/right and 0 for select. Actions
-  // without a value close the menu when selected.
+  // without a value close the menu when selected. 'section', on the first
+  // entry of a group, is the heading over it (see MenuSection).
   struct MenuItem {
     std::string label;
     std::function<std::string()> value;
     std::function<void(int)> change;
+    std::string section;
   };
   // A row of the Settings page: a setting (left / right change it, select
   // steps it on) or an action (select runs it; 'value' is then what it
@@ -393,9 +407,31 @@ private:
   std::string EntryMeta(const browse::Entry& entry) const;
 
   // --- Options menu ------------------------------------------------------
+  // The menus are lists of groups, each under a heading and always in the
+  // same order: what the item in focus can do, its folder, finding things
+  // in it, how it is shown, where to go, the plugin's settings and, last,
+  // what plays behind the menus.
   void OpenMenu();
   void AddEntryActions(const browse::Entry& entry);
+  // Entries added to menu_items_ from here on belong under 'title': the
+  // next one added gets the heading (none, if no entry follows).
+  void MenuSection(const std::string& title);
+  void AddMenuItem(MenuItem item);
+  void ShowMenu(int selection = 0);  // menu_items_ -> the screen
   void CloseMenu();
+  // A plugin's settings (what the Settings page lists for it) as a menu of
+  // their own, from the options menu of anything that is the plugin's.
+  // PluginOf() is null for a source that is not a plugin's.
+  std::shared_ptr<browse::JsPlugin> PluginOf(const std::string& source_key) const;
+  void AddPluginSettingsEntry(const std::string& source_key);
+  void OpenPluginMenu(const std::shared_ptr<browse::JsPlugin>& plugin, int selection = 0);
+  void ClosePluginMenu();
+  // The settings one plugin declares, as rows for the Settings page or for
+  // the plugin's menu. 'menu' (re)opens that menu, for a setting whose
+  // list of choices or text dialog took its place; empty on the Settings
+  // page, whose rows stay where they are.
+  void AddPluginSettings(const std::shared_ptr<browse::JsPlugin>& plugin,
+                         std::vector<SettingItem>& out, std::function<void()> menu);
   void RebuildMenuRows();
   void HandleKeyMenu(Rml::Event& event, int key);
 
@@ -404,7 +440,8 @@ private:
   // the menus come back, drawn over the video (or, for audio, over their
   // usual background) while it plays on, Kodi style. Triangle (or Tab), or
   // selecting the item that is playing, returns to full screen; stopping
-  // is hold back, the X key, a remote's stop key or the options menu.
+  // is the stop button of the controls, hold back, the X key, a remote's
+  // stop key or the options menu.
   //
   // bind_watching_ says a playback session is on; bind_fullscreen_ says it
   // has the screen to itself.
@@ -417,6 +454,18 @@ private:
   void Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue = false);
   void OpenWatchMenu();
   void CycleSubtitleTrack(int direction, bool toast = false);
+  // The playback controls: a row of buttons in the info bar (video) and on
+  // the now-playing card (audio). Down moves the focus onto them, left and
+  // right along them, select presses one, up or back lets go of them
+  // again; until then left and right seek, as ever.
+  enum class Control {
+    Previous, PlayPause, Next, Stop, Audio, Subtitles, Speed, Shuffle, Repeat, Options
+  };
+  void UpdateControls();              // the buttons there are, and their state
+  void FocusControls(bool on);
+  void ActivateControl(Control control);
+  std::string ControlLabel(Control control) const;
+  bool HandleKeyControls(int key);    // true if 'key' was one of theirs
   // Abandons an in-flight PlayEntry: the result that eventually arrives is
   // discarded (and the stream torn down again if it did open).
   void CancelLaunch();
@@ -521,6 +570,9 @@ private:
   void UpdateScreensaver(double now);
 
   void EnsureRowVisible(const char* list_id, int index, float row_pitch);
+  // The same for rows that are not all of one height: 'top' to 'bottom' is
+  // where the row is in the list, 'row_pitch' what a row of context is.
+  void EnsureSpanVisible(const char* list_id, float top, float bottom, float row_pitch);
   bool ScrollRows();
   // A notification in the corner; 'icon' is a glyph ("⭐", "⚠", ...).
   void ShowToast(const std::string& text, const char* icon = nullptr);
@@ -590,6 +642,14 @@ private:
   // until it is let go is not more presses of back.
   bool back_swallow_ = false;
   bool bind_info_visible_ = false; // watch info bar shown (auto-hides)
+  // The playback controls (see UpdateControls): the buttons shown, which
+  // of them has the focus and what that one is, in words.
+  std::vector<ControlRow> control_rows_;
+  std::vector<Control> controls_;
+  Control control_sel_ = Control::PlayPause;
+  int bind_sel_control_ = 0;
+  bool bind_control_focus_ = false;
+  Rml::String bind_control_label_;
   bool bind_watch_audio_ = false;  // audio-only: persistent now-playing card
   bool bind_watch_paused_ = false;
   bool bind_watch_seekable_ = false;
@@ -682,6 +742,16 @@ private:
   std::vector<MenuRow> menu_rows_;
   int sel_menu_ = 0;
   std::vector<MenuItem> menu_items_;
+  std::string menu_section_;       // heading the next entry added gets
+  // A menu opened from another: back returns to that one (this reopens
+  // it) rather than closing them all.
+  std::function<void()> menu_parent_;
+  // A plugin's settings menu is up, over a folder of that plugin: what
+  // the settings were when it opened. The folder is listed again when the
+  // menu closes on other settings than these.
+  bool plugin_menu_open_ = false;
+  int sel_plugin_setting_ = 0;     // the row of it last changed
+  uint64_t plugin_menu_revision_ = 0;
 
   // Home.
   std::vector<RailRow> rail_rows_;

@@ -97,11 +97,15 @@ pulses while what it opens is on its way, and back gives up on it and
 stays put. A folder that cannot be listed says why in place of the list;
 select tries again. The item that is playing is marked in the list.
 
-The options button opens a side menu: what can be done with the selected
+The options button opens a side menu, in groups under headings that come
+in the same order in every menu: first what can be done with the selected
 item (play, resume, play from the beginning, add to favorites, mark as
-watched), playing the whole folder in order or shuffled, a slideshow of
-its pictures, followed by filter (and search, where the source has it), the
-view and sort settings, refresh, and Home.
+watched); then **Folder** (play it all in order or shuffled, a slideshow
+of its pictures, refresh), **Find** (search, where the source has it, and
+filter), **View** (list or grid, sort key and order), **Go to** (the top of
+the list, Home), **Plugin** (the settings of the plugin the folder is
+from, see Settings) and, while something plays behind the menus, **Now
+playing** (back to full screen, stop).
 
 ## Filter and search
 
@@ -168,9 +172,9 @@ row, **Now playing**, holds its card. The way back to full screen is the
 way out of it: back, step by step (from a list to Home, from the rows to
 the tabs, from the tabs to the video), as on any remote; or selecting the
 Now playing card or the item that is playing, triangle (Tab on a
-keyboard), or the options menu's **Back to full screen**. Holding back in
-full screen, the options menu's **Stop playback**, a remote's stop key or
-X on a keyboard stops it.
+keyboard), or the options menu's **Back to full screen**. The stop button
+of the controls, holding back in full screen, the options menu's **Stop
+playback**, a remote's stop key or X on a keyboard stops it.
 
 The bar along the bottom shows title, tracks, elapsed and total time and,
 for anything longer than five minutes, the time it will end; its top edge
@@ -190,6 +194,16 @@ flashes on beats. mpv has no PCM tap, so the player has it render a small
 `showfreqs` spectrum into an offscreen framebuffer and reads the bars back;
 mpv keeps those frames in step with what is audible.
 
+The last row of the bar (and of the now-playing card) is the **controls**,
+a button each: previous, play / pause, next and stop; audio track,
+subtitles and speed (0.5× to 2×), each where there is a choice, picked
+from a list; shuffle and repeat (all / one); and the playback options.
+Down moves the focus onto them, left and right along them, select presses
+the one in focus, and what that one is (and is set to) stands beside the
+row; up or back returns to the timeline. Previous and next go by chapter
+where there are chapters, as L1 / R1 do. The bar stays up while the focus
+is on its buttons and a key was pressed in the last few seconds.
+
 Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s
 steps, then 30 s, a minute, two and five. Files with chapters show them
 as notches on the timeline and by name in the bar, and L1 / R1 skip by
@@ -199,13 +213,13 @@ Over the last 15 seconds of an episode an **Up next** card counts down
 to the next item in the folder; select plays it at once, back waves it
 away and the player then stops at the end.
 
-The options button opens the playback menu: audio track, subtitles,
-chapter, speed (0.5× to 2×), shuffle, repeat (all / one),
-night mode (dynamic range compression: dialogue up, explosions down),
-picture (fit / fill / stretch), subtitle delay and size, audio delay, a
-sleep timer (15 min to 2 h, or the end of the item), favorites, play next
-and stop. An item that fails to open while going through a folder is
-skipped.
+The options button (or the last button of the controls) opens the
+playback options, which hold what is set rather than done: favorites and a
+sleep timer (15 min to 2 h, or the end of the item), then **Picture**
+(scaling: fit / fill / stretch), **Subtitles** (size and delay) and
+**Audio** (night mode, which is dynamic range compression: dialogue up,
+explosions down; and delay). An item that fails to open while going
+through a folder is skipped.
 
 ## Settings
 
@@ -214,7 +228,11 @@ tab: down from the tab into the list, left and right change the one in
 focus (select steps it on), and what it does is shown beside the list.
 Select on a setting with many choices (a language, a plugin's country)
 lists them all. They are grouped as playback, screen, library, a section
-for each plugin that has settings of its own, and diagnostics: whether the
+for each plugin that has settings of its own, and diagnostics. A plugin's
+settings are also in the options menu of anything that is the plugin's (its
+tile, its folders, a favorite from it), as **Plugin** > *name* **settings**:
+a menu of their own, and a folder on screen is listed again when they have
+changed. The others: whether the
 next episode plays by itself,
 **Show input** (every key and button as it arrives, in a corner of the
 screen and the log, also those nothing reacts to: for finding out what a
@@ -310,11 +328,11 @@ options button is the way into everything that is not on the d-pad.
 
 | Controller            | Key             | Home                         | Browsing                             | Playing (full screen)              | Photos               |
 |-----------------------|-----------------|------------------------------|--------------------------------------|------------------------------------|----------------------|
-| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | seek +5 / -5 min                   | caption              |
-| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up)                   | previous / next      |
-| cross (A)             | Return          | open / play                  | open / play                          | pause; up next: play now           | slideshow on / off   |
-| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | the menus, playing on; held: stop; up next: dismiss | close |
-| options (start)       | Menu, F10       | options for the card or tile | options menu                         | playback menu                      | photo menu           |
+| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | down: onto the controls; up: back to the timeline | caption |
+| d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up); on the controls: along them | previous / next |
+| cross (A)             | Return          | open / play                  | open / play                          | pause; on the controls: press the button; up next: play now | slideshow on / off |
+| circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | the menus, playing on; held: stop; on the controls: back to the timeline; up next: dismiss | close |
+| options (start)       | Menu, F10       | options for the card or tile | options menu                         | playback options                   | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |
