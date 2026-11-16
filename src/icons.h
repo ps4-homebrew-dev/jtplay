@@ -40,7 +40,6 @@ inline constexpr const char* kGamepad = "\uE0E2";       // gamepad-2
 inline constexpr const char* kShuffle = "\uE162";       // shuffle
 inline constexpr const char* kRepeat = "\uE14A";        // repeat
 inline constexpr const char* kRepeatOne = "\uE1FD";     // repeat-1
-inline constexpr const char* kSleep = "\uE122";         // moon
 inline constexpr const char* kAudio = "\uE1AB";         // volume-2
 inline constexpr const char* kNext = "\uE164";          // skip-forward
 inline constexpr const char* kPrevious = "\uE163";      // skip-back
@@ -55,7 +54,6 @@ inline constexpr const char* kHeadphones = "\uE0F4";    // headphones
 inline constexpr const char* kLibrary = "\uE553";       // library-big
 inline constexpr const char* kChevron = "\uE073";       // chevron-right
 inline constexpr const char* kSubtitles = "\uE3A8";     // captions
-inline constexpr const char* kSpeed = "\uE1BF";         // gauge
 
 // A source's icon as a plugin gives it, an emoji, as the icon that stands
 // for the same thing; one with no counterpart is kept as it is (the emoji

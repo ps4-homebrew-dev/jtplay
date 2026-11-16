@@ -534,16 +534,13 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("watch_stream_title", &bind_watch_stream_title_);
   ctor.Bind("watch_pos", &bind_watch_pos_);
   ctor.Bind("watch_dur", &bind_watch_dur_);
-  ctor.Bind("watch_ends", &bind_watch_ends_);
   ctor.Bind("watch_buffered", &bind_watch_buffered_);
-  ctor.Bind("watch_speed", &bind_watch_speed_);
   ctor.Bind("watch_next", &bind_watch_next_);
   ctor.Bind("watch_seek", &bind_watch_seek_);
   ctor.Bind("watch_seek_at", &bind_watch_seek_at_);
   ctor.Bind("watch_progress", &bind_watch_progress_);
   ctor.Bind("watch_chapter", &bind_watch_chapter_);
   ctor.Bind("chapter_marks", &chapter_marks_);
-  ctor.Bind("watch_modes", &bind_watch_modes_);
   ctor.Bind("upnext", &bind_upnext_);
   ctor.Bind("upnext_name", &bind_upnext_name_);
   ctor.Bind("upnext_art", &bind_upnext_art_);
@@ -619,7 +616,6 @@ void App::Update() {
 
   UpdateScreensaver(now);
   UpdatePhotos(now);
-  UpdateSleepTimer(now);
   ReleaseUnusedTextures(now);
 
   if (image_refresh_pending_) {

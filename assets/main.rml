@@ -292,11 +292,11 @@
 		<!-- Paused video: a large badge in the middle, Kodi style. -->
 		<div id="pause-badge" data-if="watching && fullscreen && watch_paused && !watch_audio && !menu_open">&#xE132;</div>
 
-		<!-- The bar along the bottom, two rows under the timeline that is its
-		     top edge (played, buffered ahead, a knob at the playhead). First
-		     what plays: its title, and under it on one line where it is (the
-		     chapter), what comes next and what it is about; the time on the
-		     right. Then what can be done: the playback controls
+		<!-- The bar along the bottom, under the timeline that is its top edge
+		     (played, buffered ahead, a knob at the playhead). First what
+		     plays: its title and the time; under them, across the bar, one
+		     line of where it is (the chapter), what comes next and what it
+		     is about. Then what can be done: the playback controls
 		     (src/app_watch.cpp), which down moves the focus onto, and on the
 		     right the tracks being played. Video: auto-hides. Audio has the
 		     now-playing card instead. -->
@@ -310,26 +310,21 @@
 			</div>
 			<div class="osd-row">
 				<img class="osd-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
-				<div class="osd-main">
-					<div class="osd-title">
-						<span class="osd-state" data-if="watch_paused">&#xE132;</span>
-						<span class="osd-state" data-if="!watch_paused">&#xE140;</span>
-						{{watch_name}}
-					</div>
-					<div class="osd-meta" data-if="watch_chapter != '' || watch_next != '' || watch_description != ''">
-						<span class="osd-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</span>
-						<span class="osd-next" data-if="watch_next != ''"><span class="osd-next-label">UP NEXT</span>{{watch_next}}</span>
-						<span class="osd-desc" data-if="watch_description != ''">{{watch_description}}</span>
-					</div>
+				<div class="osd-title">
+					<span class="osd-state" data-if="watch_paused">&#xE132;</span>
+					<span class="osd-state" data-if="!watch_paused">&#xE140;</span>
+					{{watch_name}}
 				</div>
-				<div class="osd-side">
-					<div class="osd-time">
-						<span>{{watch_pos}}</span>
-						<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
-						<span class="osd-live" data-if="!watch_seekable">LIVE</span>
-					</div>
-					<div class="osd-ends" data-if="watch_ends != ''">{{watch_ends}}</div>
+				<div class="osd-time">
+					<span>{{watch_pos}}</span>
+					<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
+					<span class="osd-live" data-if="!watch_seekable">LIVE</span>
 				</div>
+			</div>
+			<div class="osd-meta" data-if="watch_chapter != '' || watch_next != '' || watch_description != ''">
+				<span class="osd-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</span>
+				<span class="osd-next" data-if="watch_next != ''"><span class="osd-next-label">UP NEXT</span>{{watch_next}}</span>
+				<span class="osd-desc" data-if="watch_description != ''">{{watch_description}}</span>
 			</div>
 			<div class="osd-foot">
 				<div class="controls" data-class-focus="control_focus">
@@ -342,8 +337,6 @@
 					<span class="control-hint" data-if="!control_focus">Down for the controls</span>
 				</div>
 				<div class="osd-tracks">
-					<span class="badge" data-if="watch_speed != ''">{{watch_speed}}</span>
-					<span class="osd-track osd-modes" data-if="watch_modes != ''">{{watch_modes}}</span>
 					<span class="osd-track" data-if="watch_vtrack != ''">{{watch_vtrack}}</span>
 					<span class="osd-track" data-if="watch_atrack != ''">{{watch_atrack}}</span>
 				</div>
@@ -374,8 +367,6 @@
 				<span>{{watch_pos}}</span>
 				<span data-if="watch_dur != ''"> / {{watch_dur}}</span>
 				<span class="np-live" data-if="!watch_seekable">LIVE</span>
-				<span class="badge" data-if="watch_speed != ''">{{watch_speed}}</span>
-				<span class="np-modes" data-if="watch_modes != ''">{{watch_modes}}</span>
 			</div>
 			<div class="np-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</div>
 			<div class="np-seek" data-if="watch_seek != ''">{{watch_seek}}</div>

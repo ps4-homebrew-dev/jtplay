@@ -452,14 +452,13 @@ private:
   // auto-advance, repeat), and resolves through the queue's source rather
   // than whatever is being browsed now.
   void Launch(const browse::Entry& entry, int64_t start_seconds, bool from_queue = false);
-  void OpenWatchMenu();
   void CycleSubtitleTrack(int direction, bool toast = false);
   // The playback controls: a row of buttons in the info bar (video) and on
   // the now-playing card (audio). Down moves the focus onto them, left and
   // right along them, select presses one, up or back lets go of them
   // again; until then left and right seek, as ever.
   enum class Control {
-    Previous, PlayPause, Next, Stop, Audio, Subtitles, Speed, Shuffle, Repeat, Options
+    Previous, PlayPause, Next, Stop, Audio, Subtitles, Shuffle, Repeat
   };
   void UpdateControls();              // the buttons there are, and their state
   void FocusControls(bool on);
@@ -511,8 +510,6 @@ private:
   // Up next: the card that counts down to the next episode over the end
   // of a video. Dismissing it means the player stops at the end instead.
   void UpdateUpNext(int64_t pos, int64_t dur);
-  void UpdateSleepTimer(double now);
-  std::string SleepLabel() const;
   void CycleAudioTrack(int direction = +1);
   void HandleKeyWatch(Rml::Event& event, int key);
 
@@ -548,10 +545,6 @@ private:
   mutable std::vector<int> play_order_;
   mutable std::string play_order_key_;
   int launch_failures_ = 0;           // skipped in a row; bounds the skipping
-  // Sleep timer: stop at 'sleep_at_' (Now() based), or at the end of what
-  // is playing.
-  double sleep_at_ = 0.0;
-  bool sleep_end_of_item_ = false;
   bool upnext_dismissed_ = false;
   // Language codes ("en", "sv", ...; "" = the file's own default).
   std::string audio_lang_;
@@ -660,9 +653,7 @@ private:
   Rml::String bind_watch_stream_title_;
   Rml::String bind_watch_pos_;     // "12:34"
   Rml::String bind_watch_dur_;     // "45:00", "" for live streams
-  Rml::String bind_watch_ends_;    // "Ends at 21:40", "" when unknown
   Rml::String bind_watch_buffered_ = "0%"; // buffered-ahead bar width
-  Rml::String bind_watch_speed_;   // "1.5×", "" at normal speed
   Rml::String bind_watch_next_;    // name of the item that plays next
   Rml::String bind_watch_seek_;    // seek bubble over the knob, "" = none
   double seek_bubble_until_ = 0.0;
@@ -679,7 +670,6 @@ private:
     bool operator!=(const MarkRow& o) const { return at != o.at; }
   };
   std::vector<MarkRow> chapter_marks_;
-  Rml::String bind_watch_modes_;   // a badge while the sleep timer runs
   bool bind_upnext_ = false;       // the up-next card is up
   Rml::String bind_upnext_name_;
   Rml::String bind_upnext_art_ = "none";

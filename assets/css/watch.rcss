@@ -3,10 +3,9 @@
  * layer) shows through, with the OSD bar along the bottom. The bar's top
  * edge is the timeline: played in the accent, buffered ahead in a lighter
  * shade, a knob at the playhead, and a bubble with the target time while
- * seeking. Under it the bar is two rows and no more, so that it takes a
- * sixth of the picture rather than a third: what plays (title, one line
- * about it, the time), then what to do about it (the controls, and the
- * tracks). For audio a card stays up instead, with large cover art, over
+ * seeking. Under it the bar is kept low, a sixth of the picture rather
+ * than a third: what plays (title and time, one line about it across the
+ * bar), then what to do about it (the controls, and the tracks). For audio a card stays up instead, with large cover art, over
  * the spectrum.
  */
 
@@ -140,34 +139,26 @@ body.behind #shell {
 	border-radius: 10px;
 }
 
-/* First row: what plays, and how far. As tall as its two lines of text
- * whether the second is there or not, so the bar does not change height
- * from one item to the next. */
+/* First row: what plays, and how far. */
 .osd-row {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	height: 72px;
+	height: 44px;
 }
 
 .osd-art {
 	display: block;
-	width: 128px;
-	max-height: 72px;
-	margin-right: 24px;
-	border-radius: 8px;
-}
-
-.osd-main {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	overflow: hidden;
+	width: 78px;
+	max-height: 44px;
+	margin-right: 20px;
+	border-radius: 6px;
 }
 
 .osd-title {
+	flex: 1;
 	font-size: 34px;
-	line-height: 42px;
+	line-height: 44px;
 	font-weight: bold;
 	color: #ffffff;
 	white-space: nowrap;
@@ -181,9 +172,46 @@ body.behind #shell {
 	color: #4dd6b8;
 }
 
-/* One line about it, in the order it matters while watching: where in it
- * we are, what comes after it, what it is. Cut short where the line ends. */
+/* "12:34 / 45:00": where we are, large; the length quieter. A row of its
+ * own, centred, so the much smaller LIVE badge sits level with the
+ * digits rather than hanging off their baseline. */
+.osd-time {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-left: 48px;
+	font-size: 34px;
+	line-height: 44px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+}
+
+.osd-dur {
+	margin-left: 12px;
+	font-weight: normal;
+	color: #8593ab;
+}
+
+.osd-live {
+	margin-left: 18px;
+	padding: 3px 9px 3px 12px; /* the letter spacing pads the right already */
+	font-size: 20px;
+	line-height: 26px;
+	font-weight: bold;
+	letter-spacing: 3px;
+	color: #ffffff;
+	background-color: #e04848;
+	border-radius: 6px;
+}
+
+/* One line about it, from one end of the bar to the other, in the order
+ * it matters while watching: where in it we are, what comes after it,
+ * what it is. The description gets what is left of the line, and is cut
+ * short where that ends. */
 .osd-meta {
+	height: 30px;
+	margin-top: 2px;
 	font-size: 22px;
 	line-height: 30px;
 	color: #aab6cc;
@@ -213,56 +241,9 @@ body.behind #shell {
 	color: #8593ab;
 }
 
-.osd-side {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	margin-left: 48px;
-}
-
-/* "12:34 / 45:00": where we are, large; the length quieter. A row of its
- * own, centred, so the much smaller LIVE badge sits level with the
- * digits rather than hanging off their baseline. */
-.osd-time {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	font-size: 34px;
-	line-height: 42px;
-	font-weight: bold;
-	color: #ffffff;
-	white-space: nowrap;
-}
-
-.osd-dur {
-	margin-left: 12px;
-	font-weight: normal;
-	color: #8593ab;
-}
-
-/* "Ends at 21:40", under the time. */
-.osd-ends {
-	font-size: 22px;
-	line-height: 30px;
-	color: #aab6cc;
-	white-space: nowrap;
-}
-
-.osd-live {
-	margin-left: 18px;
-	padding: 3px 9px 3px 12px; /* the letter spacing pads the right already */
-	font-size: 20px;
-	line-height: 26px;
-	font-weight: bold;
-	letter-spacing: 3px;
-	color: #ffffff;
-	background-color: #e04848;
-	border-radius: 6px;
-}
-
 /* Second row: the controls on the left, taking what room there is (the
  * words beside them are cut short before the tracks are); on the right,
- * under the time, the tracks being played and the modes that are on. */
+ * under the time, the tracks being played. */
 .osd-foot {
 	display: flex;
 	flex-direction: row;
@@ -278,10 +259,6 @@ body.behind #shell {
 	white-space: nowrap;
 }
 
-.osd-tracks .badge {
-	margin-left: 10px;
-}
-
 .osd-track {
 	margin-left: 10px;
 	padding: 3px 12px;
@@ -290,16 +267,6 @@ body.behind #shell {
 	background-color: #ffffff12;
 	border-radius: 6px;
 	white-space: nowrap;
-}
-
-.badge {
-	display: inline-block;
-	padding: 2px 10px;
-	font-size: 20px;
-	font-weight: bold;
-	color: #06231d;
-	background-color: #4dd6b8;
-	border-radius: 6px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -549,10 +516,6 @@ body.behind #shell {
 	color: #4dd6b8;
 }
 
-.np-status .badge {
-	margin-left: 14px;
-}
-
 .np-live {
 	margin-left: 14px;
 	font-size: 18px;
@@ -686,7 +649,7 @@ body.behind #shell {
 }
 
 /* ------------------------------------------------------------------ */
-/* Chapters, play modes                                               */
+/* Chapters                                                           */
 /* ------------------------------------------------------------------ */
 
 /* A notch in the timeline where each chapter starts. */
@@ -709,14 +672,6 @@ body.behind #shell {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-.osd-modes,
-.np-modes {
-	color: #4dd6b8;
-}
-.np-modes {
-	margin-left: 14px;
 }
 
 /* ------------------------------------------------------------------ */

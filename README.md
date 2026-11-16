@@ -176,11 +176,10 @@ keyboard), or the options menu's **Back to full screen**. The stop button
 of the controls, holding back in full screen, the options menu's **Stop
 playback**, a remote's stop key or X on a keyboard stops it.
 
-The bar along the bottom is two rows: the title, with one line under it
-(chapter, what is up next, description), and on the right elapsed and total
-time and, for anything longer than five minutes, the time it will end;
-then the controls, and on the right the tracks being played, the speed
-when it is not 1× and a moon while the sleep timer runs. Its top edge
+The bar along the bottom has the title and, on the right, elapsed and total
+time; under them one line across the bar (chapter, what is up next,
+description); then the controls, and on the right the tracks being played.
+Its top edge
 is the timeline, with the played part in the accent colour,
 what a network stream has buffered ahead in a lighter shade, and a knob at
 the playhead. Seeking shows the jump ("+30 s") in a bubble on the knob, a
@@ -198,10 +197,10 @@ flashes on beats. mpv has no PCM tap, so the player has it render a small
 mpv keeps those frames in step with what is audible.
 
 The last row of the bar (and of the now-playing card) is the **controls**,
-a button each: previous, play / pause, next and stop; audio track,
-subtitles and speed (0.5× to 2×), each where there is a choice, picked
-from a list; shuffle and repeat (all / one); and the playback options.
-Down moves the focus onto them, left and right along them, select presses
+a button each: previous, play / pause, next and stop; audio track and
+subtitles, each where there is a choice, picked from a list; shuffle and
+repeat (all / one). Down (or the options button) moves the focus onto
+them, left and right along them, select presses
 the one in focus, and what that one is (and is set to) stands beside the
 row; up or back returns to the timeline. Previous and next go by chapter
 where there are chapters, as L1 / R1 do. The bar stays up while the focus
@@ -216,13 +215,7 @@ Over the last 15 seconds of an episode an **Up next** card counts down
 to the next item in the folder; select plays it at once, back waves it
 away and the player then stops at the end.
 
-The options button (or the last button of the controls) opens the
-playback options, which hold what is set rather than done: favorites and a
-sleep timer (15 min to 2 h, or the end of the item), then **Picture**
-(scaling: fit / fill / stretch), **Subtitles** (size and delay) and
-**Audio** (night mode, which is dynamic range compression: dialogue up,
-explosions down; and delay). An item that fails to open while going
-through a folder is skipped.
+An item that fails to open while going through a folder is skipped.
 
 ## Settings
 
@@ -241,10 +234,12 @@ next episode plays by itself,
 screen and the log, also those nothing reacts to: for finding out what a
 TV remote sends; `JTPLAY_INPUT_LOG=1` turns it on from the start),
 the preferred audio and subtitle language (a matching track is picked when
-a file opens), the screensaver delay, night mode and forgetting Continue
-watching (which asks first). These and the playback choices
-above (repeat, shuffle, night mode, picture, audio delay, subtitle size)
-are kept in `settings.ini` in the cache directory.
+a file opens), the screensaver delay, night mode (dynamic range
+compression: dialogue up, explosions down) and forgetting Continue
+watching (which asks first). These and repeat and shuffle are kept in
+`settings.ini` in the cache directory; so are picture scaling (`fit`),
+audio delay (`audio_delay`) and subtitle size (`sub_scale`), which have
+no menu and are set there.
 
 After three minutes (see Settings) without input, and no media playing
 (video, audio or a slideshow), the screen dims to a slowly drifting clock; the first
@@ -335,7 +330,7 @@ options button is the way into everything that is not on the d-pad.
 | d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | seek (speeds up); on the controls: along them | previous / next |
 | cross (A)             | Return          | open / play                  | open / play                          | pause; on the controls: press the button; up next: play now | slideshow on / off |
 | circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | the menus, playing on; held: stop; on the controls: back to the timeline; up next: dismiss | close |
-| options (start)       | Menu, F10       | options for the card or tile | options menu                         | playback options                   | photo menu           |
+| options (start)       | Menu, F10       | options for the card or tile | options menu                         | onto the controls (as down)        | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |
