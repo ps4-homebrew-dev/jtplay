@@ -633,11 +633,12 @@ void App::Update() {
     // the folder and left the player at its end.
     if (!launch_request_ && player_->IsPlaying() && player_->AtEnd())
       HandlePlaybackEnd();
-    // The info bar that came by itself (an item started, a pause ended, a
-    // seek) goes after a while without a key; not while paused, and not
-    // the one the user brought up. (The now-playing card always stays.)
-    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ && !info_stay_ &&
-        !player_->IsPaused() && now > info_deadline_)
+    // The info bar always goes after a while without a key, however it
+    // came up and paused or not (a paused video says so in its middle);
+    // only a list of tracks open over it holds it. (The now-playing card
+    // always stays.)
+    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
+        now > info_deadline_)
       HideWatchInfo();
     if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
       Set("watch_seek", bind_watch_seek_, Rml::String());

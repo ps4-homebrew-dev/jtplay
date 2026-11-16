@@ -205,11 +205,10 @@ along them, select presses the one in focus, and what that one is (the
 name of the previous or next item, what a track is set to) stands beside
 the row. Rewind and fast forward speed up when pressed again and again.
 
-The video bar comes up by itself when an item starts and when a pause
-ends, and goes again after five seconds unless a key is pressed meanwhile;
-so it does when its previous or next button has started another item.
-Brought up by hand (select, up, down or options) it stays until back or
-options sends it away. While it is away, left and right seek, with just
+The video bar comes up when an item starts and when it is asked for
+(select, up, down or options), and always goes again five seconds after
+the last key (back or options send it away at once), paused or not.
+While it is away, left and right seek, with just
 the timeline up for as long as that goes on; select does not pause, it
 brings the bar with the focus on play / pause, so a second press does. Artwork, where
 an item has any, is at the left of the bar, as tall as its rows.
@@ -334,11 +333,11 @@ options button is the way into everything that is not on the d-pad.
 
 | Controller            | Key             | Home                         | Browsing                             | Playing (full screen)              | Photos               |
 |-----------------------|-----------------|------------------------------|--------------------------------------|------------------------------------|----------------------|
-| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | the info bar, to stay | caption |
+| d-pad up / down       | arrows          | tabs ↔ rows; between rows    | move (wraps around)                  | the info bar | caption |
 | d-pad left / right    | arrows          | along the tabs or a row      | list: page or letter; grid: move     | along the controls; bar away: seek (speeds up) | previous / next |
 | cross (A)             | Return          | open / play                  | open / play                          | press the button in focus; bar away: the info bar; up next: play now | slideshow on / off |
 | circle (B)            | Backspace       | to the tabs; from them, back to full screen* | back (Home from a source root)       | info bar away; without it: the menus, playing on; held: stop; up next: dismiss | close |
-| options (start)       | Menu, F10       | options for the card or tile | options menu                         | info bar, to stay / away | photo menu           |
+| options (start)       | Menu, F10       | options for the card or tile | options menu                         | info bar / away | photo menu           |
 | square (X)            | Space           | search the group again       | next sort key                        |                                    |                      |
 | triangle (Y)          | T, Tab          | back to full screen*         | reverse sort order; back to full screen* | the menus, playing on          | rotate               |
 | L1 / R1               | PageUp/PageDown |                              | page up / down                       | previous / next chapter or item    | previous / next      |

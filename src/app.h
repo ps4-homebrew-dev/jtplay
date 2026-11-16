@@ -486,9 +486,9 @@ private:
   bool HandleMediaKey(int key);
   void HandleKeyUp(int key);
   // The video info bar (see app_watch.cpp): up with the focus on its
-  // buttons, to stay or to go by itself; up for a moment to show a seek;
+  // buttons, until no key has come for a while; up to show a seek;
   // away.
-  void ShowControls(bool stay);
+  void ShowControls();
   void PeekWatchInfo();
   void HideWatchInfo();
   void SeekStep(int sign);
@@ -641,7 +641,6 @@ private:
   // until it is let go is not more presses of back.
   bool back_swallow_ = false;
   bool bind_info_visible_ = false; // watch info bar shown
-  bool info_stay_ = false;         // ... until sent away, not by itself
   // The playback controls (see UpdateControls): the buttons shown, which
   // of them has the focus and what that one is, in words.
   std::vector<ControlRow> control_rows_;

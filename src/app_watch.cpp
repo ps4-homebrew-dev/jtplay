@@ -7,11 +7,11 @@
 // controlled with (previous, rewind, pause, forward, next, stop, tracks,
 // shuffle, repeat), and whenever they are on screen the focus is on them.
 //
-// The video bar comes up by itself when an item starts and when a pause
-// ends, and goes again after a moment unless a key is pressed meanwhile.
-// Brought up by the user (select, up, down, options) it stays until it is
-// sent away (back, options). With the bar away, left and right seek, with
-// just the timeline up for as long as that goes on.
+// The video bar comes up when an item starts and when the user asks for
+// it (select, up, down, options), and always goes again once no key has
+// been pressed for a while (or at once, with back or options). With the
+// bar away, left and right seek, with just the timeline up for as long as
+// that goes on.
 //
 // Back leaves full screen without stopping, as in Kodi: the menus come
 // back over the video, on a see-through background, and can be used as
@@ -312,11 +312,10 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
     model_.DirtyVariable("chapter_marks");
   }
   RefreshImageBindings();
-  // The bar shows the new item for a moment, however it came to play (by
-  // itself, or by the next button of a bar that was up to stay). The focus
-  // is where it was: "next", pressed again, is the one after.
+  // The bar shows the new item for a moment. The focus is where it was:
+  // "next", pressed again, is the one after.
   if (fullscreen) {
-    ShowControls(false);
+    ShowControls();
   } else {
     HideWatchInfo();
     FocusControls(false);
@@ -356,7 +355,7 @@ void App::SetFullscreen(bool on) {
   Set("fullscreen", bind_fullscreen_, on);
   Set("video_behind", bind_video_behind_, !on && !bind_watch_audio_);
   if (on) {
-    ShowControls(false);
+    ShowControls();
   } else {
     Set("upnext", bind_upnext_, false);
     HideWatchInfo();
@@ -385,36 +384,28 @@ void App::StopPlayback() {
   PostTask(Lane::Playback, [this] { player_->Stop(); }, false);
 }
 
-// The bar (or the now-playing card), the focus on its buttons. 'stay':
-// until it is sent away; otherwise it goes by itself after a moment, as
-// long as no key is pressed meanwhile (see HandleKeyControls).
-void App::ShowControls(bool stay) {
-  info_stay_ = stay;
+// The bar (or the now-playing card), the focus on its buttons. The bar
+// goes by itself once no key has been pressed for a while (see
+// App::Update); every key that is one of its own starts the wait again.
+void App::ShowControls() {
   info_deadline_ = Now() + kWatchInfoSec;
   Set("info_visible", bind_info_visible_, true);
   FocusControls(true);
 }
 
 // Something happened that the bar shows (a seek, a track picked with a
-// remote's key). Up already, it is left as it is, and stays; away, it
-// comes for a moment without the focus on its buttons, so that left and
-// right go on seeking.
+// remote's key). Up already, it is left as it is, a while longer; away,
+// it comes for a moment without the focus on its buttons, so that left
+// and right go on seeking.
 void App::PeekWatchInfo() {
   info_deadline_ = Now() + kWatchInfoSec;
-  if (bind_watch_audio_)
-    return; // the card is always there
-  if (bind_info_visible_) {
-    if (bind_control_focus_)
-      info_stay_ = true;
-    return;
-  }
-  info_stay_ = false;
+  if (bind_watch_audio_ || bind_info_visible_)
+    return; // (the card is always there)
   Set("info_visible", bind_info_visible_, true);
   FocusControls(false);
 }
 
 void App::HideWatchInfo() {
-  info_stay_ = false;
   Set("info_visible", bind_info_visible_, false);
   if (!bind_watch_audio_)
     FocusControls(false); // the card stays, and the focus on it
@@ -774,7 +765,8 @@ void App::ActivateControl(Control control) {
 }
 
 // Keys with the focus on the controls, which is whenever they are on
-// screen. Any of them tells the bar that somebody is there: it stays.
+// screen. Any of them tells the bar that somebody is there: it stays a
+// while longer.
 bool App::HandleKeyControls(int key) {
   if (controls_.empty())
     return false;
@@ -797,17 +789,9 @@ bool App::HandleKeyControls(int key) {
     break;
   }
   case Rml::Input::KI_RETURN:
-  case Rml::Input::KI_NUMPADENTER: {
-    const bool resume = control_sel_ == Control::PlayPause && player_->IsPaused();
+  case Rml::Input::KI_NUMPADENTER:
     ActivateControl(control_sel_);
-    // Playing on from a pause: the bar has done what it was up for, and
-    // goes by itself again.
-    if (resume && FullscreenPlayback()) {
-      ShowControls(false);
-      return true;
-    }
     break;
-  }
   case Rml::Input::KI_UP:
   case Rml::Input::KI_DOWN:
     break; // nothing above or below them
@@ -820,7 +804,7 @@ bool App::HandleKeyControls(int key) {
   }
   // (Stop, or the end of the queue, has left the player.)
   if (FullscreenPlayback()) {
-    info_stay_ = true;
+    info_deadline_ = Now() + kWatchInfoSec;
     UpdateControls();
   }
   return true;
@@ -1030,9 +1014,9 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     key = Rml::Input::KI_RIGHT;
 
   switch (key) {
-  case Rml::Input::KI_UP:    // the bar, to stay
+  case Rml::Input::KI_UP:    // the bar
   case Rml::Input::KI_DOWN:
-    ShowControls(true);
+    ShowControls();
     break;
 
   case Rml::Input::KI_LEFT:  // the bar is away (or the key a remote's): seek
@@ -1049,14 +1033,14 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     break;
 
   case Rml::Input::KI_RETURN:
-  case Rml::Input::KI_NUMPADENTER: // the bar, to stay; on the up-next card: play it
+  case Rml::Input::KI_NUMPADENTER: // the bar; on the up-next card: play it
     if (bind_upnext_) {
       PlayNeighbor(+1);
       break;
     }
     // (Not a pause: the bar comes with the focus on that button, and it
     // takes a second press.)
-    ShowControls(true);
+    ShowControls();
     break;
 
   case Rml::Input::KI_T:     // triangle: the menus, playing on (Kodi's FullScreen)
@@ -1064,14 +1048,14 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     SetFullscreen(false);
     break;
 
-  case gamepad::kKeyOptions: // the bar, to stay; again: away with it
+  case gamepad::kKeyOptions: // the bar; again: away with it
   case Rml::Input::KI_F4:    // (a remote's display / info key likewise)
     if (bind_watch_audio_)
       break;                 // the card is always there
     if (bind_info_visible_ && bind_control_focus_)
       HideWatchInfo();
     else
-      ShowControls(true);
+      ShowControls();
     break;
 
   case Rml::Input::KI_BACK:  // back: the menus, playing on; held: stop
@@ -1131,7 +1115,7 @@ bool App::HandleMediaKey(int key) {
     const bool was_paused = player_->IsPaused();
     player_->TogglePause();
     if (bind_fullscreen_)
-      ShowControls(false); // there while paused, and for a moment after
+      ShowControls();
     else
       ShowToast(was_paused ? "Playing" : "Paused", was_paused ? icon::kPlay : icon::kPause);
     return true;
