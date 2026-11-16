@@ -295,8 +295,9 @@
 		<!-- The bar along the bottom, under the timeline that is its top edge
 		     (played, buffered ahead, a knob at the playhead). First what
 		     plays: its title and the time; under them, across the bar, one
-		     line of where it is (the chapter), what comes next and what it
-		     is about. Then what can be done: the playback controls
+		     line of where it is (the chapter) and what it is about. (Whether
+		     it plays or is paused is on the play / pause button, and what
+		     comes next beside the next button when that has the focus.) Then what can be done: the playback controls
 		     (src/app_watch.cpp), which have the focus, and on the right the
 		     tracks being played. Its artwork, if any, is beside all three
 		     rows. Audio has the now-playing card instead. -->
@@ -312,11 +313,7 @@
 				<img class="osd-art" data-if="watch_image != ''" data-attr-src="watch_image"/>
 				<div class="osd-rows">
 					<div class="osd-row">
-						<div class="osd-title">
-							<span class="osd-state" data-if="watch_paused">&#xE132;</span>
-							<span class="osd-state" data-if="!watch_paused">&#xE140;</span>
-							{{watch_name}}
-						</div>
+						<div class="osd-title">{{watch_name}}</div>
 						<div class="osd-time">
 							<span>{{watch_pos}}</span>
 							<span class="osd-dur" data-if="watch_dur != ''">/ {{watch_dur}}</span>
@@ -327,7 +324,6 @@
 					     artwork beside the rows its size.) -->
 					<div class="osd-meta">
 						<span class="osd-chapter" data-if="watch_chapter != ''">{{watch_chapter}}</span>
-						<span class="osd-next" data-if="watch_next != ''"><span class="osd-next-label">UP NEXT</span>{{watch_next}}</span>
 						<span class="osd-desc" data-if="watch_description != ''">{{watch_description}}</span>
 					</div>
 					<div class="osd-foot">

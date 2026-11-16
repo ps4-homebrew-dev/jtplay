@@ -9,9 +9,9 @@
 //
 // The video bar comes up by itself when an item starts and when a pause
 // ends, and goes again after a moment unless a key is pressed meanwhile.
-// Brought up by the user it stays until it is sent away (back, options).
-// With the bar away, left and right seek, with just the timeline up for
-// as long as that goes on.
+// Brought up by the user (select, up, down, options) it stays until it is
+// sent away (back, options). With the bar away, left and right seek, with
+// just the timeline up for as long as that goes on.
 //
 // Back leaves full screen without stopping, as in Kodi: the menus come
 // back over the video, on a see-through background, and can be used as
@@ -312,11 +312,11 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
     model_.DirtyVariable("chapter_marks");
   }
   RefreshImageBindings();
-  // A bar the user has up stays up from one item to the next, the focus
-  // where it was ("next", pressed again, is the one after); otherwise it
-  // shows the new item for a moment.
+  // The bar shows the new item for a moment, however it came to play (by
+  // itself, or by the next button of a bar that was up to stay). The focus
+  // is where it was: "next", pressed again, is the one after.
   if (fullscreen) {
-    ShowControls(bind_info_visible_ && bind_control_focus_ && info_stay_);
+    ShowControls(false);
   } else {
     HideWatchInfo();
     FocusControls(false);
@@ -1049,14 +1049,14 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     break;
 
   case Rml::Input::KI_RETURN:
-  case Rml::Input::KI_NUMPADENTER: // play / pause; on the up-next card: play it
+  case Rml::Input::KI_NUMPADENTER: // the bar, to stay; on the up-next card: play it
     if (bind_upnext_) {
       PlayNeighbor(+1);
       break;
     }
-    // The bar comes with it: there while paused, and for a moment after.
-    player_->TogglePause();
-    ShowControls(false);
+    // (Not a pause: the bar comes with the focus on that button, and it
+    // takes a second press.)
+    ShowControls(true);
     break;
 
   case Rml::Input::KI_T:     // triangle: the menus, playing on (Kodi's FullScreen)

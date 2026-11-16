@@ -180,12 +180,6 @@ body.behind #shell {
 	text-overflow: ellipsis;
 }
 
-.osd-state {
-	margin-right: 10px;
-	font-size: 28px;
-	color: #4dd6b8;
-}
-
 /* "12:34 / 45:00": where we are, large; the length quieter. A row of its
  * own, centred, so the much smaller LIVE badge sits level with the
  * digits rather than hanging off their baseline. */
@@ -219,9 +213,8 @@ body.behind #shell {
 	border-radius: 6px;
 }
 
-/* One line about it, from one end of the bar to the other, in the order
- * it matters while watching: where in it we are, what comes after it,
- * what it is. The description gets what is left of the line, and is cut
+/* One line about it, from one end of the bar to the other: where in it
+ * we are, and what it is. The description gets what is left of the line, and is cut
  * short where that ends. */
 .osd-meta {
 	height: 30px;
@@ -236,18 +229,6 @@ body.behind #shell {
 
 .osd-chapter {
 	margin-right: 28px;
-	color: #4dd6b8;
-}
-
-.osd-next {
-	margin-right: 28px;
-}
-
-.osd-next-label {
-	margin-right: 12px;
-	font-size: 16px;
-	font-weight: bold;
-	letter-spacing: 3px;
 	color: #4dd6b8;
 }
 
