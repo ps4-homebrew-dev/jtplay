@@ -37,15 +37,17 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-Across the top are four tabs: **Home**, **Sources**, **Search** and
-**Settings**. Up from a page reaches them; down, select or back returns.
+Across the top are three tabs: **Home**, **Sources** and **Settings**. Up
+from a page reaches them; down, select or back returns.
 
 Home is rows of cards, with the focus on the first from the start, so that
 what you last watched or listened to is a press of select away:
 
 - **Now playing**, while something does: the way back to it.
-- **Continue watching**: unfinished items. Select resumes at once; the
-  options menu has *Play from beginning*.
+- **Continue watching**: unfinished items. Select resumes at once, back in
+  the folder it was played from: the next item is the one that came next
+  there, and back from the player and from the folder leads where it did
+  then. The options menu has *Play from beginning*.
 - **Favorites**: anything you pinned, the latest first.
 
 The banner shows the card in focus, large, over its artwork across the
@@ -55,22 +57,26 @@ sits right under it. Whatever a card has no data for is left out. Back on
 the rows goes to the first card, or to what plays behind the menus.
 Triangle pins the card in focus to Favorites, or unpins it.
 
-**Sources** lists every source there is, local drives, network servers and
-plugins alike, the ones you open most first, each with its picture where a
-plugin gives one, otherwise the first artwork seen in it (or of something
-from it in the library), otherwise its icon. The list is remembered from
-one start to the next, so it is there at once, as it was. Meanwhile all of
-the sources are looked for again in the background (local drives and
-plugins first, network servers last), and one that has not been found yet
-is looked for when selected, then opened. One that is not found at all is
-dimmed; the options menu can forget it. Square looks for every source
-again. Back from a source returns to it in the list.
+**Sources** opens the list of every source there is, local drives, network
+servers and plugins alike, the ones you open most first. It is a folder
+like any other (see Browsing): a list or a grid, sorted and filtered the
+same way, with the same keys, each source with its picture where a plugin
+gives one, otherwise the first artwork seen in it (or of something from it
+in the library), otherwise its icon. The list is remembered from one start
+to the next, so it is there at once, as it was. Meanwhile all of the
+sources are looked for again in the background (local drives and plugins
+first, network servers last), and one that has not been found yet is
+looked for when selected, then opened; one that is not found at all says
+so, and its options menu can forget it. Triangle pins a source to
+Favorites. Back from the top of a source returns to it in the list; back
+from the list, to the Sources tab.
 
-**Search** (or Ctrl+S on Home) searches everything at once: your library
-by name (Continue watching, what you played lately and Favorites), then
-every source that can search, most used first, all of them side by side so
-the slowest sets the pace rather than the sum. A source that fails is left
-out; back from the results leads home.
+In the list's options menu, **Refresh** looks for every source again, and
+**Search all sources** (or Ctrl+S) searches everything at once: your
+library by name (Continue watching, what you played lately and Favorites),
+then every source that can search, most used first, all of them side by
+side so the slowest sets the pace rather than the sum. A source that fails
+is left out; back from the results returns to the list.
 
 ## Browsing
 
@@ -401,7 +407,7 @@ on, holding OK (Return) for a moment is options too. What a TV remote connected 
 the console and the TV; Settings > Show input shows it.
 
 Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
-Ctrl+S searches the source (on Home: everything).
+Ctrl+S searches the source (on the list of sources: all of them).
 The mapping lives in `src/gamepad.cpp` and `RmlSDL::ConvertKey`.
 
 ## Playback

@@ -119,14 +119,16 @@ void App::OpenSource(const browse::SourcePtr& source) {
     return;
   CancelForegroundLaunch();
   RememberPlace(); // the one on screen, if any
+  // From the list of sources: back from its top returns there, on it.
+  from_sources_list_ = current_source_ && current_source_ == sources_source_;
+  if (from_sources_list_)
+    sources_list_key_ = source->Key();
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
-  // Counted, for the order of the Sources list; and back from it,
-  // the focus is on it there.
+  // Counted, for the order of the Sources list.
   library_.SourceUsed(source->Key());
   library_.Save();
-  home_return_id_ = "source:" + source->Key();
 
   Set("source_name", bind_source_name_, current_source_->Name());
   view_ = View::Browse;
@@ -154,6 +156,62 @@ void App::OpenSource(const browse::SourcePtr& source) {
   RequestBrowse(place.back().id, place.back().name, false, place.back().selected);
 }
 
+bool App::ResumeInPlace(const browse::Entry& card) {
+  library::Ref ref;
+  if (!IdentifyIn(card, continue_source_, ref))
+    return false;
+  std::string key;
+  std::vector<library::PlaceLevel> place;
+  if (!library_.ResumePlace(ref.source_key, ref.entry.id, key, place) || place.empty())
+    return false;
+  // Played from a folder of a source (opened from the list of sources),
+  // or from a favorite folder (opened from its card at home).
+  browse::SourcePtr source = key == favorites_source_->Key() ? favorites_source_
+                                                             : registry_.Find(key);
+  if (!source)
+    return false;
+  const bool library = LibraryView(source);
+  if (!library && place.front().id != source->RootId())
+    return false;
+
+  CancelForegroundLaunch();
+  AbandonBrowse();
+  RememberPlace();
+  // Back from its top leads where it led then: to the list of sources,
+  // on this one; or home, to the favorite.
+  from_sources_list_ = !library;
+  if (!library) {
+    sources_list_key_ = key;
+    library_.SourceUsed(key);
+  }
+  home_return_id_ = library ? place.front().id : std::string();
+  current_source_ = source;
+  path_.clear();
+  for (size_t i = 0; i + 1 < place.size(); i++) {
+    BrowseLevel level;
+    level.id = place[i].id;
+    level.name = place[i].name;
+    level.keep = place[i].selected;
+    level.stale = true;
+    path_.push_back(std::move(level));
+  }
+  sel_entry_ = 0;
+  view_ = View::Browse;
+  Set("view", bind_view_, Rml::String("browse"));
+  Set("source_name", bind_source_name_,
+      library ? (ref.source_name.empty() ? source->Name() : ref.source_name)
+              : source->Name());
+  RebuildEntryRows();
+  RebuildCrumb();
+  RebuildDetail();
+  const library::PlaceLevel& last = place.back();
+  RequestBrowse(last.id, last.name, false, last.selected);
+  pending_resume_request_ = browse_request_;
+  pending_resume_id_ = last.selected;
+  pending_resume_card_ = card;
+  return true;
+}
+
 void App::NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& entries) {
   if (!source || LibraryView(source) || !source->Image().empty())
     return;
@@ -170,22 +228,30 @@ void App::NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& 
 
 bool App::LibraryView(const browse::SourcePtr& source) const {
   return source && (source == favorites_source_ || source == continue_source_ ||
-                    source == search_source_);
+                    source == sources_source_);
+}
+
+std::vector<library::PlaceLevel> App::CurrentPlace() const {
+  // The folders, not search results; down to the last one that was listed.
+  std::vector<library::PlaceLevel> levels;
+  for (size_t i = 0; i < path_.size(); i++) {
+    const BrowseLevel& level = path_[i];
+    if (!level.query.empty() || !level.error.empty())
+      break;
+    library::PlaceLevel place{level.id, level.name, level.keep};
+    // (The one on top: where the cursor is now.)
+    const int at = i + 1 == path_.size() ? sel_entry_ : level.selection;
+    if (!level.stale && at >= 0 && at < (int)level.entries.size())
+      place.selected = level.entries[at].id;
+    levels.push_back(std::move(place));
+  }
+  return levels;
 }
 
 void App::RememberPlace() {
   if (view_ != View::Browse || !current_source_ || LibraryView(current_source_))
     return;
-  // The folders, not search results; down to the last one that was listed.
-  std::vector<library::PlaceLevel> levels;
-  for (const BrowseLevel& level : path_) {
-    if (!level.query.empty() || !level.error.empty())
-      break;
-    library::PlaceLevel place{level.id, level.name, level.keep};
-    if (!level.stale && level.selection >= 0 && level.selection < (int)level.entries.size())
-      place.selected = level.entries[level.selection].id;
-    levels.push_back(std::move(place));
-  }
+  std::vector<library::PlaceLevel> levels = CurrentPlace();
   // The top of it, on its first entry: nothing worth remembering.
   if (levels.size() == 1 && levels[0].selected.empty())
     levels.clear();
@@ -218,7 +284,25 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       if (request != browse_request_)
         return; // superseded while it was in flight
       BrowseArrived();
+      // Continue watching, back in its folder (ResumeInPlace): the item
+      // resumes from there once it is listed, or as it is if it is not.
+      std::string resume_id;
+      browse::Entry resume_card;
+      if (request == pending_resume_request_) {
+        resume_id = std::move(pending_resume_id_);
+        resume_card = std::move(pending_resume_card_);
+        pending_resume_request_ = 0;
+      }
+      auto resume_anyway = [this, resume_id, resume_card] {
+        if (resume_id.empty())
+          return;
+        const browse::SourcePtr here = current_source_;
+        current_source_ = continue_source_; // what the card is listed under
+        PlayEntry(resume_card, true);
+        current_source_ = here;
+      };
       if (!error.empty()) {
+        resume_anyway();
         // A refresh that failed leaves the listing there was, and says so.
         if (replace && !path_.empty() && path_.back().error.empty()) {
           ShowToast(error, icon::kWarning);
@@ -289,6 +373,16 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       RebuildCrumb();
       RebuildDetail();
       scroll_entries_pending_ = true;
+      if (!resume_id.empty()) {
+        const browse::Entry* e = SelectedEntry();
+        if (e && e->id == resume_id) {
+          const browse::Entry item = *e;
+          PlayEntry(item, true);
+        } else {
+          resume_anyway();
+        }
+        return;
+      }
       if (through)
         RequestBrowse(only.id, only.name, false);
     });
@@ -307,6 +401,13 @@ void App::RefreshContainer() {
   if (!level)
     return;
   CancelForegroundLaunch();
+  if (OnSourcesList()) {
+    // The list of sources: every group looked for again (and the list
+    // made again as each is done).
+    SearchAllSources();
+    RefreshSourcesList();
+    return;
+  }
   if (!level->query.empty()) {
     // A list of results: search again rather than list a folder.
     const std::string query = level->query;
@@ -319,14 +420,21 @@ void App::RefreshContainer() {
 void App::LeaveContainer() {
   CancelForegroundLaunch(); // ... otherwise playback pops up over another folder
   AbandonBrowse(); // any browse that is still in flight
-  // Past the folders that were only passed through, and out of a search
-  // of everything (which has no folder of its own to return to).
+  // Past the folders that were only passed through.
   size_t depth = path_.empty() ? 0 : path_.size() - 1;
   while (depth > 0 && path_[depth - 1].passthrough)
     depth--;
-  if (depth == 0 || (current_source_ == search_source_ && depth == 1)) {
-    // At the top: back home, to the tile it was opened from. (Left as it
-    // is until then, so that it is remembered as it was left.)
+  if (depth == 0) {
+    // At the top of a source opened from the list of sources: back to
+    // the list, on it. (Left as it is until then, so that it is
+    // remembered as it was left.)
+    if (from_sources_list_ && current_source_ != sources_source_) {
+      OpenSourcesList(current_source_->Key());
+      return;
+    }
+    // The list itself: home, onto its tab. Anything else: home, to the
+    // card it was opened from.
+    return_to_sources_tab_ = current_source_ == sources_source_;
     GoHome();
     return;
   }
@@ -352,7 +460,7 @@ void App::RebuildEntryRows() {
   if (const BrowseLevel* level = CurrentLevel()) {
     for (const browse::Entry& e : level->entries) {
       EntryRow row;
-      row.icon = IconFor(e);
+      row.icon = EntryIcon(e);
       row.kind = browse::TypeName(e.type);
       row.name = DisplayName(e);
       row.meta = EntryMeta(e);
@@ -406,7 +514,7 @@ void App::RebuildDetail() {
   const browse::Entry* e = SelectedEntry();
 
   Set("detail_name", bind_detail_name_, e ? DisplayName(*e) : std::string());
-  Set("detail_icon", bind_detail_icon_, Rml::String(e ? IconFor(*e) : ""));
+  Set("detail_icon", bind_detail_icon_, Rml::String(e ? EntryIcon(*e) : ""));
   Set("detail_kind", bind_detail_kind_, Rml::String(e ? browse::TypeName(e->type) : ""));
   Set("detail_description", bind_detail_description_,
       e ? e->description : std::string());
@@ -438,7 +546,8 @@ void App::RebuildDetail() {
           add("Status", "Resume at " + FormatTime(p.position * 1000000));
       }
       // Under Favorites / Continue watching, where it actually lives.
-      if (ref.source_key != (current_source_ ? current_source_->Key() : ""))
+      if (ref.source_key != (current_source_ ? current_source_->Key() : "") &&
+          !ListedSourceOf(*e))
         add("Source", ref.source_name.empty() ? "Not available" : ref.source_name);
       favorite = library_.IsFavorite(ref.source_key, ref.entry.id);
     }
@@ -592,6 +701,14 @@ void App::ActivateSelection() {
       RefreshContainer();
     return;
   }
+  if (const ListedSource* listed = ListedSourceOf(*e)) {
+    // A source: opened as itself, where it was left (see OpenSource).
+    path_.front().selection = sel_entry_;
+    const ListedSource open = *listed; // the list may be made again
+    sources_list_key_ = open.key;
+    OpenKnownSource(open.key, open.name);
+    return;
+  }
   if (e->IsFolder())
     EnterContainer(*e);
   else
@@ -648,8 +765,16 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
   // unpins it. (Reversing the order is in the options menu.)
   case Rml::Input::KI_T:
   case Rml::Input::KI_TAB:
-    if (const browse::Entry* e = SelectedEntry())
-      ToggleFavorite(*e);
+    if (const browse::Entry* e = SelectedEntry()) {
+      if (const ListedSource* listed = ListedSourceOf(*e)) {
+        if (const browse::SourcePtr source = listed->source)
+          ToggleSourceFavorite(source);
+        else
+          ShowToast("Not found right now", icon::kWarning);
+      } else {
+        ToggleFavorite(*e);
+      }
+    }
     break;
   case gamepad::kKeyOptions: OpenMenu(); break;
   case Rml::Input::KI_RETURN:
@@ -665,12 +790,8 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
       ShowToast("Cancelled", icon::kStop);
     } else if (browse_pending_ && !path_.empty()) {
       // Likewise a folder that is still being opened (or listed again):
-      // back gives up on that, and stays where it was asked from -- unless
-      // that is the page a search of everything is made from, which has
-      // nothing on it: then home.
+      // back gives up on that, and stays where it was asked from.
       AbandonBrowse();
-      if (current_source_ == search_source_ && path_.size() == 1)
-        GoHome();
     } else if (const BrowseLevel* level = CurrentLevel();
                level && !level->filter.empty()) {
       ClearFilter(); // back out of the filter before the folder
@@ -882,12 +1003,35 @@ void App::OpenMenu() {
     // The item in focus first: it is what the menu was most likely opened
     // for, and its name is the menu's title.
     const browse::Entry* e = SelectedEntry();
-    if (e) {
+    const ListedSource* listed = e ? ListedSourceOf(*e) : nullptr;
+    if (listed) {
+      // A source, on the list of them: open it; one that is found can be
+      // a favorite, one that is not (any more) can be forgotten.
+      const ListedSource source = *listed;
+      Set("menu_title", bind_menu_title_, Rml::String(source.name));
+      AddMenuItem({"Open", nullptr, [this](int) { ActivateSelection(); }});
+      if (source.source) {
+        const bool fav = library_.IsFavorite(source.key, source.source->RootId());
+        AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
+          [this, s = source.source](int) {
+            ToggleSourceFavorite(s);
+            RebuildEntryRows();
+          }});
+      } else {
+        AddMenuItem({"Forget this source", nullptr, [this, key = source.key](int) {
+          library_.ForgetSource(key);
+          library_.Save();
+          RefreshSourcesList();
+        }});
+      }
+    } else if (e) {
       Set("menu_title", bind_menu_title_, DisplayName(*e));
       AddEntryActions(*e);
     }
 
-    MenuSection("Folder");
+    // (The list of sources: what is done to the lot of them.)
+    const bool everything = current_source_ == sources_source_ && SearchScope() == 0;
+    MenuSection(everything ? "Sources" : "Folder");
     // A folder of music or episodes plays as a whole, in order or shuffled.
     if (FolderPlayableCount() > 1) {
       AddMenuItem({"Play all", nullptr, [this](int) { PlayFolder(false); }});
@@ -912,7 +1056,8 @@ void App::OpenMenu() {
     MenuSection("Find");
     if (current_source_ && !path_.empty() &&
         current_source_->CanSearch(path_[SearchScope()].id))
-      AddMenuItem({"Search", nullptr, [this](int) { OpenSearch(); }});
+      AddMenuItem({everything ? "Search all sources" : "Search", nullptr,
+                   [this](int) { OpenSearch(); }});
     AddMenuItem({"Filter", nullptr, [this](int) { OpenFilter(); }});
     if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
       AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
@@ -955,31 +1100,12 @@ void App::OpenMenu() {
     // The plugin this is from: of the source, or in Favorites and Continue
     // watching, of the item in focus.
     library::Ref ref;
-    if (e && Identify(*e, ref))
+    if (listed)
+      AddPluginSettingsEntry(listed->key);
+    else if (e && Identify(*e, ref))
       AddPluginSettingsEntry(ref.source_key);
     else if (current_source_)
       AddPluginSettingsEntry(current_source_->Key());
-  } else if (bind_home_shelves_ && SourceShelf(sel_shelf_) && SelectedCard()) {
-    // A source's tile: open it; one that is found can be a favorite, one
-    // that is not (any more) can be forgotten.
-    const library::KnownSource known = shelves_[sel_shelf_].known[sel_card_];
-    const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_];
-    Set("menu_title", bind_menu_title_, Rml::String(known.name));
-    AddMenuItem({"Open", nullptr,
-      [this, known](int) { OpenKnownSource(known.key, known.name); }});
-    if (source) {
-      const bool fav = library_.IsFavorite(source->Key(), source->RootId());
-      AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
-        [this, source](int) { ToggleSourceFavorite(source); }});
-    } else {
-      AddMenuItem({"Forget this source", nullptr, [this, key = known.key](int) {
-        library_.ForgetSource(key);
-        library_.Save();
-      }});
-    }
-    AddPluginSettingsEntry(known.key);
-    MenuSection("Sources");
-    AddMenuItem({"Search again", nullptr, [this](int) { SearchAllSources(); }});
   } else if (bind_home_shelves_ && NowPlayingShelf(sel_shelf_)) {
     Set("menu_title", bind_menu_title_, bind_watch_name_); // back to it, or stop
   } else if (bind_home_shelves_ && SelectedCard()) {
@@ -1003,10 +1129,9 @@ void App::OpenMenu() {
     library::Ref ref;
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);
-  } else if (view_ == View::Home && !bind_settings_page_ &&
-             (!bind_home_shelves_ || bind_sources_page_)) {
+  } else if (view_ == View::Home && !bind_settings_page_ && !bind_home_shelves_) {
     MenuSection("Sources");
-    AddMenuItem({"Search again", nullptr, [this](int) { SearchAllSources(); }});
+    AddMenuItem({"Refresh", nullptr, [this](int) { SearchAllSources(); }});
   } else if (bind_watching_) {
     // The top level of the rail: only what plays.
     Set("menu_title", bind_menu_title_, bind_watch_name_);
@@ -1321,10 +1446,8 @@ void App::UpdateVisibleArt() {
       }
     }
   }
-  if (changed) {
+  if (changed)
     model_.DirtyVariable("shelves");
-    SyncSourceList();
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1474,8 +1597,10 @@ void App::OpenSearch() {
   // "Search Podcasts"; under Favorites it is the favorite's own source that
   // is asked, whose name is not at hand.
   const bool library = LibraryView(current_source_);
+  const bool everything = current_source_ == sources_source_ && SearchScope() == 0;
   Set("search_title", bind_search_title_,
-      library ? std::string("Search") : "Search " + current_source_->Name());
+      everything ? std::string("Search all sources")
+      : library  ? std::string("Search") : "Search " + current_source_->Name());
   // The field is only hidden between searches (data-if), so it still holds
   // the last query.
   if (Rml::Element* input = document_->GetElementById("search-input"))
@@ -1568,35 +1693,6 @@ void App::HandleKeySearch(Rml::Event& event, int key) {
 // screen). The hits become a level of their own above the folder, or replace
 // the one on top when that is a list of hits, so back always returns to the
 // folder.
-void App::OpenGlobalSearch() {
-  if (FullscreenPlayback() || bind_photo_)
-    return;
-  OpenTextEntry("Search everything", std::string(), kSearchMaxLength, false,
-                [this](const std::string& query) {
-    if (query.empty())
-      return;
-    // Searched from a page of its own, the one level the results are
-    // pushed over; back from them leads home.
-    RememberPlace();
-    CancelForegroundLaunch();
-    AbandonBrowse();
-    current_source_ = search_source_;
-    path_.clear();
-    BrowseLevel top;
-    top.id = search_source_->RootId();
-    top.name = search_source_->Name();
-    path_.push_back(std::move(top));
-    sel_entry_ = 0;
-    view_ = View::Browse;
-    Set("view", bind_view_, Rml::String("browse"));
-    Set("source_name", bind_source_name_, search_source_->Name());
-    RebuildEntryRows();
-    RebuildCrumb();
-    RebuildDetail();
-    RequestSearch(query);
-  });
-}
-
 void App::RequestSearch(const std::string& query) {
   if (!current_source_ || path_.empty())
     return;
@@ -1626,24 +1722,12 @@ void App::RequestSearch(const std::string& query) {
       if (request != browse_request_ || scope >= path_.size())
         return; // superseded while it was in flight
       BrowseArrived();
-      // A search of everything that found nothing has no page to stay on:
-      // back to the Search tab, to try something else.
-      auto nowhere = [this] {
-        if (current_source_ != search_source_ || path_.size() != 1)
-          return;
-        GoHome();
-        home_rows_wanted_ = false;
-        RebuildHome("search");
-        Set("home_shelves", bind_home_shelves_, false);
-      };
       if (!error.empty()) {
         ShowToast(error, icon::kWarning);
-        nowhere();
         return;
       }
       if (result.empty()) {
         ShowToast("Nothing found for \"" + query + "\"", icon::kSearch);
-        nowhere();
         return;
       }
 
@@ -1652,9 +1736,7 @@ void App::RequestSearch(const std::string& query) {
       BrowseLevel level;
       // Never the id of a folder: the play order and the like are keyed on it.
       level.id = "search:" + folder + "\n" + query;
-      // (A search of everything is under "Search" already.)
-      level.name = current_source_ == search_source_ ? "\u201C" + query + "\u201D"
-                                                    : "Search: " + query;
+      level.name = "Search: " + query;
       level.query = query;
       level.raw = std::move(result);
       SortLevel(level);

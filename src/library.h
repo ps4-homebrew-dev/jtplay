@@ -93,6 +93,12 @@ public:
   // Artwork remembered for an item (a snapshot of where it was stopped),
   // or "".
   std::string ImageFor(const std::string& source_key, const std::string& id) const;
+  // Where an item with a resume point was played from, so that resuming
+  // it can open that folder again (and play on through it from there).
+  void SetResumePlace(const std::string& source_key, const std::string& id,
+                      const std::string& place_source, const std::vector<PlaceLevel>& place);
+  bool ResumePlace(const std::string& source_key, const std::string& id,
+                   std::string& place_source, std::vector<PlaceLevel>& place) const;
   // Unfinished items, most recently played first.
   std::vector<std::pair<Ref, Progress>> InProgress() const;
 
@@ -125,6 +131,10 @@ private:
   struct Item {
     Ref ref;
     Progress progress;
+    // Where it was played from (see SetResumePlace): a source's key and
+    // the folders down to the one it is in, on it.
+    std::string place_source;
+    std::vector<PlaceLevel> place;
   };
   static std::string Id(const std::string& key, const std::string& id) {
     return key + '\n' + id;
@@ -163,9 +173,10 @@ bool DecodeId(const std::string& encoded, std::string& source_key, std::string& 
 
 class LibrarySource : public browse::Source {
 public:
-  // Search: lists nothing; searched at its root, it searches the library
-  // (by name) and every source that can search, and lists what they found.
-  enum class Kind { Favorites, ContinueWatching, Search };
+  // Sources: the list of every source (the app makes its root listing,
+  // see App::OpenSourcesList); searched there, it searches the library (by
+  // name) and every source that can search, and lists what they found.
+  enum class Kind { Favorites, ContinueWatching, Sources };
 
   LibrarySource(Kind kind, Library& library, SourceRegistry& registry);
 

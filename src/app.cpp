@@ -84,8 +84,8 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
     library::LibrarySource::Kind::Favorites, library_, registry_);
   continue_source_ = std::make_shared<library::LibrarySource>(
     library::LibrarySource::Kind::ContinueWatching, library_, registry_);
-  search_source_ = std::make_shared<library::LibrarySource>(
-    library::LibrarySource::Kind::Search, library_, registry_);
+  sources_source_ = std::make_shared<library::LibrarySource>(
+    library::LibrarySource::Kind::Sources, library_, registry_);
 
   providers_.push_back(std::make_unique<browse::FsProvider>());
   providers_.push_back(std::make_unique<browse::DlnaProvider>(kDiscoveryWaitMs));
@@ -463,9 +463,6 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("home_compact", &bind_home_compact_);
   ctor.Bind("group_status", &bind_group_status_);
   ctor.Bind("settings_page", &bind_settings_page_);
-  ctor.Bind("sources_page", &bind_sources_page_);
-  ctor.Bind("source_cards", &source_cards_);
-  ctor.Bind("source_count", &bind_source_count_);
   ctor.Bind("home_settings", &bind_home_settings_);
   ctor.Bind("settings", &setting_rows_);
   ctor.Bind("sel_setting", &sel_setting_);
@@ -747,10 +744,6 @@ void App::Update() {
   if (preview_at_ > 0.0 && Now() >= preview_at_ && !preview_running_)
     RequestPreview();
 
-  if (scroll_sources_pending_ && bind_sources_page_) {
-    EnsureRowVisible("source-list", sel_card_, kSourceRowPitch);
-    scroll_sources_pending_ = false;
-  }
   if (scroll_sources_pending_ && ScrollRows())
     scroll_sources_pending_ = false;
 
@@ -907,15 +900,6 @@ void App::ProcessEvent(Rml::Event& event) {
     SDL_Event quit = {};
     quit.type = SDL_QUIT;
     SDL_PushEvent(&quit);
-    event.StopPropagation();
-    return;
-  }
-
-  // Home: Ctrl+S searches everything (as its Search tab does).
-  if (key == Rml::Input::KI_S && event.GetParameter<int>("ctrl_key", 0) != 0 &&
-      view_ == View::Home && !bind_search_open_ && !bind_menu_open_ && !bind_photo_ &&
-      !FullscreenPlayback()) {
-    OpenGlobalSearch();
     event.StopPropagation();
     return;
   }

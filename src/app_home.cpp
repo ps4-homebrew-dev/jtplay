@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The home screen: tabs across the top -- Home, Sources, Search and
-// Settings -- and the page of the one in focus below them. Home is rows of
-// cards, the focus on the first, so that what was last watched or listened
-// to is a press of select away:
+// The home screen: tabs across the top -- Home, Sources and Settings --
+// and the page of the one in focus below them. Home is rows of cards, the
+// focus on the first, so that what was last watched or listened to is a
+// press of select away:
 //
 //   Now playing         while something does: the way back to it
 //   Continue watching   unfinished items; select resumes, at once
 //   Favorites           anything pinned, most recently first
 //
-// Sources is every source there is, local, network or plugin, most used
-// first, as a list down the page (internally the one shelf of that tab).
-// The sources are remembered from one run to the next (library.h), so the
-// list is there from the start, as it was; the providers look for them
-// again in the background, and one not found yet is looked for when
-// selected. Search asks for something to look for everywhere; Settings is
-// a list of its own (see BuildSettings). Up from the first row reaches the
-// tabs, back or down returns.
+// Sources opens the list of every source there is, local, network or
+// plugin, most used first, in the browse view, as any folder (see
+// OpenSourcesList); its options menu searches them all. The sources are
+// remembered from one run to the next (library.h), so the list is there
+// from the start, as it was; the providers look for them again in the
+// background, and one not found yet is looked for when selected. Settings
+// is a list of its own (see BuildSettings). Up from the first row reaches
+// the tabs, back or down returns.
 //
 // The banner shows the card in focus, large -- its artwork across the top
 // of the screen, its title, what is left of it, its description -- and so
@@ -52,10 +52,13 @@ void App::GoHome() {
   current_source_.reset();
   view_ = View::Home;
   Set("view", bind_view_, Rml::String("home"));
-  // Back on Home: on its rows, on the card it was left from (a source's,
-  // on the Sources tab).
-  home_rows_wanted_ = true;
-  RebuildHome(home_return_id_.compare(0, 7, "source:") == 0 ? "sources" : "home");
+  // Back on Home: on its rows, on the card it was left from; from the list
+  // of sources, on the Sources tab.
+  home_rows_wanted_ = !return_to_sources_tab_;
+  RebuildHome(return_to_sources_tab_ ? "sources" : "home");
+  if (return_to_sources_tab_)
+    Set("home_shelves", bind_home_shelves_, false);
+  return_to_sources_tab_ = false;
   if (!home_return_id_.empty()) {
     FocusHomeCard(home_return_id_);
     home_return_id_.clear();
@@ -89,10 +92,6 @@ Group GroupOfKey(const std::string& key) {
   if (key.compare(0, 5, "dlna:") == 0)
     return Group::Network;
   return Group::Plugin;
-}
-
-std::string StandInId(const std::string& key) {
-  return "source:" + key;
 }
 
 } // namespace
@@ -173,6 +172,11 @@ void App::StartDiscovery(browse::Source::Group group,
 
       if (view_ == View::Home)
         RebuildHome(); // keeps the focus where it was
+      else if (OnSourcesList()) {
+        RefreshSourcesList();
+        if (!errors.empty())
+          ShowToast(errors, icon::kWarning);
+      }
       for (const std::function<void()>& then : waiting)
         then();
     });
@@ -202,7 +206,7 @@ void App::OpenKnownSource(const std::string& key, const std::string& name) {
   const Group group = GroupOfKey(key);
   ShowToast("Looking for " + name + "...", GroupIcon(group));
   StartDiscovery(group, [this, key, name] {
-    if (view_ != View::Home || FullscreenPlayback() || bind_menu_open_)
+    if (!OnSourcesList() || FullscreenPlayback() || bind_menu_open_)
       return;
     if (const browse::SourcePtr source = registry_.Find(key))
       OpenSource(source);
@@ -212,13 +216,113 @@ void App::OpenKnownSource(const std::string& key, const std::string& name) {
 }
 
 // ---------------------------------------------------------------------------
+// The list of sources
+// ---------------------------------------------------------------------------
+
+// Every source remembered, most used first, as folders: one that is found
+// under its root's id as a favorite of it would have (so it shows as one,
+// and its preview is what is in it); one that is not under a stand-in.
+browse::Listing App::SourcesListing() {
+  listed_sources_.clear();
+  browse::Listing out;
+  for (const library::KnownSource& known : library_.KnownSources()) {
+    const browse::SourcePtr s = registry_.Find(known.key);
+    const GroupScan& scan = scans_[(int)GroupOfKey(known.key)];
+    browse::Entry e;
+    e.type = browse::Entry::Type::Folder;
+    e.id = s ? library::EncodeId(known.key, s->RootId()) : "source:" + known.key;
+    e.name = s ? s->Name() : known.name;
+    e.description = s ? s->Detail()
+      : scan.scanned && !scan.running ? std::string("Not found right now") : known.detail;
+    e.image = s && !s->Image().empty() ? s->Image() : known.image;
+    ListedSource listed;
+    listed.key = known.key;
+    listed.name = e.name;
+    listed.icon = s ? s->Icon() : !known.icon.empty() ? known.icon : icon::kFolder;
+    listed.source = s;
+    listed_sources_[e.id] = std::move(listed);
+    out.push_back(std::move(e));
+  }
+  return out;
+}
+
+const App::ListedSource* App::ListedSourceOf(const browse::Entry& e) const {
+  if (!OnSourcesList())
+    return nullptr;
+  const auto it = listed_sources_.find(e.id);
+  return it == listed_sources_.end() ? nullptr : &it->second;
+}
+
+const char* App::EntryIcon(const browse::Entry& e) const {
+  if (const ListedSource* listed = ListedSourceOf(e))
+    return listed->icon.c_str();
+  return IconFor(e);
+}
+
+void App::OpenSourcesList(const std::string& select_key) {
+  if (FullscreenPlayback() || bind_photo_)
+    return;
+  CancelForegroundLaunch();
+  AbandonBrowse();
+  RememberPlace(); // the source on screen, if any
+  library_.Save();
+  const std::string want = !select_key.empty() ? select_key : sources_list_key_;
+  current_source_ = sources_source_;
+  path_.clear();
+  BrowseLevel top;
+  top.id = sources_source_->RootId();
+  top.name = sources_source_->Name();
+  top.raw = SourcesListing();
+  SortLevel(top);
+  for (size_t i = 0; i < top.entries.size(); i++) {
+    const auto it = listed_sources_.find(top.entries[i].id);
+    if (it != listed_sources_.end() && it->second.key == want) {
+      top.selection = (int)i;
+      break;
+    }
+  }
+  sel_entry_ = top.selection;
+  path_.push_back(std::move(top));
+  view_ = View::Browse;
+  Set("view", bind_view_, Rml::String("browse"));
+  Set("source_name", bind_source_name_, sources_source_->Name());
+  RebuildEntryRows();
+  RebuildCrumb();
+  RebuildDetail();
+  scroll_entries_pending_ = true;
+  // Nothing remembered yet (the first run): looked for now.
+  if (path_.front().raw.empty())
+    SearchAllSources();
+}
+
+void App::RefreshSourcesList() {
+  if (!OnSourcesList())
+    return;
+  // On the same one, by its key: one found since is listed under another id.
+  std::string key;
+  if (const browse::Entry* e = SelectedEntry())
+    if (const ListedSource* listed = ListedSourceOf(*e))
+      key = listed->key;
+  BrowseLevel& top = path_.front();
+  top.raw = SourcesListing();
+  top.selection = -1;
+  SortLevel(top);
+  for (size_t i = 0; i < top.entries.size(); i++)
+    if (listed_sources_[top.entries[i].id].key == key)
+      top.selection = (int)i;
+  sel_entry_ = std::max(0, top.selection);
+  top.selection = sel_entry_;
+  RebuildEntryRows();
+  RebuildDetail();
+}
+
+// ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
 std::string App::RailKey(const RailItem& item) {
   switch (item.kind) {
   case RailKind::Sources:  return "sources";
-  case RailKind::Search:   return "search";
   case RailKind::Settings: return "settings";
   default:                 return "home";
   }
@@ -235,8 +339,6 @@ void App::RebuildHome(const std::string& select) {
   rail_rows_.push_back({icon::kHome, "Home", ""});
   rail_.push_back({RailKind::Sources});
   rail_rows_.push_back({icon::kDrive, "Sources", ""});
-  rail_.push_back({RailKind::Search});
-  rail_rows_.push_back({icon::kSearch, "Search", ""});
   rail_.push_back({RailKind::Settings});
   rail_rows_.push_back({icon::kSettings, "Settings", ""});
 
@@ -275,8 +377,8 @@ void App::ActivateRail() {
     EnterSettings();
     return;
   }
-  if (rail_[sel_rail_].kind == RailKind::Search) {
-    OpenGlobalSearch();
+  if (rail_[sel_rail_].kind == RailKind::Sources) {
+    OpenSourcesList();
     return;
   }
   home_rows_wanted_ = true;
@@ -293,15 +395,13 @@ void App::RebuildShelves() {
   const RailKind place = sel_rail_ < (int)rail_.size() ? rail_[sel_rail_].kind : RailKind::Home;
   const bool settings = place == RailKind::Settings;
   const bool sources_page = place == RailKind::Sources;
-  const bool search_page = place == RailKind::Search;
 
   // What the rows were, to keep the focus on the same row when the one of
   // what is playing comes or goes above it.
   const bool had_now_playing = NowPlayingShelf(0);
   shelves_.clear();
-  Set("home_compact", bind_home_compact_, settings || sources_page || search_page);
+  Set("home_compact", bind_home_compact_, settings || sources_page);
   Set("settings_page", bind_settings_page_, settings);
-  Set("sources_page", bind_sources_page_, sources_page);
   if (settings)
     RebuildSettingRows();
   else
@@ -346,62 +446,28 @@ void App::RebuildShelves() {
       shelves_.push_back(std::move(favs));
   }
 
-  if (sources_page) {
-    // Artwork for a source's tile: its own picture, or one seen in it, or
-    // that of something from it in the library (a snapshot will do: it is
-    // only shown, not kept).
-    std::map<std::string, std::string> library_art;
-    auto note = [&library_art](const library::Ref& ref) {
-      if (!ref.entry.image.empty())
-        library_art.emplace(ref.source_key, ref.entry.image);
-    };
-    for (const auto& item : library_.InProgress())
-      note(item.first);
-    for (const library::Recent& r : library_.RecentItems())
-      note(r.ref);
-    for (const library::Ref& ref : library_.Favorites())
-      note(ref);
-
-    Shelf row{"Sources", nullptr, {}, {}, {}};
-    for (const library::KnownSource& known : library_.KnownSources()) {
-      const browse::SourcePtr found = registry_.Find(known.key);
-      browse::Entry stand_in;
-      stand_in.id = StandInId(known.key);
-      stand_in.name = known.name;
-      stand_in.type = browse::Entry::Type::Folder;
-      stand_in.image = found && !found->Image().empty() ? found->Image() : known.image;
-      if (stand_in.image.empty()) {
-        auto it = library_art.find(known.key);
-        if (it != library_art.end())
-          stand_in.image = it->second;
-      }
-      row.entries.push_back(std::move(stand_in));
-      row.sources.push_back(found);
-      row.known.push_back(known);
-    }
-    if (!row.entries.empty())
-      shelves_.push_back(std::move(row));
-  }
-
-  // Nothing to show: Home before anything was played or pinned, or no
-  // source found at all. Says what is going on in its place.
-  // (The Search tab is only that: what it does, and select to start.)
+  // Nothing to show: Home before anything was played or pinned. The
+  // Sources tab says what is behind it, select to open it.
   const bool empty = !settings && shelves_.empty();
+  const size_t sources = library_.KnownSources().size();
   Set("hero_icon", bind_hero_icon_, Rml::String(!empty ? ""
-    : search_page ? icon::kSearch : sources_page ? icon::kDrive : icon::kHome));
+    : sources_page ? icon::kDrive : icon::kHome));
   Set("hero_title", bind_hero_title_, Rml::String(!empty ? ""
-    : search_page ? "Search everything"
-    : sources_page ? (searching ? "Looking for sources..." : "No sources found")
+    : sources_page ? (sources ? "Sources" : searching ? "Looking for sources..."
+                                                      : "No sources found")
     : "Welcome"));
   Set("hero_detail", bind_hero_detail_, Rml::String(!empty ? ""
-    : search_page ? "Your library, and every source that can search."
-    : sources_page ? "Drives, media servers on the network, and plugins."
+    : sources_page ? (sources ? std::to_string(sources) +
+                                (sources == 1 ? " source" : " sources") +
+                                ": drives, media servers and plugins."
+                              : "Drives, media servers on the network, and plugins.")
     : "Your drives, servers and plugins are under Sources."));
   Set("hero_note", bind_hero_note_, Rml::String(!empty ? ""
-    : search_page ? "Select to type what to look for."
-    : sources_page ? (searching ? "" : "Square looks again.")
+    : sources_page && !errors.empty() ? errors // a plugin that failed to load, say
+    : sources_page ? (sources ? "Select to open the list; search them all from its options."
+                              : searching ? "" : "Square looks again.")
     : "What you leave unfinished, and what you pin, will gather here."));
-  // Beside the head of the Sources list: a search under way, or what
+  // Beside the count of the list of sources: a search under way, or what
   // went wrong with the last one.
   Set("group_status", bind_group_status_, searching ? Rml::String("Searching...") : errors);
 
@@ -425,40 +491,11 @@ void App::RebuildShelves() {
   RebuildCards();
 }
 
-void App::SyncSourceList() {
-  source_cards_.clear();
-  if (bind_sources_page_ && SourceShelf(0) && !shelf_rows_.empty())
-    source_cards_ = shelf_rows_[0].cards;
-  Set("source_count", bind_source_count_, (int)source_cards_.size());
-  model_.DirtyVariable("source_cards");
-}
-
 void App::RebuildCards() {
   shelf_rows_.clear();
   for (const Shelf& shelf : shelves_) {
     ShelfRow row;
     row.title = shelf.title;
-    row.sources = !shelf.known.empty();
-    if (row.sources) {
-      // A source: its own icon and what it says it is. One that has not
-      // been found again says so once its group has been looked through.
-      row.count = (int)shelf.known.size();
-      for (size_t i = 0; i < shelf.known.size(); i++) {
-        const library::KnownSource& known = shelf.known[i];
-        const browse::SourcePtr& s = shelf.sources[i];
-        const GroupScan& scan = scans_[(int)GroupOfKey(known.key)];
-        CardRow card;
-        card.title = s ? s->Name() : known.name;
-        card.subtitle = s ? s->Detail()
-          : scan.scanned && !scan.running ? std::string("Not found") : known.detail;
-        card.glyph = s ? s->Icon() : !known.icon.empty() ? known.icon.c_str() : icon::kFolder;
-        card.kind = "source"; // a card like the others, tinted (main.rml)
-        card.missing = !s && scan.scanned && !scan.running;
-        row.cards.push_back(std::move(card));
-      }
-      shelf_rows_.push_back(std::move(row));
-      continue;
-    }
     if (shelf.now_playing) {
       // Its time and progress are the player's, live (main.rml).
       CardRow card;
@@ -510,7 +547,6 @@ void App::RebuildCards() {
   model_.DirtyVariable("shelves");
   model_.DirtyVariable("sel_shelf");
   model_.DirtyVariable("sel_card");
-  SyncSourceList();
   art_scan_pending_ = true;
   UpdateBackdrop();
 }
@@ -589,11 +625,6 @@ void App::ActivateCard() {
   const browse::Entry* card = SelectedCard();
   if (!card)
     return;
-  if (SourceShelf(sel_shelf_)) {
-    const library::KnownSource& known = shelves_[sel_shelf_].known[sel_card_];
-    OpenKnownSource(known.key, known.name);
-    return;
-  }
   if (NowPlayingShelf(sel_shelf_)) {
     SetFullscreen(true); // back to it
     return;
@@ -643,7 +674,10 @@ void App::OpenCard(const browse::Entry& entry,
     RequestBrowse(entry.id, entry.name, false);
   } else {
     // Continue watching: from where it was left, without asking (the
-    // options menu has "Play from beginning").
+    // options menu has "Play from beginning"), in the folder it was played
+    // from when that is known: the next item, and back, as they were then.
+    if (shelf_source == continue_source_ && ResumeInPlace(entry))
+      return;
     PlayEntry(entry, shelf_source == continue_source_);
   }
 }
@@ -668,8 +702,8 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     case Rml::Input::KI_DOWN:  // into the page under the tab
       if (bind_settings_page_) {
         EnterSettings();
-      } else if (sel_rail_ < (int)rail_.size() && rail_[sel_rail_].kind == RailKind::Search) {
-        OpenGlobalSearch();
+      } else if (sel_rail_ < (int)rail_.size() && rail_[sel_rail_].kind == RailKind::Sources) {
+        OpenSourcesList();
       } else {
         home_rows_wanted_ = true;
         if (!shelves_.empty())
@@ -716,48 +750,6 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     UpdateBackdrop();
   };
 
-  // The Sources tab: its one shelf is a list down the page.
-  if (bind_sources_page_) {
-    switch (key) {
-    case Rml::Input::KI_UP:
-      if (sel_card_ > 0) {
-        select(0, sel_card_ - 1);
-      } else { // up out of the list: the tabs
-        home_rows_wanted_ = false;
-        Set("home_shelves", bind_home_shelves_, false);
-      }
-      event.StopPropagation();
-      return;
-    case Rml::Input::KI_DOWN:
-      if (sel_card_ + 1 < cards)
-        select(0, sel_card_ + 1);
-      event.StopPropagation();
-      return;
-    case Rml::Input::KI_LEFT:
-    case Rml::Input::KI_RIGHT:
-      event.StopPropagation();
-      return;
-    case Rml::Input::KI_PRIOR:
-    case Rml::Input::KI_NEXT:
-      select(0, std::clamp(sel_card_ + (key == Rml::Input::KI_PRIOR ? -kPageSettings : kPageSettings),
-                           0, std::max(0, cards - 1)));
-      event.StopPropagation();
-      return;
-    case Rml::Input::KI_BACK:
-    case Rml::Input::KI_ESCAPE:
-      if (bind_watching_) {
-        SetFullscreen(true);
-      } else { // to the tabs
-        home_rows_wanted_ = false;
-        Set("home_shelves", bind_home_shelves_, false);
-      }
-      event.StopPropagation();
-      return;
-    default:
-      break; // the rest as on Home
-    }
-  }
-
   switch (key) {
   case Rml::Input::KI_LEFT:
     if (sel_card_ > 0)
@@ -787,12 +779,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
   // Triangle: pins the card in focus to Favorites, or unpins it.
   case Rml::Input::KI_T:
   case Rml::Input::KI_TAB:
-    if (SourceShelf(sel_shelf_)) {
-      if (const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_])
-        ToggleSourceFavorite(source);
-      else
-        ShowToast("Not found right now", icon::kWarning);
-    } else if (!NowPlayingShelf(sel_shelf_)) {
+    if (!NowPlayingShelf(sel_shelf_)) {
       if (const browse::Entry* card = SelectedCard()) {
         const browse::Entry entry = *card; // the rows are made again
         ToggleFavorite(entry);

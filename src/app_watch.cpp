@@ -167,11 +167,21 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
   const browse::SourcePtr source = from_queue ? queue_.source : current_source_;
   if (!from_queue) {
     launch_queue_ = PlayQueue{current_source_, std::string(), browse::Listing{entry}};
+    launch_place_source_.clear();
+    launch_place_.clear();
     if (view_ == View::Browse && !path_.empty()) {
       const BrowseLevel& level = path_.back();
       for (const browse::Entry& e : level.entries) {
         if (e.id == entry.id) {
           launch_queue_ = PlayQueue{current_source_, level.id, level.entries};
+          // And where that folder is, to be back in it to resume (a
+          // folder of a source, or under a favorite; not search results).
+          std::vector<library::PlaceLevel> place = CurrentPlace();
+          if (current_source_ && place.size() == path_.size() &&
+              (current_source_ == favorites_source_ || !LibraryView(current_source_))) {
+            launch_place_source_ = current_source_->Key();
+            launch_place_ = std::move(place);
+          }
           break;
         }
       }
@@ -260,8 +270,11 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
         progress_saved_at_ = Now();
         watch_last_pos_us_ = watch_last_dur_us_ = -1;
         watch_last_seekable_ = false;
-        if (!launch_from_queue_)
+        if (!launch_from_queue_) {
           queue_ = std::move(launch_queue_);
+          playing_place_source_ = std::move(launch_place_source_);
+          playing_place_ = std::move(launch_place_);
+        }
         const bool behind = launch_behind_;
         CancelLaunch();
         EnterWatch(playing_, !behind);

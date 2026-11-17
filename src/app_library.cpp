@@ -163,6 +163,14 @@ void App::RecordProgress(bool final, bool ended) {
       }
     }
     library_.SetResume(playing_ref_, pos, dur);
+    // The folder it plays from, on it (moving on through the folder, on
+    // the one it has moved on to).
+    if (!playing_place_.empty()) {
+      std::vector<library::PlaceLevel> place = playing_place_;
+      place.back().selected = playing_.id;
+      library_.SetResumePlace(playing_ref_.source_key, playing_ref_.entry.id,
+                              playing_place_source_, place);
+    }
   } else {
     return; // barely started: leave whatever was recorded before
   }

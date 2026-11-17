@@ -135,6 +135,10 @@ void Library::Load(const std::string& path) {
       item.progress.duration = e->Int64Attribute("total", 0);
       item.progress.watched = e->BoolAttribute("watched", false);
       item.progress.updated = e->Int64Attribute("updated", 0);
+      item.place_source = Attr(e, "place_source");
+      for (const XMLElement* l = e->FirstChildElement("level"); l;
+           l = l->NextSiblingElement("level"))
+        item.place.push_back({Attr(l, "id"), Attr(l, "name"), Attr(l, "selected")});
       item.ref = std::move(ref);
       const std::string id = Id(item.ref.source_key, item.ref.entry.id);
       progress_[id] = std::move(item);
@@ -198,6 +202,17 @@ void Library::Save() {
     e->SetAttribute("total", item.progress.duration);
     e->SetAttribute("watched", item.progress.watched);
     e->SetAttribute("updated", item.progress.updated);
+    if (!item.place_source.empty() && !item.place.empty()) {
+      e->SetAttribute("place_source", item.place_source.c_str());
+      for (const PlaceLevel& level : item.place) {
+        XMLElement* l = doc.NewElement("level");
+        l->SetAttribute("id", level.id.c_str());
+        l->SetAttribute("name", level.name.c_str());
+        if (!level.selected.empty())
+          l->SetAttribute("selected", level.selected.c_str());
+        e->InsertEndChild(l);
+      }
+    }
     root->InsertEndChild(e);
   }
 
@@ -303,6 +318,31 @@ void Library::SetWatched(const Ref& ref, bool watched) {
   item.progress.watched = true;
   item.progress.updated = (int64_t)std::time(nullptr);
   Changed();
+}
+
+void Library::SetResumePlace(const std::string& key, const std::string& id,
+                             const std::string& place_source,
+                             const std::vector<PlaceLevel>& place) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = progress_.find(Id(key, id));
+  if (it == progress_.end())
+    return;
+  std::vector<PlaceLevel> kept(place.begin(),
+                               place.begin() + std::min(place.size(), kMaxPlaceDepth));
+  it->second.place_source = place_source;
+  it->second.place = std::move(kept);
+  dirty_ = true; // saved with the rest; nothing on screen shows it
+}
+
+bool Library::ResumePlace(const std::string& key, const std::string& id,
+                          std::string& place_source, std::vector<PlaceLevel>& place) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = progress_.find(Id(key, id));
+  if (it == progress_.end() || it->second.place_source.empty() || it->second.place.empty())
+    return false;
+  place_source = it->second.place_source;
+  place = it->second.place;
+  return true;
 }
 
 std::string Library::ImageFor(const std::string& key, const std::string& id) const {
@@ -529,26 +569,26 @@ bool DecodeId(const std::string& encoded, std::string& key, std::string& id) {
 LibrarySource::LibrarySource(Kind kind, Library& library, SourceRegistry& registry)
   : kind_(kind), library_(library), registry_(registry),
     name_(kind == Kind::Favorites ? "Favorites"
-          : kind == Kind::Search  ? "Search"
+          : kind == Kind::Sources ? "Sources"
                                   : "Continue watching") {
   UpdateDetail();
 }
 
 const char* LibrarySource::Icon() const {
   return kind_ == Kind::Favorites ? icon::kStar
-       : kind_ == Kind::Search    ? icon::kSearch
+       : kind_ == Kind::Sources   ? icon::kDrive
                                   : icon::kResume;
 }
 
 std::string LibrarySource::Key() const {
   return kind_ == Kind::Favorites ? "library:favorites"
-       : kind_ == Kind::Search    ? "library:search"
+       : kind_ == Kind::Sources   ? "library:sources"
                                   : "library:continue";
 }
 
 size_t LibrarySource::Count() const {
   return kind_ == Kind::Favorites ? library_.Favorites().size()
-       : kind_ == Kind::Search    ? 0
+       : kind_ == Kind::Sources   ? 0
                                   : library_.InProgress().size();
 }
 
@@ -576,8 +616,8 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
     if (kind_ == Kind::Favorites) {
       for (const Ref& ref : library_.Favorites())
         add(ref);
-    } else if (kind_ == Kind::Search) {
-      // Nothing of its own: it only searches.
+    } else if (kind_ == Kind::Sources) {
+      // (Made by the app, which knows which are found: App::OpenSourcesList.)
     } else {
       for (const auto& item : library_.InProgress())
         add(item.first);
@@ -607,7 +647,7 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
 bool LibrarySource::CanSearch(const std::string& folder_id) const {
   std::string key, inner;
   if (!DecodeId(folder_id, key, inner))
-    return kind_ == Kind::Search; // the root: of everything, or of the library
+    return kind_ == Kind::Sources; // the root: of everything, or of the library
   const browse::SourcePtr source = registry_.Find(key);
   return source && source->CanSearch(inner);
 }
@@ -616,7 +656,7 @@ bool LibrarySource::Search(const std::string& folder_id, const std::string& quer
                            browse::Listing& out, std::string& error) {
   std::string key, inner;
   if (!DecodeId(folder_id, key, inner)) {
-    if (kind_ == Kind::Search)
+    if (kind_ == Kind::Sources)
       return SearchEverything(query, out, error);
     error = "this source cannot search";
     return false;

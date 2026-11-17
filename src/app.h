@@ -284,7 +284,7 @@ private:
   // watching, Recent (live streams and the folders things were played
   // from), Favorites and, last, every source there is, most used first.
   // Above them two tabs, Home and Settings (a gear).
-  enum class RailKind { Home, Sources, Search, Settings };
+  enum class RailKind { Home, Sources, Settings };
   struct RailItem {
     RailKind kind;
   };
@@ -292,11 +292,6 @@ private:
     std::string title;
     std::shared_ptr<library::LibrarySource> source; // what its cards open in
     browse::Listing entries;                        // ids encoded
-    // Not empty: the row of sources (one per card, 'entries' only standing
-    // in for them), as remembered, and found again if they have been
-    // (null until then).
-    std::vector<library::KnownSource> known;
-    std::vector<browse::SourcePtr> sources;
     // The row of what is playing (Home's first, while something does):
     // one card, the way back to it.
     bool now_playing = false;
@@ -326,9 +321,6 @@ private:
   void FocusHomeCard(const std::string& id);
   bool NowPlayingShelf(int shelf) const {
     return shelf >= 0 && shelf < (int)shelves_.size() && shelves_[shelf].now_playing;
-  }
-  bool SourceShelf(int shelf) const {
-    return shelf >= 0 && shelf < (int)shelves_.size() && !shelves_[shelf].known.empty();
   }
   static std::string RailKey(const RailItem& item); // what RebuildHome keeps
   void ActivateCard();
@@ -364,6 +356,18 @@ private:
 
   // --- Browse view -------------------------------------------------------
   void OpenSource(const browse::SourcePtr& source); // browse its root
+  // The folders on screen, down to the last one listed (not results of a
+  // search), each with the entry in focus.
+  std::vector<library::PlaceLevel> CurrentPlace() const;
+  // Continue watching: back to the folder the item was played from (as
+  // the library remembers it, see launch_place_), the item resumed from
+  // there. False when there is no such place (or its source is not
+  // found): the caller plays the card as it is.
+  bool ResumeInPlace(const browse::Entry& card);
+  // The card ResumeInPlace is opening a folder for, and that request.
+  browse::Entry pending_resume_card_;
+  std::string pending_resume_id_;
+  uint32_t pending_resume_request_ = 0;
   void EnterContainer(const browse::Entry& entry);
   void LeaveContainer();                 // back one level (or to sources)
   void RefreshContainer();               // re-list the current folder
@@ -421,9 +425,33 @@ private:
   // back returns to the folder, selection and all. Unlike the filter it
   // reaches content that is not listed.
   void OpenSearch();
-  // Asks what to look for, then searches the library and every source that
-  // can search (the Search tab on Home).
-  void OpenGlobalSearch();
+  // The list of sources (the Sources tab), in the browse view as any
+  // folder: every source there is, remembered or found, most used first,
+  // on 'select_key' (or the one last opened from it). Select opens one,
+  // back from its top returns here; Search in its options menu searches
+  // the library and every source that can.
+  void OpenSourcesList(const std::string& select_key = std::string());
+  // The list again, as the sources found now are, on the same one.
+  void RefreshSourcesList();
+  browse::Listing SourcesListing();
+  // On the list itself (not results searched from it).
+  bool OnSourcesList() const {
+    return view_ == View::Browse && current_source_ &&
+           current_source_ == sources_source_ && path_.size() == 1;
+  }
+  // A source as listed there: its key, and the source if it is found.
+  struct ListedSource {
+    std::string key, name;
+    std::string icon;
+    browse::SourcePtr source;
+  };
+  std::map<std::string, ListedSource> listed_sources_; // by entry id
+  const ListedSource* ListedSourceOf(const browse::Entry& e) const;
+  // The glyph for an entry: a source's own, on the list of them.
+  const char* EntryIcon(const browse::Entry& e) const;
+  std::string sources_list_key_;      // last opened from the list
+  bool from_sources_list_ = false;    // the source on screen was
+  bool return_to_sources_tab_ = false; // GoHome: onto the Sources tab
   // The search dialog asking for something else (OpenTextEntry): who gets
   // the text. Empty while it asks for a search.
   std::function<void(const std::string&)> text_entry_;
@@ -813,11 +841,6 @@ private:
   // Settings: the tab is the place (its page shows), and the focus is down
   // in its list.
   bool bind_settings_page_ = false;
-  // The Sources tab: its one shelf, drawn as a list down the page.
-  bool bind_sources_page_ = false;
-  std::vector<CardRow> source_cards_;
-  int bind_source_count_ = 0;
-  void SyncSourceList();
   bool bind_home_settings_ = false;
   std::vector<SettingItem> setting_items_;
   std::vector<SettingRow> setting_rows_;
@@ -906,10 +929,17 @@ private:
   library::SourceRegistry registry_;
   std::shared_ptr<library::LibrarySource> favorites_source_;
   std::shared_ptr<library::LibrarySource> continue_source_;
-  std::shared_ptr<library::LibrarySource> search_source_;
+  std::shared_ptr<library::LibrarySource> sources_source_;
   std::vector<browse::SourcePtr> discovered_;   // from the providers
   uint64_t library_seen_ = 0;          // generation the UI reflects
 
+  // Where an item was started from, in the browse view: the source on
+  // screen (its key) and the folders down to the one it is in, so that
+  // Continue watching resumes it there, with that folder as the queue and
+  // back leading where it led (see ResumeInPlace). Empty for an item
+  // started from Home, or from results of a search.
+  std::string launch_place_source_, playing_place_source_;
+  std::vector<library::PlaceLevel> launch_place_, playing_place_;
   // The item playing, as the library knows it; 'resumable' says whether
   // its progress is worth remembering (seekable, long enough).
   library::Ref playing_ref_;

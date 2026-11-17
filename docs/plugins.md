@@ -39,8 +39,8 @@ up, a changed one is loaded afresh, a deleted one goes. An unchanged plugin
 keeps running, with whatever it has cached. So the loop on a console is:
 upload the file over FTP, press square.
 
-A plugin that fails to load says why beside the head of the Sources list,
-and does not hold up the others.
+A plugin that fails to load says why on the Sources tab (and in a toast
+while the list of sources is open), and does not hold up the others.
 
 ## The shape of a plugin
 

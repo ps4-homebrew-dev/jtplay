@@ -37,7 +37,6 @@ inline constexpr int kWindowGridMargin = 4;
 inline constexpr int kArtThreads = 4;
 inline constexpr float kMenuRowPitch = 72.0f + 6.0f;      // .menu-row
 inline constexpr float kMenuSectionPitch = 56.0f;         // .menu-section
-inline constexpr float kSourceRowPitch = 96.0f + 8.0f;    // .source-row
 // What a search may be; the search field says so too (maxlength).
 inline constexpr size_t kSearchMaxLength = 100;
 // What a plugin's text setting may be: a sign-in token runs to a couple of
