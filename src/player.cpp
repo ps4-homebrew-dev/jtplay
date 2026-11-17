@@ -549,7 +549,6 @@ bool Player::Open(const Media& media, std::string& error, int64_t start_seconds)
   mpv_set_property_string(mpv_, "speed", "1");
   speed_ = 1.0;
   mpv_set_property_string(mpv_, "sub-delay", "0");
-  sub_delay_ = 0.0;
   // "start" applies to every file loaded after it is set, so it is set
   // (or reset) for each one.
   const std::string start = start_seconds > 0 ? std::to_string(start_seconds) : "none";
@@ -1181,11 +1180,6 @@ bool Player::TogglePause() {
   return paused;
 }
 
-std::vector<VideoTrackInfo> Player::VideoTracks() const {
-  std::lock_guard<std::mutex> lock(tracks_mutex_);
-  return video_tracks_;
-}
-
 std::vector<AudioTrackInfo> Player::AudioTracks() const {
   std::lock_guard<std::mutex> lock(tracks_mutex_);
   return audio_tracks_;
@@ -1232,13 +1226,6 @@ bool Player::SelectAudioTrack(int stream_index) {
   mpv_set_property_async(mpv_, 0, "aid", MPV_FORMAT_INT64, &id);
   audio_id_ = stream_index;
   return true;
-}
-
-void Player::SetSpeed(double speed) {
-  if (!mpv_ || !active_)
-    return;
-  speed_ = speed; // at once, for the UI; the property event confirms it
-  mpv_set_property_async(mpv_, 0, "speed", MPV_FORMAT_DOUBLE, &speed);
 }
 
 std::vector<SubtitleTrackInfo> Player::SubtitleTracks() const {
@@ -1309,11 +1296,6 @@ void Player::SetFit(Fit fit) {
 void Player::SetAudioDelay(double seconds) {
   audio_delay_ = seconds;
   SetDouble("audio-delay", seconds);
-}
-
-void Player::SetSubtitleDelay(double seconds) {
-  sub_delay_ = seconds;
-  SetDouble("sub-delay", seconds);
 }
 
 void Player::SetSubtitleScale(double scale) {

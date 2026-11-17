@@ -44,8 +44,8 @@ body.home #video-shade {
 	decorator: linear-gradient(90deg, #0b1020eb 0%, #0b1020b8 28%, #0b102040 58%, #0b102000 78%),
 	           linear-gradient(180deg, #0b1020c0 0%, #0b102000 14%, #0b102000 28%, #0b1020f2 45%);
 }
-/* A group's page: no banner, the rows start right under the tabs, so the
- * shade is even, as over the browse view. */
+/* The Settings page: no banner, the list starts right under the tabs, so
+ * the shade is even, as over the browse view. */
 body.home.compact #video-shade {
 	decorator: none;
 	background-color: #0b1020d6;

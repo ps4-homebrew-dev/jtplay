@@ -126,7 +126,7 @@ void App::OpenSource(const browse::SourcePtr& source) {
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
-  // Counted, for the order of the Sources list.
+  // Counted, for the order of the list of sources.
   library_.SourceUsed(source->Key());
   library_.Save();
 
@@ -216,7 +216,7 @@ void App::NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& 
   if (!source || LibraryView(source) || !source->Image().empty())
     return;
   // The first picture listed: a show's poster, an album's cover, a folder's
-  // artwork. Taken once; the tile keeps it.
+  // artwork. Taken once; the list of sources keeps it.
   for (const browse::Entry& e : entries) {
     if (e.image.empty())
       continue;
@@ -1114,15 +1114,6 @@ void App::OpenMenu() {
     if (shelves_[sel_shelf_].source == continue_source_)
       AddMenuItem({"Remove from Continue watching", nullptr,
         [this, card](int) { SetWatched(card, false); }});
-    if (shelves_[sel_shelf_].recent) {
-      AddMenuItem({"Remove from Recent", nullptr, [this, card](int) {
-        library::Ref ref;
-        if (Identify(card, ref)) {
-          library_.RemoveRecent(ref.source_key, ref.entry.id);
-          library_.Save();
-        }
-      }});
-    }
     library::Ref ref;
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);

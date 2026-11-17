@@ -110,10 +110,9 @@ private:
   };
 
   // Rows exposed to the RmlUi data model.
-  struct RailRow {      // home: the menu down the left edge
+  struct RailRow {      // home: a tab across the top
     Rml::String icon;
     Rml::String label;
-    Rml::String detail;
   };
   struct CardRow {      // home: one tile of a shelf
     Rml::String title;
@@ -125,13 +124,10 @@ private:
     Rml::String art = "none";
     Rml::String progress = "0%"; // never empty, see EntryRow
     bool watched = false;
-    bool missing = false; // a source not found this time: dimmed
   };
   struct ShelfRow {
-    Rml::String title;  // "" for a row that goes on from the one above
+    Rml::String title;
     int count = 0;        // what the title counts; 0 shows no count
-    bool sources = false; // a row of a group's sources: launcher tiles
-    bool gap = false;     // the first row after those: set apart from them
     std::vector<CardRow> cards;
   };
   struct EntryRow {
@@ -271,19 +267,20 @@ private:
   // watched once it is (nearly) over. 'final': playback is ending;
   // 'ended': it played to the end.
   void RecordProgress(bool final, bool ended = false);
-  // Puts what played into Recently played as it ends.
+  // Puts what played among the library's recent items as it ends (which
+  // Search all sources looks through first, see library.h).
   void RecordRecent();
-  // Artwork from a listing of 'source', for the Sources list when it has
-  // no picture of its own yet.
+  // Artwork from a listing of 'source', for the list of sources when it
+  // has no picture of its own yet.
   void NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& entries);
   // Library changed: refresh what shows it (rows, counts, library views).
   void OnLibraryChanged();
 
   // --- Home view -----------------------------------------------------------
-  // One page of rows, the focus on its first card: what plays, Continue
-  // watching, Recent (live streams and the folders things were played
-  // from), Favorites and, last, every source there is, most used first.
-  // Above them two tabs, Home and Settings (a gear).
+  // Tabs across the top, Home, Sources and Settings (see app_home.cpp).
+  // Home's page is rows of cards: what plays, Continue watching and
+  // Favorites. Sources' page is the list of sources, in the browse view
+  // (see OpenSourcesList); Settings', a list of what can be set.
   enum class RailKind { Home, Sources, Settings };
   struct RailItem {
     RailKind kind;
@@ -295,13 +292,10 @@ private:
     // The row of what is playing (Home's first, while something does):
     // one card, the way back to it.
     bool now_playing = false;
-    // Recently played: which of its cards are live streams.
-    bool recent = false;
-    std::vector<bool> live;
   };
-  // Runs the providers of one rail group on the worker and replaces that
-  // group's sources with what they find; 'done' runs on the main thread
-  // afterwards. A search already under way for the group is joined.
+  // Runs the providers of one group of sources on the worker and replaces
+  // that group's sources with what they find; 'done' runs on the main
+  // thread afterwards. A search already under way for the group is joined.
   void StartDiscovery(browse::Source::Group group,
                       std::function<void()> done = nullptr);
   bool SourceKnown(const std::string& key) const;
@@ -312,7 +306,8 @@ private:
   void RebuildCards();         // card rows from shelves_ (artwork, progress)
   void MoveRail(int delta);
   void ActivateRail();
-  // Every group of sources looked for again (square on Home).
+  // Every group of sources looked for again (square on Home, Refresh on
+  // the list of sources).
   void SearchAllSources();
   // A source by its key: opened if it has been found, looked for (and then
   // opened) if it has not been yet.
@@ -369,7 +364,9 @@ private:
   std::string pending_resume_id_;
   uint32_t pending_resume_request_ = 0;
   void EnterContainer(const browse::Entry& entry);
-  void LeaveContainer();                 // back one level (or to sources)
+  // Back one level; from the top of a source, to the list of sources (or
+  // home); from that list, up to its tab.
+  void LeaveContainer();
   void RefreshContainer();               // re-list the current folder
   // 'keep': the entry to put the cursor on (by id), if it is there.
   void RequestBrowse(const std::string& id, const std::string& name,
@@ -483,8 +480,8 @@ private:
   // --- Options menu ------------------------------------------------------
   // The menus are lists of groups, each under a heading and always in the
   // same order: what the item in focus can do, its folder, finding things
-  // in it, how it is shown, where to go, the plugin's settings and, last,
-  // what plays behind the menus.
+  // in it, how it is shown, the plugin's settings and, last, what plays
+  // behind the menus.
   void OpenMenu();
   void AddEntryActions(const browse::Entry& entry);
   // Entries added to menu_items_ from here on belong under 'title': the
@@ -562,14 +559,15 @@ private:
   bool HandleMediaKey(int key);
   bool HandleTransportKey(int key);     // the transport keys among them
   void HandleKeyUp(int key);
-  // The video info bar (see app_watch.cpp): up with the focus on its
-  // buttons, until no key has come for a while; up without it, to show
-  // an item or a seek; away.
+  // The video info bar along the bottom (see app_watch.cpp): up with the
+  // focus on its buttons, until no key has come for a while; up without
+  // it, after a pause or a track picked with a remote's key; away.
   void ShowControls();
   void PeekWatchInfo();
   void HideWatchInfo();
-  // A seek: shown on the bottom bar if that is up, otherwise on a thin bar
-  // of its own along the top, which goes again a moment after the last.
+  // A seek: shown on the bottom bar if that is up, otherwise on the thin
+  // bar along the top (which also shows an item as it starts), which goes
+  // again a moment after the last.
   void ShowSeek();
   void SeekStep(int sign, bool large = false);
   void UpdateWatchOverlay();
@@ -706,12 +704,11 @@ private:
   std::string preview_key_;                 // the one the panel waits for
   double preview_at_ = 0.0;                 // when to ask for it; 0 = not
   bool preview_running_ = false;
-  bool bind_busy_ = false;         // a browse/discovery is in flight
-  // The browse view's own account of waiting: a listing is on its way
-  // (said in place of the list while that is empty), or the focused row is
-  // being opened (a folder being listed, an item being started) and has
-  // been for long enough to say so; and what went wrong with the folder on
-  // screen.
+  // The one sign of waiting, the dots by the clock: a task of a lane (see
+  // PostTask) or a picture on its way.
+  bool bind_busy_ = false;
+  // A listing is on its way (the list says nothing about being empty
+  // meanwhile); and what went wrong with the folder on screen.
   bool bind_browse_loading_ = false;
   Rml::String bind_browse_error_;
   bool bind_watching_ = false;     // a playback session is on
@@ -725,7 +722,7 @@ private:
   // Playback was stopped by holding back: what the keyboard repeats of it
   // until it is let go is not more presses of back.
   bool back_swallow_ = false;
-  bool bind_info_visible_ = false; // watch info bar shown
+  bool bind_info_visible_ = false; // the bottom bar shown
   // The playback controls (see UpdateControls): the buttons shown, which
   // of them has the focus and what that one is, in words.
   std::vector<ControlRow> control_rows_;
@@ -786,7 +783,7 @@ private:
   bool bind_photo_ = false;
   bool bind_photo_info_ = false;       // caption along the bottom
   bool bind_photo_playing_ = false;    // slideshow running
-  bool bind_photo_loading_ = false;
+  bool bind_photo_loading_ = false;    // (not bound: one of bind_busy_'s)
   bool bind_photo_fade_ = true;        // cross-fade between pictures
   int bind_photo_front_ = 0;           // layer showing the current picture
   Rml::String bind_photo_art_[2] = {"none", "none"};  // decorators
@@ -862,16 +859,13 @@ private:
   Rml::String bind_feat_desc_;
   Rml::String bind_feat_progress_ = "0%"; // never empty, see EntryRow
   bool bind_feat_live_ = false;  // the banner shows what plays: live time
-  // On a group's page: no banner, so that the grid of its sources starts
-  // right under the tabs (the tab already says where we are).
+  // On the Settings page: no banner, so that the list starts right under
+  // the tabs (the tab already says where we are).
   bool bind_home_compact_ = false;
-  // On a group's page with sources: a search under way, or what went wrong
-  // with the last one, beside the count in the head of the grid.
-  Rml::String bind_group_status_;
   std::vector<RailItem> rail_;
-  // Per rail group (indexed by browse::Source::Group): searched at least
-  // once, a search under way and what to do when it ends, and what the
-  // providers had to say about the last one ("" when all went well).
+  // Per group of sources (indexed by browse::Source::Group): looked for at
+  // least once, a search under way and what to do when it ends, and what
+  // the providers had to say about the last one ("" when all went well).
   struct GroupScan {
     bool scanned = false;
     bool running = false;
@@ -943,8 +937,8 @@ private:
   // started from Home, or from results of a search.
   std::string launch_place_source_, playing_place_source_;
   std::vector<library::PlaceLevel> launch_place_, playing_place_;
-  // The item playing, as the library knows it; 'resumable' says whether
-  // its progress is worth remembering (seekable, long enough).
+  // The item playing, as the library knows it; 'identified': it does (a
+  // file played from outside every source is not).
   library::Ref playing_ref_;
   bool playing_identified_ = false;
   double progress_saved_at_ = 0.0;  // last RecordProgress() while playing
@@ -1007,16 +1001,16 @@ private:
   double toast_deadline_ = 0.0;
   double info_deadline_ = 0.0;      // watch info bar auto-hide
   bool info_stay_ = false;          // ... not: select brought it up
-  bool bind_seekbar_visible_ = false; // the top seek bar
+  bool bind_seekbar_visible_ = false; // the top bar
   double seekbar_deadline_ = 0.0;
   bool scroll_entries_pending_ = false;
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
-  bool scroll_sources_pending_ = false;
+  bool scroll_rows_pending_ = false;    // Home's rows, onto the focus
   // Home's focus belongs on its rows (it goes back there with Home),
   // unless it was taken up to the tabs. At the start it is on the tabs,
   // on Home.
   bool home_rows_wanted_ = false;
-  // The card to focus when Home is back (the source just left).
+  // The card to focus when Home is back: the one a folder was opened from.
   std::string home_return_id_;
 };

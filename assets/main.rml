@@ -30,10 +30,9 @@
 				     of sources, in the browse view, under them as well. -->
 				<div id="tabs" data-if="view == 'home' || (view == 'browse' && sources_tab)"
 				     data-class-away="view == 'home' ? (home_shelves || home_settings) : !browse_tabs">
-					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail"
-					     data-class-icon-only="r.label == ''">
+					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail">
 						<span class="tab-icon">{{r.icon}}</span>
-						<span class="tab-label" data-if="r.label != ''">{{r.label}}</span>
+						<span class="tab-label">{{r.label}}</span>
 					</div>
 				</div>
 				<!-- (The tabs keep their width; what plays gives way to them.) -->
@@ -91,8 +90,7 @@
 						<div class="feat-desc" data-if="feat_desc != ''">{{feat_desc}}</div>
 					</div>
 					<!-- ...or, when there is nothing else to show, what the place is:
-					     Home before the library has anything, a group with no
-					     sources (being looked for, or none found). -->
+					     Home before the library has anything. -->
 					<div id="hero" data-if="feat_title == '' && hero_title != ''">
 						<div class="hero-icon">{{hero_icon}}</div>
 						<div class="hero-text">
@@ -107,22 +105,15 @@
 						     data-class-current="si == sel_shelf">
 							<!-- (Bindings to sh go on what is inside: on the repeated
 							     element itself they are looked at once more as rows go.) -->
-							<div class="shelf-in" data-class-sources="sh.sources" data-class-gap="sh.gap">
-								<!-- The row of sources says beside its head whether they
-								     are being looked for. -->
-								<div class="shelf-head" data-if="sh.title != ''">
+							<div class="shelf-in">
+								<div class="shelf-head">
 									<span class="shelf-title">{{sh.title}}</span>
 									<span class="shelf-count" data-if="sh.count > 0">{{sh.count}}</span>
-									<span class="shelf-status" data-if="sh.sources && group_status != ''">{{group_status}}</span>
 								</div>
 								<div class="cards" data-attr-id="'cards-' + si">
 									<div class="card" data-for="c, ci : sh.cards"
 									     data-class-selected="home_shelves && si == sel_shelf && ci == sel_card">
-										<!-- (A source: its picture, or its icon on a tint of its own;
-										     dimmed while it is not found.) -->
 										<div class="art-tile"
-										     data-class-k-source="c.kind == 'source'"
-										     data-class-missing="c.missing"
 										     data-class-k-folder="c.kind == 'folder'"
 										     data-class-k-audio="c.kind == 'audio'"
 										     data-class-k-video="c.kind == 'video' || c.kind == 'playing'"

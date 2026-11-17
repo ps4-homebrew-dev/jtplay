@@ -20,8 +20,6 @@ namespace appdetail {
 // Geometry; must match the stylesheets so keyboard scrolling can be
 // computed without layout queries on the generated rows.
 inline constexpr float kCardPitch = 384.0f + 24.0f;       // .card + gap
-// Source tiles per row on a group's page: the rows then make a grid, and
-// four whole cards fit across the screen.
 inline constexpr float kEntryRowPitch = 72.0f + 6.0f;     // list .entry-row
 inline constexpr int kGridColumns = 6;                    // grid .entry-row
 inline constexpr float kGridGap = 24.0f;                  // grid #entry-list gap

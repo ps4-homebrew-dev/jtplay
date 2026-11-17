@@ -138,8 +138,8 @@ public:
   // is no video or mpv could not do it.
   bool Snapshot(const std::string& path);
 
-  // Playback speed, 1.0 = normal. Reset to normal for every file.
-  void SetSpeed(double speed);
+  // Playback speed, 1.0 = normal (mpv's; nothing here changes it, and it
+  // is reset to normal for every file).
   double Speed() const { return speed_.load(); }
 
   // What the stream says is on right now: the song an internet radio
@@ -156,17 +156,14 @@ public:
   bool SeekChapter(int index);
 
   // --- Picture and sound adjustments ----------------------------------------
-  // Sticky across files (they are about the room, not the file), except
-  // the subtitle delay, which belongs to one file's timing and is reset by
-  // Open().
+  // Sticky across files: they are about the room, not the file. (Only
+  // read from and kept in the settings file; nothing on screen sets them.)
   enum class Fit { Fit, Fill, Stretch, Count };
   void SetFit(Fit fit);
   Fit GetFit() const { return fit_; }
   // Seconds; positive = later.
   void SetAudioDelay(double seconds);
   double AudioDelay() const { return audio_delay_; }
-  void SetSubtitleDelay(double seconds);
-  double SubtitleDelay() const { return sub_delay_; }
   // 1.0 = normal.
   void SetSubtitleScale(double scale);
   double SubtitleScale() const { return sub_scale_; }
@@ -180,11 +177,8 @@ public:
   void SetPreferredLanguages(const std::string& audio, const std::string& subs);
 
   // --- Video tracks -------------------------------------------------------
-  // The video streams of the open file, in file order (cover art excluded).
-  std::vector<VideoTrackInfo> VideoTracks() const;
-  // mpv id of the track being shown, or -1.
-  int CurrentVideoStream() const { return video_id_.load(); }
-  // Label of the track being shown; "" when there is no video.
+  // Label of the track being shown ("h264 1920x1080"); "" when there is
+  // no video.
   std::string CurrentVideoLabel() const;
   // There is no switching between them: mpv picks the best one when the
   // file opens (for HLS and DASH the highest-bitrate variant) and that is
@@ -264,7 +258,6 @@ private:
   // Adjustments (main thread).
   Fit fit_ = Fit::Fit;
   double audio_delay_ = 0.0;
-  double sub_delay_ = 0.0;
   double sub_scale_ = 1.0;
   bool night_mode_ = false;
 

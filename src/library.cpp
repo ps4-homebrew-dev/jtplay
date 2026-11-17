@@ -125,7 +125,6 @@ void Library::Load(const std::string& path) {
       favorites_.push_back(std::move(ref));
     } else if (std::string(e->Name()) == "recent") {
       Recent r;
-      r.live = e->BoolAttribute("live", false);
       r.updated = e->Int64Attribute("updated", 0);
       r.ref = std::move(ref);
       recent_.push_back(std::move(r));
@@ -166,7 +165,6 @@ void Library::Save() {
   for (const Recent& r : recent_) {
     XMLElement* e = doc.NewElement("recent");
     WriteRef(e, r.ref);
-    e->SetAttribute("live", r.live);
     e->SetAttribute("updated", r.updated);
     root->InsertEndChild(e);
   }
@@ -368,29 +366,18 @@ std::vector<std::pair<Ref, Progress>> Library::InProgress() const {
   return out;
 }
 
-void Library::AddRecent(const Ref& ref, bool live) {
+void Library::AddRecent(const Ref& ref) {
   std::lock_guard<std::mutex> lock(mutex_);
   recent_.erase(std::remove_if(recent_.begin(), recent_.end(), [&ref](const Recent& r) {
     return r.ref.source_key == ref.source_key && r.ref.entry.id == ref.entry.id;
   }), recent_.end());
   Recent r;
   r.ref = ref;
-  r.live = live;
   r.updated = (int64_t)std::time(nullptr);
   recent_.insert(recent_.begin(), std::move(r));
   if (recent_.size() > kMaxRecent)
     recent_.resize(kMaxRecent);
   Changed();
-}
-
-void Library::RemoveRecent(const std::string& key, const std::string& id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  const size_t before = recent_.size();
-  recent_.erase(std::remove_if(recent_.begin(), recent_.end(), [&](const Recent& r) {
-    return r.ref.source_key == key && r.ref.entry.id == id;
-  }), recent_.end());
-  if (recent_.size() != before)
-    Changed();
 }
 
 std::vector<Recent> Library::RecentItems() const {
@@ -570,9 +557,10 @@ LibrarySource::LibrarySource(Kind kind, Library& library, SourceRegistry& regist
   : kind_(kind), library_(library), registry_(registry),
     name_(kind == Kind::Favorites ? "Favorites"
           : kind == Kind::Sources ? "Sources"
-                                  : "Continue watching") {
-  UpdateDetail();
-}
+                                  : "Continue watching"),
+    detail_(kind == Kind::Favorites ? "What you pinned"
+            : kind == Kind::Sources ? "Drives, media servers and plugins"
+                                    : "What you left unfinished") {}
 
 const char* LibrarySource::Icon() const {
   return kind_ == Kind::Favorites ? icon::kStar
@@ -584,22 +572,6 @@ std::string LibrarySource::Key() const {
   return kind_ == Kind::Favorites ? "library:favorites"
        : kind_ == Kind::Sources   ? "library:sources"
                                   : "library:continue";
-}
-
-size_t LibrarySource::Count() const {
-  return kind_ == Kind::Favorites ? library_.Favorites().size()
-       : kind_ == Kind::Sources   ? 0
-                                  : library_.InProgress().size();
-}
-
-void LibrarySource::UpdateDetail() {
-  const size_t n = Count();
-  if (n == 0)
-    detail_ = kind_ == Kind::Favorites
-      ? "Add folders and items from the options menu"
-      : "Nothing started yet";
-  else
-    detail_ = std::to_string(n) + (n == 1 ? " item" : " items");
 }
 
 bool LibrarySource::Browse(const std::string& id, browse::Listing& out,

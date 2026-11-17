@@ -353,7 +353,6 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   if (auto row = ctor.RegisterStruct<RailRow>()) {
     row.RegisterMember("icon", &RailRow::icon);
     row.RegisterMember("label", &RailRow::label);
-    row.RegisterMember("detail", &RailRow::detail);
   }
   ctor.RegisterArray<std::vector<RailRow>>();
 
@@ -365,15 +364,12 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("art", &CardRow::art);
     row.RegisterMember("progress", &CardRow::progress);
     row.RegisterMember("watched", &CardRow::watched);
-    row.RegisterMember("missing", &CardRow::missing);
   }
   ctor.RegisterArray<std::vector<CardRow>>();
 
   if (auto row = ctor.RegisterStruct<ShelfRow>()) {
     row.RegisterMember("title", &ShelfRow::title);
     row.RegisterMember("count", &ShelfRow::count);
-    row.RegisterMember("sources", &ShelfRow::sources);
-    row.RegisterMember("gap", &ShelfRow::gap);
     row.RegisterMember("cards", &ShelfRow::cards);
   }
   ctor.RegisterArray<std::vector<ShelfRow>>();
@@ -457,7 +453,6 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("feat_progress", &bind_feat_progress_);
   ctor.Bind("feat_live", &bind_feat_live_);
   ctor.Bind("home_compact", &bind_home_compact_);
-  ctor.Bind("group_status", &bind_group_status_);
   ctor.Bind("settings_page", &bind_settings_page_);
   ctor.Bind("sources_tab", &bind_sources_tab_);
   ctor.Bind("browse_tabs", &bind_browse_tabs_);
@@ -510,7 +505,6 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("photo", &bind_photo_);
   ctor.Bind("photo_info", &bind_photo_info_);
   ctor.Bind("photo_playing", &bind_photo_playing_);
-  ctor.Bind("photo_loading", &bind_photo_loading_);
   ctor.Bind("photo_fade", &bind_photo_fade_);
   ctor.Bind("photo_front", &bind_photo_front_);
   ctor.Bind("photo_art0", &bind_photo_art_[0]);
@@ -714,8 +708,8 @@ void App::Update() {
   if (preview_at_ > 0.0 && Now() >= preview_at_ && !preview_running_)
     RequestPreview();
 
-  if (scroll_sources_pending_ && ScrollRows())
-    scroll_sources_pending_ = false;
+  if (scroll_rows_pending_ && ScrollRows())
+    scroll_rows_pending_ = false;
 
   if (art_scan_pending_) {
     art_scan_pending_ = false;
@@ -743,8 +737,7 @@ void App::RenderVideo(int width, int height) {
 // when the page does not have the rows yet.
 bool App::ScrollRows() {
   if (Rml::Element* shelves = document_->GetElementById("shelves")) {
-    // (Rows of sources are lower than rows of cards, so it goes by the
-    // heights the rows have.)
+    // (By the heights the rows have, rather than one figure for them all.)
     Rml::ElementList rows;
     shelves->QuerySelectorAll(rows, ".shelf");
     // (Not the hidden one the rows are made from, which keeps 'data-for'.)

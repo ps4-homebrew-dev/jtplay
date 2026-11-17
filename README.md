@@ -1,7 +1,7 @@
 # JTPlay
 
-An audio/video player for jailbroken PS4s and PS5s where the majority of the code
-was produced by claude.ai
+An audio/video player for jailbroken PS4s and PS5s where the majority of
+the code was produced by claude.ai
 
 It is built for the couch: a 10-foot UI driven entirely by a remote or game
 controller, browsing local drives, UPnP/DLNA media servers and JavaScript
@@ -61,38 +61,38 @@ Triangle pins the card in focus to Favorites, or unpins it.
 **Sources** has for its page the list of every source there is, local
 drives, network servers and plugins alike, the ones you open most first,
 shown as soon as the tab has the focus; down (or select) moves into it, up
-from its first row returns to the tabs. It is a folder
-like any other (see Browsing): a list or a grid, sorted and filtered the
-same way, with the same keys, each source with its picture where a plugin
-gives one, otherwise the first artwork seen in it (or of something from it
-in the library), otherwise its icon. The list is remembered from one start
-to the next, so it is there at once, as it was. Meanwhile all of the
-sources are looked for again in the background (local drives and plugins
-first, network servers last), and one that has not been found yet is
-looked for when selected, then opened; one that is not found at all says
-so, and its options menu can forget it. Triangle pins a source to
-Favorites. Back from the top of a source returns to it in the list; back
-from the list, to the tabs.
+from its first row returns to the tabs. It is a folder like any other (see
+Browsing): a list or a grid, sorted and filtered the same way, with the
+same keys, each source with its picture where a plugin gives one,
+otherwise the first artwork seen in it (or of something from it in the
+library), otherwise its icon. The list is remembered from one start to the
+next, so it is there at once, as it was. Meanwhile all of the sources are
+looked for again in the background (local drives and plugins first,
+network servers last), and one that has not been found yet is looked for
+when selected, then opened; one that is not found at all says so, and its
+options menu can forget it. Triangle pins a source to Favorites. Back from
+the top of a source returns to it in the list; back from the list, to the
+tabs.
 
 The options menu on the Sources tab has **Search** and **Refresh** (also
 in the list's options menu, as *Search all sources* and *Refresh*; square
 on the tab refreshes too). Refresh looks for every source again; Search
-(or Ctrl+S on the list) searches everything at once: your
-library by name (Continue watching, what you played lately and Favorites),
-then every source that can search, most used first, all of them side by
-side so the slowest sets the pace rather than the sum. A source that fails
-is left out; back from the results returns to the list.
+(or Ctrl+S on the list) searches everything at once: your library by name
+(Continue watching, what you played lately and Favorites), then every
+source that can search, most used first, all of them side by side so the
+slowest sets the pace rather than the sum. A source that fails is left
+out; back from the results returns to the list.
 
 ## Browsing
 
 Folders are always listed first, and files are named without their
-extension ("Episode 1", not "Episode 1.mkv"). A folder is shown as a **list** (with a
-thumbnail per row and an info panel with artwork, type, size, duration,
-date and resume point) or as a **grid** of artwork tiles with the focused
-item's details along the bottom; switch with View in the options menu.
-Artwork is loaded in the background, newest request first, and shrunk to
-thumbnails so even a folder of camera photos stays light; the selected
-item's artwork is the backdrop.
+extension ("Episode 1", not "Episode 1.mkv"). A folder is shown as a
+**list** (with a thumbnail per row and an info panel with artwork, type,
+size, duration, date and resume point) or as a **grid** of artwork tiles
+with the focused item's details along the bottom; switch with View in the
+options menu. Artwork is loaded in the background, newest request first,
+and shrunk to thumbnails so even a folder of camera photos stays light;
+the selected item's artwork is the backdrop.
 
 The list can be sorted by name (natural order, so "Episode 2" comes before
 "Episode 10"), date or size, ascending or descending, or kept in the order
@@ -127,9 +127,10 @@ in the same order in every menu: first what can be done with the selected
 item (play, resume, play from the beginning, add to favorites, mark as
 watched); then **Folder** (play it all in order or shuffled, a slideshow
 of its pictures, refresh), **Find** (search, where the source has it, and
-filter), **View** (list or grid, sort key and order), **Plugin** (the settings of the plugin the folder is
-from, see Settings) and, while something plays behind the menus, **Now
-playing** (back to full screen, stop).
+filter), **View** (list or grid, sort key and order), **Plugin** (the
+settings of the plugin the folder is from, see Settings) and, while
+something plays behind the menus, **Now playing** (back to full screen,
+stop).
 
 ## Filter and search
 
@@ -175,15 +176,15 @@ triangle or the options menu. A
 favorite folder is a shortcut: it browses (and plays) through the source it
 came from, so a DLNA folder works as long as that server is on the network.
 
-Videos (and audio longer than 20 minutes) remember where they were stopped.
-Playing one again from a folder asks whether to resume (from Continue
-watching it resumes at once), unfinished items show a progress
-bar on their art and gather under **Continue watching**, and anything played
-past 92% is marked watched with a tick. A video without artwork of its own
-gets a snapshot of the frame it was stopped on, so its card shows where you
-left off. Moving to the next item in a folder resumes it without asking.
-All of this, and what was played lately and the sources seen, is stored in `library.xml`
-in the cache directory.
+Videos (and audio longer than 20 minutes) remember where they were
+stopped. Playing one again from a folder asks whether to resume (from
+Continue watching it resumes at once), unfinished items show a progress
+bar on their art and gather under **Continue watching**, and anything
+played past 92% is marked watched with a tick. A video without artwork of
+its own gets a snapshot of the frame it was stopped on, so its card shows
+where you left off. Moving to the next item in a folder resumes it without
+asking. All of this, and what was played lately and the sources seen, is
+stored in `library.xml` in the cache directory.
 
 ## Playing
 
@@ -229,8 +230,9 @@ track and subtitles, each where there is a choice, picked from a list;
 shuffle and repeat (all / one). Select puts the focus on them, on play /
 pause: left and right then go along them, select presses the one in focus,
 and what that one is (the name of the previous or next item, what a track
-is set to) stands beside the row. Back takes the focus off them again. Without the focus the keys steer playback
-directly: left and right seek, up and down seek five minutes on or back.
+is set to) stands beside the row. Back takes the focus off them again.
+Without the focus the keys steer playback directly: left and right seek,
+up and down seek five minutes on or back.
 
 When an item starts, the thin bar along the top (below) shows it for five
 seconds -- unless it was started from the bar's own buttons, which then
@@ -239,10 +241,11 @@ plays on, and with options, and goes again five seconds after the last
 key. Brought up with select, for its buttons, it stays until back (or
 options) sends it away; once its buttons start another item or play on
 from a pause, it goes by itself again. Select does not pause: a second
-press, on play / pause, does. A seek with the bar away shows on a thin
-bar along the top instead -- the title, the time, the timeline and where
-the seek lands (a live stream: LIVE, no timeline) -- which goes three seconds after the last seek. Artwork, where an item has any, is at the
-left of the bar, as tall as its rows.
+press, on play / pause, does. A seek with the bar away shows on a thin bar
+along the top instead -- the title, the time, the timeline and where the
+seek lands (a live stream: LIVE, no timeline) -- which goes three seconds
+after the last seek. Artwork, where an item has any, is at the left of the
+bar, as tall as its rows.
 
 Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s
 steps, then 30 s, a minute, two and five. Files with chapters show them
@@ -257,38 +260,38 @@ An item that fails to open while going through a folder is skipped.
 
 ## Settings
 
-Settings, the last of the tabs, lists the settings right under the
-tab: down from the tab into the list, left and right change the one in
-focus (select steps it on), and what it does is shown beside the list.
-Select on a setting with many choices (a language, a plugin's country)
-lists them all. They are grouped as playback, screen, library, a section
-for each plugin that has settings of its own, and diagnostics. A plugin's
-settings are also in the options menu of anything that is the plugin's (its
-tile, its folders, a favorite from it), as **Plugin** > *name* **settings**:
-a menu of their own, and a folder on screen is listed again when they have
-changed. The others: whether the
-next episode plays by itself,
-**Show input** (every key and button as it arrives, in a corner of the
-screen and the log, also those nothing reacts to: for finding out what a
-TV remote sends; `JTPLAY_INPUT_LOG=1` turns it on from the start),
-the preferred audio and subtitle language (a matching track is picked when
-a file opens), the screensaver delay, night mode (dynamic range
-compression: dialogue up, explosions down) and forgetting Continue
-watching (which asks first). These and repeat and shuffle are kept in
+Settings, the last of the tabs, lists the settings right under the tab:
+down from the tab into the list, left and right change the one in focus
+(select steps it on), and what it does is shown beside the list. Select on
+a setting with many choices (a language, a plugin's country) lists them
+all. They are grouped as playback, screen, library, a section for each
+plugin that has settings of its own, and diagnostics. A plugin's settings
+are also in the options menu of anything that is the plugin's (its source
+in the list of sources, its folders, a favorite from it), as **Plugin** >
+*name* **settings**: a menu of their own, and a folder on screen is listed
+again when they have changed. The others: whether the next episode plays
+by itself, the preferred audio and subtitle language (a matching track is
+picked when a file opens), the screensaver delay, night mode (dynamic
+range compression: dialogue up, explosions down), forgetting Continue
+watching (which asks first) and **Show input** (every key and button as it
+arrives, in a corner of the screen and the log, also those nothing reacts
+to: for finding out what a TV remote sends; `JTPLAY_INPUT_LOG=1` turns it
+on from the start). These and repeat and shuffle are kept in
 `settings.ini` in the cache directory; so are picture scaling (`fit`),
-audio delay (`audio_delay`) and subtitle size (`sub_scale`), which have
-no menu and are set there.
+audio delay (`audio_delay`) and subtitle size (`sub_scale`), which have no
+menu and are set there.
 
 After three minutes (see Settings) without input, and no media playing
-(video, audio or a slideshow), the screen dims to a slowly drifting clock; the first
-key press only wakes it.
+(video, audio or a slideshow), the screen dims to a slowly drifting clock;
+the first key press only wakes it.
 
 ## JavaScript plugins
 
 Besides UPnP/DLNA servers and the local filesystem, media sources can be
-added with JavaScript: every `*.js` file in the plugin directories is run by
-QuickJS and becomes a source on Home. **[docs/plugins.md](docs/plugins.md)**
-is the guide to writing one; in short, a plugin returns an object like this
+added with JavaScript: every `*.js` file in the plugin directories is run
+by QuickJS and its sources join the list of sources.
+**[docs/plugins.md](docs/plugins.md)** is the guide to writing one; in
+short, a plugin returns an object like this
 
 ```js
 return {
@@ -316,12 +319,11 @@ for choices that appear on the Settings page. The host gives it blocking
 (`util`, `xml`).
 
 Plugins of your own go in `plugins` in jtplay's preference directory, as
-SDL gives it: in the title's data on a console, `~/.local/share/jtplay/plugins`
-on a PC (or `--user-plugins DIR`); the log names it at start. A file
-with the name of a bundled plugin replaces it. They are picked up, and
-changed ones loaded afresh, whenever the sources are looked for again
-(square on Home):
-no restart, no new package.
+SDL gives it: in the title's data on a console,
+`~/.local/share/jtplay/plugins` on a PC (or `--user-plugins DIR`); the log
+names it at start. A file with the name of a bundled plugin replaces it.
+They are picked up, and changed ones loaded afresh, whenever the sources
+are looked for again (square on Home): no restart, no new package.
 
 `jtplay --plugin FILE [--browse ID | --search QUERY | --resolve ID]` runs a
 plugin without the app and prints what it answers, which is the quick way
@@ -381,11 +383,11 @@ that is not on the d-pad.
 
 | Button          | Home                        | Lists, menus, Settings            | Playing (full screen)                       | Photos             |
 |-----------------|-----------------------------|-----------------------------------|---------------------------------------------|--------------------|
-| up / down       | between rows; tabs above    | move (lists and menus wrap)       | seek +5 / -5 min                            | caption            |
+| up / down       | between rows; tabs above    | move (lists and menus wrap; up from the top of the list of sources: the tabs) | seek +5 / -5 min                            | caption            |
 | left / right    | along a row (or the tabs)   | list: page or letter; grid: move; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
 | select          | open / play                 | open / play / choose              | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
-| back            | first card; full screen*    | back (Home from a source root); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
-| options         | options for the card or tile | options menu; closes a menu      | info bar / away                             | photo menu         |
+| back            | first card; full screen*    | back (a source's top: its place in the list of sources; that list: the tabs); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
+| options         | options for the card        | options menu; closes a menu       | info bar / away                             | photo menu         |
 | square          | look for sources again      | next sort key                     | play / pause                                | slideshow on / off |
 | triangle        | pin / unpin                 | pin / unpin (Favorites)           | the menus, playing on                       | rotate             |
 | previous / next | a page of rows              | page up / down                    | previous / next chapter or item             | previous / next    |
@@ -407,15 +409,15 @@ field; with nothing playing, in the photo viewer they are the slideshow's
 (play / pause, previous / next picture, close). Its rewind / fast forward
 (as left / right in full screen, 10 s steps behind the menus), audio (the
 next audio track) and subtitle (the next subtitle track, F1 on a keyboard)
-keys work on playback too; its display key
-shows or hides the bar in full screen. Since not every remote has an
-options key, nor every TV passes it
-on, holding OK (Return) for a moment is options too. What a TV remote connected over HDMI-CEC sends depends on
-the console and the TV; Settings > Show input shows it.
+keys work on playback too; its display key shows or hides the bar in full
+screen. Since not every remote has an options key, nor every TV passes it
+on, holding OK (Return) for a moment is options too. What a TV remote
+connected over HDMI-CEC sends depends on the console and the TV; Settings
+> Show input shows it.
 
-Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
-Ctrl+S searches the source (on the list of sources: all of them).
-The mapping lives in `src/gamepad.cpp` and `RmlSDL::ConvertKey`.
+Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen
+and Ctrl+S searches the source (on the list of sources: all of them). The
+mapping lives in `src/gamepad.cpp` and `RmlSDL::ConvertKey`.
 
 ## Playback
 
@@ -444,8 +446,8 @@ On a PC:
     ./build/jtplay -a assets
 
 That also builds `jtplay-plugin`, the plugin runner on its own (see
-docs/plugins.md). `-DJTPLAY_WERROR=OFF` builds with a
-compiler whose warnings are not the ones the code is kept clean of.
+docs/plugins.md). `-DJTPLAY_WERROR=OFF` builds with a compiler whose
+warnings are not the ones the code is kept clean of.
 
 For the PS4, with the ps4-homebrew-dev SDK, the same CMakeLists.txt builds
 `build-ps4/IV0000-BREW04327_00-JTPLAY0000000000.pkg`:

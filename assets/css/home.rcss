@@ -1,8 +1,8 @@
 /*
  * Home: tabs of places across the top (in the top bar), a banner showing
  * the card in focus large over its artwork, and rows of cards below.
- * Heights must stay in sync with kShelfPitch / kCardPitch in
- * src/app_internal.h.
+ * The width of a card and the gap after it must stay in sync with
+ * kCardPitch in src/app_internal.h.
  */
 
 /* The page's margin is 72px, as everywhere; but what clips the rows
@@ -23,7 +23,7 @@
 /* Tabs                                                               */
 /* ------------------------------------------------------------------ */
 
-/* Always the five, at their full width; the first tab's icon on the page
+/* Always the three, at their full width; the first tab's icon on the page
  * margin, as the text below it is (its pill reaching out into the margin
  * when focused). */
 #tabs {
@@ -60,18 +60,13 @@
 }
 
 /* Focused: the solid accent, as everywhere. */
-/* Settings: a gear, without a word. */
-.tab.icon-only .tab-icon {
-	margin-right: 0px;
-}
-
 .tab.selected {
 	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
 }
 .tab.selected .tab-icon,
 .tab.selected .tab-label { color: #06231d; }
 
-/* Focus is down in the rows: the tab stays marked as where we are. */
+/* Focus is down in the page: the tab stays marked as where we are. */
 #tabs.away .tab.selected {
 	decorator: none;
 	background-color: #ffffff1f;
@@ -162,9 +157,8 @@
 	overflow: hidden;
 }
 
-/* A place with nothing else to show (an empty Home, a group with no
- * sources): its icon and what it says about itself, right under the tabs,
- * where the rows would begin. */
+/* Home with nothing to show yet: its icon and what it says about itself,
+ * right under the tabs, where the rows would begin. */
 #hero {
 	box-sizing: border-box;
 	display: flex;
@@ -216,19 +210,10 @@
 	color: #8593ab;
 }
 
-/* On a group's page there is no banner: the tab says where we are, and
- * the grid of its sources starts right under it. The rows have that much
- * more room, and so does the space after the last (for it to get to the
- * top too, rather than leave the one above it cut). A group with no
- * sources says so where the grid would be. */
+/* On the Settings page there is no banner: the tab says where we are, and
+ * the list starts right under it. */
 body.compact #feature {
 	display: none;
-}
-body.compact #shelves {
-	padding-top: 12px;
-}
-body.compact .shelves-end {
-	height: 560px;
 }
 
 /* ------------------------------------------------------------------ */
@@ -248,18 +233,6 @@ body.compact .shelves-end {
 	box-sizing: border-box;
 	height: 380px;
 	padding-top: 8px;
-}
-
-/* A source's card without a picture: its icon on a tint of its own. One
- * not found this time is dimmed. */
-.art-tile.k-source {
-	background-color: #173a3d;
-}
-.art-tile.k-source .art-glyph {
-	color: #4dd6b8;
-}
-.art-tile.missing {
-	opacity: 0.45;
 }
 
 /* The rows scroll so that the focused one is at the top (src/app.cpp);
@@ -290,17 +263,6 @@ body.compact .shelves-end {
 	margin-left: 14px;
 	font-size: 20px;
 	color: #5a6478;
-}
-
-/* A group's search under way, or what went wrong with the last one. */
-.shelf-status {
-	flex: 1;
-	margin-left: 24px;
-	font-size: 20px;
-	color: #8593ab;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 /* The row of cards scrolls sideways under program control; the padding

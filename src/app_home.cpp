@@ -9,14 +9,15 @@
 //   Continue watching   unfinished items; select resumes, at once
 //   Favorites           anything pinned, most recently first
 //
-// Sources opens the list of every source there is, local, network or
-// plugin, most used first, in the browse view, as any folder (see
-// OpenSourcesList); its options menu searches them all. The sources are
-// remembered from one run to the next (library.h), so the list is there
-// from the start, as it was; the providers look for them again in the
-// background, and one not found yet is looked for when selected. Settings
-// is a list of its own (see BuildSettings). Up from the first row reaches
-// the tabs, back or down returns.
+// Sources has for its page the list of every source there is, local,
+// network or plugin, most used first: the browse view, with the tabs over
+// it, as soon as the tab has the focus (see OpenSourcesList and
+// HandleKeySourcesTabs); the tab's options menu searches them all. The
+// sources are remembered from one run to the next (library.h), so the list
+// is there from the start, as it was; the providers look for them again in
+// the background, and one not found yet is looked for when selected.
+// Settings is a list of its own (see BuildSettings). Up from the first row
+// of a page reaches the tabs; down or select returns.
 //
 // The banner shows the card in focus, large -- its artwork across the top
 // of the screen, its title, what is left of it, its description -- and so
@@ -26,7 +27,6 @@
 // The internals still say "rail" for the tabs: they were a rail down the
 // left once.
 #include <algorithm>
-#include <set>
 
 #include "app.h"
 #include "app_internal.h"
@@ -35,13 +35,6 @@
 #include "icons.h"
 
 using namespace appdetail;
-
-namespace {
-
-// Of Recent, this many cards at most.
-constexpr size_t kRecentShown = 10;
-
-} // namespace
 
 void App::GoHome() {
   CancelForegroundLaunch();
@@ -101,8 +94,6 @@ void App::StartDiscovery(browse::Source::Group group,
   if (scan.running)
     return;
   scan.running = true;
-  if (view_ == View::Home)
-    RebuildHome();
 
   // The providers stay put for the app's lifetime, so the worker can take
   // plain pointers to the ones it needs.
@@ -133,7 +124,7 @@ void App::StartDiscovery(browse::Source::Group group,
           discovered_.push_back(std::move(s));
       registry_.Set(discovered_);
 
-      // Remembered, for the Sources list the next time round (and the
+      // Remembered, for the list of sources the next time round (and the
       // name a library item's source goes by while it is not found).
       for (const browse::SourcePtr& s : discovered_) {
         if (s->RailGroup() != group)
@@ -167,6 +158,7 @@ void App::StartDiscovery(browse::Source::Group group,
       std::vector<std::function<void()>> waiting;
       waiting.swap(scan.waiting);
 
+      // (The cards say where they are from once their source is found.)
       if (view_ == View::Home)
         RebuildHome(); // keeps the focus where it was
       else if (OnSourcesList()) {
@@ -343,11 +335,11 @@ void App::RebuildHome(const std::string& select) {
   rail_.clear();
   rail_rows_.clear();
   rail_.push_back({RailKind::Home});
-  rail_rows_.push_back({icon::kHome, "Home", ""});
+  rail_rows_.push_back({icon::kHome, "Home"});
   rail_.push_back({RailKind::Sources});
-  rail_rows_.push_back({icon::kDrive, "Sources", ""});
+  rail_rows_.push_back({icon::kDrive, "Sources"});
   rail_.push_back({RailKind::Settings});
-  rail_rows_.push_back({icon::kSettings, "Settings", ""});
+  rail_rows_.push_back({icon::kSettings, "Settings"});
 
   sel_rail_ = 0;
   for (size_t i = 0; i < rail_.size(); i++) {
@@ -359,7 +351,7 @@ void App::RebuildHome(const std::string& select) {
   model_.DirtyVariable("rail");
   model_.DirtyVariable("sel_rail");
   RebuildShelves();
-  scroll_sources_pending_ = true;
+  scroll_rows_pending_ = true;
 }
 
 void App::MoveRail(int delta) {
@@ -387,7 +379,7 @@ void App::MoveRail(int delta) {
     return;
   }
   RebuildShelves();
-  scroll_sources_pending_ = true;
+  scroll_rows_pending_ = true;
 }
 
 void App::SetBrowseTabs(bool on) {
@@ -452,10 +444,6 @@ void App::ActivateRail() {
     EnterSettings();
     return;
   }
-  if (rail_[sel_rail_].kind == RailKind::Sources) {
-    OpenSourcesList();
-    return;
-  }
   home_rows_wanted_ = true;
   if (!shelves_.empty())
     Set("home_shelves", bind_home_shelves_, true);
@@ -469,39 +457,27 @@ void App::ActivateRail() {
 void App::RebuildShelves() {
   const RailKind place = sel_rail_ < (int)rail_.size() ? rail_[sel_rail_].kind : RailKind::Home;
   const bool settings = place == RailKind::Settings;
-  const bool sources_page = place == RailKind::Sources;
 
   // What the rows were, to keep the focus on the same row when the one of
   // what is playing comes or goes above it.
   const bool had_now_playing = NowPlayingShelf(0);
   shelves_.clear();
-  Set("home_compact", bind_home_compact_, settings || sources_page);
+  Set("home_compact", bind_home_compact_, settings);
   Set("settings_page", bind_settings_page_, settings);
   if (settings)
     RebuildSettingRows();
   else
     Set("home_settings", bind_home_settings_, false);
 
-  bool searching = false;
-  Rml::String errors;
-  for (Group group : kGroups) {
-    const GroupScan& scan = scans_[(int)group];
-    searching = searching || scan.running;
-    if (!scan.errors.empty())
-      errors += (errors.empty() ? "" : "; ") + scan.errors;
-  }
-
   if (place == RailKind::Home) {
     if (bind_watching_) {
-      Shelf now{"Now playing", nullptr, {playing_}, {}, {}};
+      Shelf now{"Now playing", nullptr, {playing_}};
       now.now_playing = true;
       shelves_.push_back(std::move(now));
     }
 
-    std::set<std::string> resuming; // what Continue watching has already
-    Shelf resume{"Continue watching", continue_source_, {}, {}, {}};
+    Shelf resume{"Continue watching", continue_source_, {}};
     for (const auto& item : library_.InProgress()) {
-      resuming.insert(item.first.source_key + '\n' + item.first.entry.id);
       browse::Entry e = item.first.entry;
       e.id = library::EncodeId(item.first.source_key, item.first.entry.id);
       resume.entries.push_back(std::move(e));
@@ -509,7 +485,7 @@ void App::RebuildShelves() {
     if (!resume.entries.empty())
       shelves_.push_back(std::move(resume));
 
-    Shelf favs{"Favorites", favorites_source_, {}, {}, {}};
+    Shelf favs{"Favorites", favorites_source_, {}};
     for (const library::Ref& ref : library_.Favorites()) {
       browse::Entry e = ref.entry;
       e.id = library::EncodeId(ref.source_key, ref.entry.id);
@@ -521,30 +497,14 @@ void App::RebuildShelves() {
       shelves_.push_back(std::move(favs));
   }
 
-  // Nothing to show: Home before anything was played or pinned. The
-  // Sources tab says what is behind it, select to open it.
-  const bool empty = !settings && shelves_.empty();
-  const size_t sources = library_.KnownSources().size();
-  Set("hero_icon", bind_hero_icon_, Rml::String(!empty ? ""
-    : sources_page ? icon::kDrive : icon::kHome));
-  Set("hero_title", bind_hero_title_, Rml::String(!empty ? ""
-    : sources_page ? (sources ? "Sources" : searching ? "Looking for sources..."
-                                                      : "No sources found")
-    : "Welcome"));
-  Set("hero_detail", bind_hero_detail_, Rml::String(!empty ? ""
-    : sources_page ? (sources ? std::to_string(sources) +
-                                (sources == 1 ? " source" : " sources") +
-                                ": drives, media servers and plugins."
-                              : "Drives, media servers on the network, and plugins.")
-    : "Your drives, servers and plugins are under Sources."));
-  Set("hero_note", bind_hero_note_, Rml::String(!empty ? ""
-    : sources_page && !errors.empty() ? errors // a plugin that failed to load, say
-    : sources_page ? (sources ? "Select to open the list; search them all from its options."
-                              : searching ? "" : "Square looks again.")
-    : "What you leave unfinished, and what you pin, will gather here."));
-  // Beside the count of the list of sources: a search under way, or what
-  // went wrong with the last one.
-  Set("group_status", bind_group_status_, searching ? Rml::String("Searching...") : errors);
+  // Nothing to show: Home before anything was played or pinned.
+  const bool empty = place == RailKind::Home && shelves_.empty();
+  Set("hero_icon", bind_hero_icon_, Rml::String(empty ? icon::kHome : ""));
+  Set("hero_title", bind_hero_title_, Rml::String(empty ? "Welcome" : ""));
+  Set("hero_detail", bind_hero_detail_,
+      Rml::String(empty ? "Your drives, servers and plugins are under Sources." : ""));
+  Set("hero_note", bind_hero_note_, Rml::String(empty
+    ? "What you leave unfinished, and what you pin, will gather here." : ""));
 
   if (NowPlayingShelf(0) != had_now_playing && !shelf_card_sel_.empty()) {
     if (had_now_playing) {
@@ -557,8 +517,8 @@ void App::RebuildShelves() {
   }
   shelf_card_sel_.resize(shelves_.size(), 0);
   sel_shelf_ = std::clamp(sel_shelf_, 0, std::max(0, (int)shelves_.size() - 1));
-  // The focus on the rows, as soon as there are any (at the start, once
-  // the first sources are found), unless it was taken up to the tabs.
+  // The focus on the rows, if there are any and it is not up on the tabs
+  // (as at the start).
   if (shelves_.empty())
     Set("home_shelves", bind_home_shelves_, false);
   else if (home_rows_wanted_ && !settings && view_ == View::Home)
@@ -582,8 +542,7 @@ void App::RebuildCards() {
       continue;
     }
     row.count = (int)shelf.entries.size();
-    for (size_t i = 0; i < shelf.entries.size(); i++) {
-      const browse::Entry& e = shelf.entries[i];
+    for (const browse::Entry& e : shelf.entries) {
       CardRow card;
       card.title = DisplayName(e);
       card.glyph = IconFor(e);
@@ -601,8 +560,6 @@ void App::RebuildCards() {
             card.subtitle = FormatTime((p.duration - p.position) * 1000000) + " left";
         }
       }
-      if (shelf.recent && i < shelf.live.size() && shelf.live[i])
-        card.subtitle = "Live";
       // Time left, and where it is from; what kind of entry it is only
       // when there is nothing else to say.
       if (!where.empty())
@@ -636,7 +593,7 @@ void App::FocusHomeCard(const std::string& id) {
       shelf_card_sel_[i] = (int)j;
       model_.DirtyVariable("sel_shelf");
       model_.DirtyVariable("sel_card");
-      scroll_sources_pending_ = true;
+      scroll_rows_pending_ = true;
       UpdateBackdrop();
       return;
     }
@@ -777,8 +734,6 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     case Rml::Input::KI_DOWN:  // into the page under the tab
       if (bind_settings_page_) {
         EnterSettings();
-      } else if (sel_rail_ < (int)rail_.size() && rail_[sel_rail_].kind == RailKind::Sources) {
-        OpenSourcesList();
       } else {
         home_rows_wanted_ = true;
         if (!shelves_.empty())
@@ -821,7 +776,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     shelf_card_sel_[shelf] = card;
     model_.DirtyVariable("sel_shelf");
     model_.DirtyVariable("sel_card");
-    scroll_sources_pending_ = true;
+    scroll_rows_pending_ = true;
     UpdateBackdrop();
   };
 
@@ -840,7 +795,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     } else { // up out of the first row: the tabs
       home_rows_wanted_ = false;
       Set("home_shelves", bind_home_shelves_, false);
-      scroll_sources_pending_ = true;
+      scroll_rows_pending_ = true;
       UpdateBackdrop();
     }
     break;

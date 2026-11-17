@@ -115,8 +115,7 @@ void App::RecordRecent() {
   // Never got going: nothing to come back to.
   if (!playing_identified_ || watch_last_pos_us_ < 0)
     return;
-  // (Live: the player cannot seek in it, or it has no length.)
-  library_.AddRecent(playing_ref_, !watch_last_seekable_ || watch_last_dur_us_ <= 0);
+  library_.AddRecent(playing_ref_);
   library_.Save();
 }
 
@@ -184,8 +183,6 @@ void App::RecordProgress(bool final, bool ended) {
 }
 
 void App::OnLibraryChanged() {
-  favorites_source_->UpdateDetail();
-  continue_source_->UpdateDetail();
   RebuildHome();
   if (view_ != View::Browse)
     return;

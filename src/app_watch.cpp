@@ -10,13 +10,15 @@
 // then left and right go along them and select presses one, until back
 // takes the focus off them again.
 //
-// The video bar comes up by itself when an item starts, when it pauses or
-// plays on, and with the options key, and goes again once no key has been
-// pressed for a while. Brought up by select, for its buttons, it stays
-// until back (or options) sends it away -- except when its buttons start
-// another item, or play on from a pause: then it goes as it does by
-// itself. A seek with the bar away shows on a thin bar along the top
-// instead, which goes a moment after the last one.
+// An item that starts shows on a thin bar along the top for a moment
+// (unless the video bar's buttons started it: that bar then stays as it
+// was). The video bar along the bottom comes up by itself when playback
+// pauses or plays on, and with the options key, and goes again once no
+// key has been pressed for a while. Brought up by select, for its
+// buttons, it stays until back (or options) sends it away -- except when
+// its buttons start another item, or play on from a pause: then it goes
+// as it does by itself. A seek with the bar away shows on the thin bar
+// along the top, which goes a moment after the last one.
 //
 // Back leaves full screen without stopping, as in Kodi: the menus come
 // back over the video, on a see-through background, and can be used as
@@ -394,7 +396,7 @@ void App::SetFullscreen(bool on) {
     progress_saved_at_ = Now();
     // The shell was hidden: put its lists back where they were.
     scroll_entries_pending_ = true;
-    scroll_sources_pending_ = true;
+    scroll_rows_pending_ = true;
     if (view_ == View::Browse)
       RebuildDetail(); // its status: now playing
   }
@@ -422,8 +424,8 @@ void App::ShowControls() {
   FocusControls(true);
 }
 
-// The bar, for a while (longer): an item started, a pause, a track picked
-// with a remote's key. Up already, it is left as it is, a while longer
+// The bar, for a while (longer): back to full screen, a pause, a track
+// picked with a remote's key, the options key. Up already, it is left as it is, a while longer
 // (and if select brought it up, it stays). The focus is left where it is,
 // which with the bar away is not on its buttons, so the keys go on
 // steering playback.

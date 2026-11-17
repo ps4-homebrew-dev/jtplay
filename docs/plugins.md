@@ -1,7 +1,7 @@
 # Writing plugins
 
-A plugin is one JavaScript file that adds a source to the **Plugins** tab:
-something to browse, search and play from. It runs in a QuickJS runtime of
+A plugin is one JavaScript file that adds sources to the list under the
+**Sources** tab: something to browse, search and play from. It runs in a QuickJS runtime of
 its own, with the handful of globals described here and nothing else: no
 file system, no modules, no timers.
 
@@ -29,15 +29,15 @@ log names the plugins directory at start, and it is made if it isn't
 there.
 
 Every `*.js` file in either directory is a plugin; a `settings.ini` beside
-them gives plugins' settings (see [Settings](#settings)). A file of your own with
-the name of a bundled one replaces it, which is how to try a fix to a
-bundled plugin on a console without rebuilding the package.
+them gives plugins' settings (see [Settings](#settings)). A file of your
+own with the name of a bundled one replaces it, which is how to try a fix
+to a bundled plugin on a console without rebuilding the package.
 
 Plugins are loaded when jtplay starts looking for its sources, and looked
-at again every time it does so later (square, or Space, on Home): a new file shows
-up, a changed one is loaded afresh, a deleted one goes. An unchanged plugin
-keeps running, with whatever it has cached. So the loop on a console is:
-upload the file over FTP, press square.
+at again every time it does so later (square, or Space, on Home): a new
+file shows up, a changed one is loaded afresh, a deleted one goes. An
+unchanged plugin keeps running, with whatever it has cached. So the loop
+on a console is: upload the file over FTP, press square.
 
 A plugin that fails to load says why in a toast on the Sources tab, and
 does not hold up the others.
@@ -54,10 +54,10 @@ return {
   discover() {
     return [
       {
-        name: "My source",         // the tile's title
-        detail: "somewhere",       // its second line (optional)
+        name: "My source",         // its name in the list of sources
+        detail: "somewhere",       // what it says it is (optional)
         icon: "📻",                // an emoji (optional; see below)
-        image: "https://example.com/logo.png", // in the Sources list (optional)
+        image: "https://example.com/logo.png", // its picture there (optional)
         root: "/",                 // id of the root folder (optional, "/")
         browse(id) {               // list the folder 'id'
           return [
@@ -95,7 +95,8 @@ state on it.
 The icon is named with an emoji, which is shown as the matching icon of the
 UI's own set where there is one: 📺 📻 🎙 🎤 🎧 🎵 🎬 🎞 🎥 📷 🖼 📁 🖥 💾.
 
-The `image` is the source's picture in the Sources list, landscape (16:9).
+The `image` is the source's picture in the list of sources (its artwork in
+the grid view, its thumbnail in the list view), landscape (16:9).
 Without one the list takes the first artwork seen while browsing the
 source, or of something from it in the library, and until then shows the
 icon.
@@ -179,8 +180,8 @@ viewer is told (`throw new Error("not available from here")`).
 
 A provider can ask the user for a choice or two. They appear on the
 Settings page under the plugin's name, and in the options menu of the
-plugin's tile and folders (*name* settings), are remembered, and are read
-back with `settings.get(key)`:
+plugin's sources in the list of sources and of their folders (*name*
+settings), are remembered, and are read back with `settings.get(key)`:
 
 ```js
 return {

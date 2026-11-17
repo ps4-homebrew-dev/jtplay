@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The user's own library on top of the browsable sources: favorites (any
-// folder or item, from any source), playback progress (resume points and
-// watched marks), what was played lately, and the sources seen so far
-// (so Home can list them before they are found again). All of it is
-// remembered across restarts in one small XML file in the cache directory.
+// folder or item, from any source), playback progress (resume points,
+// where they were played from, and watched marks), what was played lately,
+// the sources seen so far (so the list of sources is there before they are
+// found again) and where each was left. All of it is remembered across
+// restarts in one small XML file in the cache directory.
 //
 // Everything is stored against a Ref: the key of the source an entry came
 // from (browse::Source::Key()) and the entry as that source listed it. The
@@ -32,24 +33,23 @@ struct Ref {
 };
 
 // A source seen before: enough to list it before it is found again,
-// and how often it was opened, for the order of the tiles.
+// and how often it was opened, for the order of the list.
 struct KnownSource {
   std::string key;
   std::string name;
   std::string detail;
   std::string icon;     // a glyph of icons.h
-  // Artwork seen in it, for the Sources list when it has no picture of its own
-  // (see App::NoteSourceArt). Not changed by RememberSource.
+  // Artwork seen in it, for the list of sources when it has no picture of
+  // its own (see App::NoteSourceArt). Not changed by RememberSource.
   std::string image;
   int uses = 0;
   int64_t used = 0;     // epoch seconds it was last opened, 0 = never
 };
 
-// Something played lately: a live stream as itself, anything else as the
-// folder it was played from (where the next one is). See App::RecordRecent.
+// Something played lately (see App::RecordRecent), which a search of
+// everything looks through by name before it asks the sources.
 struct Recent {
   Ref ref;
-  bool live = false;
   int64_t updated = 0;  // epoch seconds
 };
 
@@ -104,8 +104,7 @@ public:
 
   // Lately played (see Recent), most recent first. Adding one already
   // there moves it to the front.
-  void AddRecent(const Ref& ref, bool live);
-  void RemoveRecent(const std::string& source_key, const std::string& id);
+  void AddRecent(const Ref& ref);
   std::vector<Recent> RecentItems() const;
 
   // The sources seen: most opened first, then the order they were found
@@ -113,7 +112,7 @@ public:
   // counts an opening.
   void RememberSource(const KnownSource& source);
   void SourceUsed(const std::string& key);
-  // Artwork for the tile of a source that has none yet; true if taken.
+  // Artwork for a source that has none yet; true if taken.
   bool SetSourceImage(const std::string& key, const std::string& image);
   void ForgetSource(const std::string& key);
   std::vector<KnownSource> KnownSources() const;
@@ -187,17 +186,12 @@ public:
   std::string RootId() const override { return std::string(); }
 
   bool Browse(const std::string& id, browse::Listing& out, std::string& error) override;
-  // Below a favorite folder the original source searches, if it can; the
-  // library's own root has nothing to ask.
+  // Below a favorite folder the original source searches, if it can; of
+  // the roots, only that of Sources can (everything, see above).
   bool CanSearch(const std::string& folder_id) const override;
   bool Search(const std::string& folder_id, const std::string& query,
               browse::Listing& out, std::string& error) override;
   bool Resolve(const browse::Entry& entry, browse::Playable& out, std::string& error) override;
-
-  // Main thread: recomputes the subtitle ("12 items").
-  void UpdateDetail();
-  // How many entries the root lists right now.
-  size_t Count() const;
 
 private:
   bool SearchEverything(const std::string& query, browse::Listing& out, std::string& error);

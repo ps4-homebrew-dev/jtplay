@@ -112,8 +112,8 @@ void App::ClosePhotos() {
 
 // Makes 'index' the current picture. It goes on screen as soon as its
 // screen-sized copy is ready (at once if it is cached); until then the
-// previous one stays up with a loading indicator, so stepping quickly
-// through a folder never flashes black.
+// previous one stays up (the dots in the corner say one is on its way),
+// so stepping quickly through a folder never flashes black.
 void App::ShowPhoto(int index) {
   const int n = (int)photo_list_.size();
   if (n == 0)
