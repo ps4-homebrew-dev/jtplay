@@ -369,6 +369,102 @@ body.compact .shelves-end {
 .card.selected .card-sub { color: #aab6cc; }
 
 /* ------------------------------------------------------------------ */
+/* Sources                                                            */
+/* ------------------------------------------------------------------ */
+
+/* The page under the Sources tab: one row per source, its picture (or its
+ * icon on a tint) at the left, its name and what it is beside it. Rows
+ * keep to kSourceRowPitch (src/app_internal.h). */
+#sources-page {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	overflow: hidden;
+	padding-top: 12px;
+}
+
+.sources-head {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	height: 44px;
+	padding-left: 4px;
+}
+
+#source-list {
+	flex: 1;
+	width: 1200px;
+	margin-left: -24px;
+	padding: 8px 0px 0px 24px;
+	overflow-y: auto;
+}
+#source-list scrollbarvertical { width: 0px; }
+
+.source-list-end {
+	height: 48px;
+}
+
+.source-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 96px;
+	margin: 0px 0px 8px -24px;
+	padding: 0px 24px 0px 12px;
+	border-radius: 12px;
+	background-color: #ffffff08;
+}
+
+.source-thumb {
+	flex-shrink: 0;
+	width: 128px;
+	height: 72px;
+	border-radius: 8px;
+}
+.source-thumb .art-glyph {
+	font-size: 36px;
+}
+
+.source-text {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	margin-left: 24px;
+	overflow: hidden;
+}
+
+.source-name {
+	font-size: 28px;
+	font-weight: bold;
+	color: #c5cee0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.source-detail {
+	margin-top: 4px;
+	font-size: 21px;
+	color: #6f7b92;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.source-row.missing .source-thumb,
+.source-row.missing .source-name {
+	opacity: 0.45;
+}
+
+/* Focused: the solid accent, as everywhere. */
+.source-row.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.source-row.selected .source-name { color: #06231d; }
+.source-row.selected .source-detail { color: #0d3d33; }
+
+/* ------------------------------------------------------------------ */
 /* Settings                                                           */
 /* ------------------------------------------------------------------ */
 

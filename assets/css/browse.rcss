@@ -143,6 +143,18 @@
 .empty.failed {
 	margin-top: 96px;
 }
+
+/* Nothing listed: the message in the middle of the page, the info panel
+ * (empty anyway) out of the way. */
+#browse.bare #details {
+	display: none;
+}
+#browse.bare #entries {
+	margin-right: 0px;
+}
+#browse.bare .empty {
+	margin-top: 300px;
+}
 .failed-icon {
 	font-size: 64px;
 	color: #e0b84d;

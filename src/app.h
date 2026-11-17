@@ -273,7 +273,7 @@ private:
   void RecordProgress(bool final, bool ended = false);
   // Puts what played into Recently played as it ends.
   void RecordRecent();
-  // Artwork from a listing of 'source', for its tile on Home when it has
+  // Artwork from a listing of 'source', for the Sources list when it has
   // no picture of its own yet.
   void NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& entries);
   // Library changed: refresh what shows it (rows, counts, library views).
@@ -284,7 +284,7 @@ private:
   // watching, Recent (live streams and the folders things were played
   // from), Favorites and, last, every source there is, most used first.
   // Above them two tabs, Home and Settings (a gear).
-  enum class RailKind { Home, Search, Settings };
+  enum class RailKind { Home, Sources, Search, Settings };
   struct RailItem {
     RailKind kind;
   };
@@ -813,6 +813,11 @@ private:
   // Settings: the tab is the place (its page shows), and the focus is down
   // in its list.
   bool bind_settings_page_ = false;
+  // The Sources tab: its one shelf, drawn as a list down the page.
+  bool bind_sources_page_ = false;
+  std::vector<CardRow> source_cards_;
+  int bind_source_count_ = 0;
+  void SyncSourceList();
   bool bind_home_settings_ = false;
   std::vector<SettingItem> setting_items_;
   std::vector<SettingRow> setting_rows_;

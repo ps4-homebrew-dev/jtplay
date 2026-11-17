@@ -31,14 +31,14 @@ struct Ref {
   browse::Entry entry;      // entry.id is the source's own id
 };
 
-// A source seen before: enough to show its tile before it is found again,
+// A source seen before: enough to list it before it is found again,
 // and how often it was opened, for the order of the tiles.
 struct KnownSource {
   std::string key;
   std::string name;
   std::string detail;
   std::string icon;     // a glyph of icons.h
-  // Artwork seen in it, for its tile when it has no picture of its own
+  // Artwork seen in it, for the Sources list when it has no picture of its own
   // (see App::NoteSourceArt). Not changed by RememberSource.
   std::string image;
   int uses = 0;

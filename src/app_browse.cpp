@@ -122,8 +122,8 @@ void App::OpenSource(const browse::SourcePtr& source) {
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
-  // Counted, for the order of Home's row of sources; and back from it,
-  // the focus is on its tile.
+  // Counted, for the order of the Sources list; and back from it,
+  // the focus is on it there.
   library_.SourceUsed(source->Key());
   library_.Save();
   home_return_id_ = "source:" + source->Key();
@@ -1003,7 +1003,8 @@ void App::OpenMenu() {
     library::Ref ref;
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);
-  } else if (view_ == View::Home && !bind_home_shelves_ && !bind_settings_page_) {
+  } else if (view_ == View::Home && !bind_settings_page_ &&
+             (!bind_home_shelves_ || bind_sources_page_)) {
     MenuSection("Sources");
     AddMenuItem({"Search again", nullptr, [this](int) { SearchAllSources(); }});
   } else if (bind_watching_) {
@@ -1320,8 +1321,10 @@ void App::UpdateVisibleArt() {
       }
     }
   }
-  if (changed)
+  if (changed) {
     model_.DirtyVariable("shelves");
+    SyncSourceList();
+  }
 }
 
 // ---------------------------------------------------------------------------

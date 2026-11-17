@@ -463,6 +463,9 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("home_compact", &bind_home_compact_);
   ctor.Bind("group_status", &bind_group_status_);
   ctor.Bind("settings_page", &bind_settings_page_);
+  ctor.Bind("sources_page", &bind_sources_page_);
+  ctor.Bind("source_cards", &source_cards_);
+  ctor.Bind("source_count", &bind_source_count_);
   ctor.Bind("home_settings", &bind_home_settings_);
   ctor.Bind("settings", &setting_rows_);
   ctor.Bind("sel_setting", &sel_setting_);
@@ -744,6 +747,10 @@ void App::Update() {
   if (preview_at_ > 0.0 && Now() >= preview_at_ && !preview_running_)
     RequestPreview();
 
+  if (scroll_sources_pending_ && bind_sources_page_) {
+    EnsureRowVisible("source-list", sel_card_, kSourceRowPitch);
+    scroll_sources_pending_ = false;
+  }
   if (scroll_sources_pending_ && ScrollRows())
     scroll_sources_pending_ = false;
 

@@ -115,8 +115,8 @@ public:
   virtual const std::string& Name() const = 0;   // row title
   virtual const std::string& Detail() const = 0; // row subtitle (host, path)
   virtual const char* Icon() const = 0;          // emoji glyph for the row
-  // A picture for its tile on Home (a logo, a channel's artwork); "" for
-  // none, when the tile shows artwork seen in the source, or its icon.
+  // A picture for it in the Sources list (a logo, a channel's artwork); ""
+  // for none, when the list shows artwork seen in the source, or its icon.
   virtual const std::string& Image() const {
     static const std::string none;
     return none;

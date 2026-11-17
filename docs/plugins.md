@@ -39,9 +39,8 @@ up, a changed one is loaded afresh, a deleted one goes. An unchanged plugin
 keeps running, with whatever it has cached. So the loop on a console is:
 upload the file over FTP, press square.
 
-A plugin that fails to load says why beside the head of Home's row of
-sources, and
-does not hold up the others.
+A plugin that fails to load says why beside the head of the Sources list,
+and does not hold up the others.
 
 ## The shape of a plugin
 
@@ -58,7 +57,7 @@ return {
         name: "My source",         // the tile's title
         detail: "somewhere",       // its second line (optional)
         icon: "📻",                // an emoji (optional; see below)
-        image: "https://example.com/logo.png", // its tile on Home (optional)
+        image: "https://example.com/logo.png", // in the Sources list (optional)
         root: "/",                 // id of the root folder (optional, "/")
         browse(id) {               // list the folder 'id'
           return [
@@ -96,10 +95,10 @@ state on it.
 The icon is named with an emoji, which is shown as the matching icon of the
 UI's own set where there is one: 📺 📻 🎙 🎤 🎧 🎵 🎬 🎞 🎥 📷 🖼 📁 🖥 💾.
 
-The `image` is the picture on the source's tile on Home, landscape (16:9)
-like the other cards. Without one the tile takes the first artwork seen
-while browsing the source, or of something from it in the library, and
-until then shows the icon.
+The `image` is the source's picture in the Sources list, landscape (16:9).
+Without one the list takes the first artwork seen while browsing the
+source, or of something from it in the library, and until then shows the
+icon.
 
 Functions may be `async`. There is nothing asynchronous to wait for (`http`
 answers before it returns), but code written with `await` works as is.

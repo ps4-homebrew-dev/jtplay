@@ -25,8 +25,8 @@
 
 		<div id="shell">
 			<div id="topbar">
-				<!-- Home: two tabs (src/app_home.cpp), Home and Settings, a gear;
-				     up from the first row reaches them. -->
+				<!-- Home: the tabs (src/app_home.cpp), Home, Sources, Search and
+				     Settings; up from the first row reaches them. -->
 				<div id="tabs" data-if="view == 'home'" data-class-away="home_shelves || home_settings">
 					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail"
 					     data-class-icon-only="r.label == ''">
@@ -100,7 +100,32 @@
 						</div>
 					</div>
 
-					<div id="shelves" data-if="!settings_page" data-class-active="home_shelves">
+					<!-- Sources: every source, a list down the page (src/app_home.cpp:
+					     the tab's one shelf). Its picture, or its icon on a tint. -->
+					<div id="sources-page" data-if="sources_page && source_count > 0" data-class-active="home_shelves">
+						<div class="sources-head">
+							<span class="shelf-title">Sources</span>
+							<span class="shelf-count">{{source_count}}</span>
+							<span class="shelf-status" data-if="group_status != ''">{{group_status}}</span>
+						</div>
+						<div id="source-list">
+							<div class="source-row" data-for="c, ci : source_cards"
+							     data-class-selected="home_shelves && ci == sel_card"
+							     data-class-missing="c.missing">
+								<div class="art-tile k-source source-thumb">
+									<div class="art-img" data-if="c.art != 'none'" data-style-decorator="c.art"/>
+									<div class="art-glyph" data-if="c.art == 'none'">{{c.glyph}}</div>
+								</div>
+								<div class="source-text">
+									<div class="source-name">{{c.title}}</div>
+									<div class="source-detail" data-if="c.subtitle != ''">{{c.subtitle}}</div>
+								</div>
+							</div>
+							<div class="source-list-end"/>
+						</div>
+					</div>
+
+					<div id="shelves" data-if="!settings_page && !sources_page" data-class-active="home_shelves">
 						<div class="shelf" data-for="sh, si : shelves"
 						     data-class-current="si == sel_shelf">
 							<!-- (Bindings to sh go on what is inside: on the repeated
@@ -176,8 +201,10 @@
 			</div>
 
 			<!-- =========================== Browse ========================== -->
+			<!-- (Bare: nothing listed -- waiting, empty or failed. The message
+			     takes the whole page, the info panel having nothing to say.) -->
 			<div id="browse" class="content" data-if="view == 'browse'"
-			     data-class-grid="view_mode == 'grid'">
+			     data-class-grid="view_mode == 'grid'" data-class-bare="entry_count == 0">
 				<div id="entries" class="pane">
 					<div class="pane-head">
 						<!-- (No count of a folder that is not there: on its way, or failed.) -->

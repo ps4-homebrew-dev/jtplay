@@ -37,43 +37,40 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-Home is one page of rows, with the focus on its first card from the start,
-so that what you last watched or listened to is a press of select away:
+Across the top are four tabs: **Home**, **Sources**, **Search** and
+**Settings**. Up from a page reaches them; down, select or back returns.
+
+Home is rows of cards, with the focus on the first from the start, so that
+what you last watched or listened to is a press of select away:
 
 - **Now playing**, while something does: the way back to it.
 - **Continue watching**: unfinished items. Select resumes at once; the
   options menu has *Play from beginning*.
-- **Recently played**: what you played lately, live streams included
-  (what is still in Continue watching is not repeated here).
 - **Favorites**: anything you pinned, the latest first.
-- **Sources**: every source there is, local drives, network servers and
-  plugins alike, the ones you open most first.
-
-The sources are remembered from one start to the next, so their row is
-there at once, as it was. Meanwhile all of them are looked for again in
-the background (local drives and plugins first, network servers last),
-and a source that has not been found yet is looked for when selected,
-then opened. A source's card shows its own picture where a plugin gives
-one, otherwise the first artwork seen in it (or of something from it in
-the library), otherwise its icon. One that is not found at all is dimmed
-and says so; the
-options menu can forget it. Square looks for every source again. Back
-from a source returns to its tile. Triangle pins the card in focus to
-Favorites, or unpins it.
-
-The **Search** tab (or Ctrl+S on Home) searches everything at once: your
-library by name (Continue watching, Recently played and Favorites), then every
-source that can search, most used first, all of them side by side so the
-slowest sets the pace rather than the sum. A source that fails is left
-out; back from the results leads home.
 
 The banner shows the card in focus, large, over its artwork across the
 top of the screen -- where it is from, what is left of it, its
 description -- and follows the focus along the rows; the focused row
-sits right under it. Whatever a card has no data for is left out. Up from
-the first row reaches three tabs, Home, Search and Settings (the gear);
-down or back returns to the rows. Back on the rows goes to the first card, or to what
-plays behind the menus.
+sits right under it. Whatever a card has no data for is left out. Back on
+the rows goes to the first card, or to what plays behind the menus.
+Triangle pins the card in focus to Favorites, or unpins it.
+
+**Sources** lists every source there is, local drives, network servers and
+plugins alike, the ones you open most first, each with its picture where a
+plugin gives one, otherwise the first artwork seen in it (or of something
+from it in the library), otherwise its icon. The list is remembered from
+one start to the next, so it is there at once, as it was. Meanwhile all of
+the sources are looked for again in the background (local drives and
+plugins first, network servers last), and one that has not been found yet
+is looked for when selected, then opened. One that is not found at all is
+dimmed; the options menu can forget it. Square looks for every source
+again. Back from a source returns to it in the list.
+
+**Search** (or Ctrl+S on Home) searches everything at once: your library
+by name (Continue watching, what you played lately and Favorites), then
+every source that can search, most used first, all of them side by side so
+the slowest sets the pace rather than the sum. A source that fails is left
+out; back from the results leads home.
 
 ## Browsing
 
@@ -174,7 +171,7 @@ bar on their art and gather under **Continue watching**, and anything played
 past 92% is marked watched with a tick. A video without artwork of its own
 gets a snapshot of the frame it was stopped on, so its card shows where you
 left off. Moving to the next item in a folder resumes it without asking.
-All of this, and Recently played and the sources seen, is stored in `library.xml`
+All of this, and what was played lately and the sources seen, is stored in `library.xml`
 in the cache directory.
 
 ## Playing
@@ -247,7 +244,7 @@ An item that fails to open while going through a folder is skipped.
 
 ## Settings
 
-Settings, the gear beside the Home tab, lists the settings right under the
+Settings, the last of the tabs, lists the settings right under the
 tab: down from the tab into the list, left and right change the one in
 focus (select steps it on), and what it does is shown beside the list.
 Select on a setting with many choices (a language, a plugin's country)
