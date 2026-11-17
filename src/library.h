@@ -40,6 +40,9 @@ struct KnownSource {
   std::string name;
   std::string detail;
   std::string icon;     // a glyph of icons.h
+  // Its own picture, a logo (browse::Source::Image), as it said the last
+  // time it was found; "" when it has none.
+  std::string logo;
   // Artwork seen in it, for the list of sources when it has no picture of
   // its own (see App::NoteSourceArt). Not changed by RememberSource.
   std::string image;

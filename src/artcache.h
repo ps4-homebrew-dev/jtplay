@@ -67,6 +67,13 @@ constexpr int kScreenSize = 1920;
 Status LookupScreen(const std::string& uri, std::string& path);
 std::string FetchScreen(const std::string& uri);
 
+// The colour around the edge of the image at 'path' ("#1e6fd9"), when its
+// border is one opaque colour, as a logo on a background of its own (an
+// app icon) is: what a box larger than the picture can be filled with, so
+// that the picture shows as if it filled it. "" otherwise: transparent
+// edges, or a photo. Decodes the file; for small images (thumbnails).
+std::string EdgeColor(const std::string& path);
+
 } // namespace artcache
 
 #endif

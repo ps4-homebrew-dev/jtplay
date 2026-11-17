@@ -121,6 +121,7 @@ void Library::Load(const std::string& path) {
       s.name = Attr(e, "name");
       s.detail = Attr(e, "detail");
       s.icon = Attr(e, "icon");
+      s.logo = Attr(e, "logo");
       s.image = Attr(e, "image");
       s.uses = e->IntAttribute("uses", 0);
       s.used = e->Int64Attribute("used", 0);
@@ -184,6 +185,7 @@ void Library::Save() {
     e->SetAttribute("name", s.name.c_str());
     if (!s.detail.empty()) e->SetAttribute("detail", s.detail.c_str());
     if (!s.icon.empty())   e->SetAttribute("icon", s.icon.c_str());
+    if (!s.logo.empty())   e->SetAttribute("logo", s.logo.c_str());
     if (!s.image.empty())  e->SetAttribute("image", s.image.c_str());
     if (s.uses > 0)        e->SetAttribute("uses", s.uses);
     if (s.used > 0)        e->SetAttribute("used", s.used);
@@ -411,10 +413,12 @@ void Library::RememberSource(const KnownSource& source) {
       continue;
     // What it says about itself may have changed (a server renamed, a
     // drive's free space); how often it was opened has not.
-    if (s.name != source.name || s.detail != source.detail || s.icon != source.icon) {
+    if (s.name != source.name || s.detail != source.detail || s.icon != source.icon ||
+        s.logo != source.logo) {
       s.name = source.name;
       s.detail = source.detail;
       s.icon = source.icon;
+      s.logo = source.logo;
       Changed();
     }
     return;

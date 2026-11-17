@@ -385,6 +385,8 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("favorite", &EntryRow::favorite);
     row.RegisterMember("watched", &EntryRow::watched);
     row.RegisterMember("playing", &EntryRow::playing);
+    row.RegisterMember("logo", &EntryRow::logo);
+    row.RegisterMember("bg", &EntryRow::bg);
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
 
@@ -483,6 +485,8 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("detail_image", &bind_detail_image_);
   ctor.Bind("detail_cover", &bind_detail_cover_);
   ctor.Bind("detail_favorite", &bind_detail_favorite_);
+  ctor.Bind("detail_logo", &bind_detail_logo_);
+  ctor.Bind("detail_bg", &bind_detail_bg_);
 
   ctor.Bind("saver", &bind_saver_);
   ctor.Bind("saver_x", &bind_saver_x_);
@@ -923,6 +927,21 @@ std::string App::CoverDecorator(const std::string& path) {
   return "image(\"" + path + "\" cover)";
 }
 
+std::string App::LogoDecorator(const std::string& path) {
+  if (path.empty())
+    return "none";
+  return "image(\"" + path + "\" contain)";
+}
+
+std::string App::EdgeColorOf(const std::string& path) {
+  if (path.empty())
+    return {};
+  auto it = edge_colors_.find(path);
+  if (it == edge_colors_.end())
+    it = edge_colors_.emplace(path, artcache::EdgeColor(path)).first;
+  return it->second;
+}
+
 std::string App::ImagePathFor(const std::string& uri, bool thumb) {
   // Anything shown large (details, backdrop, now playing, the photo viewer)
   // uses the screen-sized copy, so a camera original never becomes a
@@ -1063,12 +1082,17 @@ void App::ArtworkMain() {
 void App::RefreshImageBindings() {
   // Details pane follows the browse selection.
   Rml::String detail;
+  bool logo = false;
   if (view_ == View::Browse) {
-    if (const browse::Entry* entry = SelectedEntry())
+    if (const browse::Entry* entry = SelectedEntry()) {
       detail = ImagePathFor(ArtUri(*entry));
+      logo = !detail.empty() && ShowsLogo(*entry);
+    }
   }
   Set("detail_image", bind_detail_image_, detail);
   Set("detail_cover", bind_detail_cover_, CoverDecorator(detail));
+  Set("detail_logo", bind_detail_logo_, logo);
+  Set("detail_bg", bind_detail_bg_, Rml::String(logo ? EdgeColorOf(detail) : ""));
 
   // Now-playing card / transport bar follows the playing item.
   Rml::String watch;
@@ -1085,7 +1109,8 @@ void App::RefreshImageBindings() {
 void App::UpdateBackdrop() {
   std::string uri;
   if (view_ == View::Browse) {
-    if (const browse::Entry* entry = SelectedEntry())
+    // (Not a logo: it is no picture to fill the screen with.)
+    if (const browse::Entry* entry = SelectedEntry(); entry && !ShowsLogo(*entry))
       uri = ArtUri(*entry);
   } else if (const browse::Entry* card = FeaturedCard()) {
     uri = ArtUri(*card);

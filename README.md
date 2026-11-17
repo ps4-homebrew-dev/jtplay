@@ -63,13 +63,14 @@ drives, network servers and plugins alike, the ones you open most first,
 shown as soon as the tab has the focus; down (or select) moves into it, up
 from its first row returns to the tabs. It is a folder like any other (see
 Browsing): a list or a grid, sorted and filtered the same way, with the
-same keys, each source with its picture where a plugin gives one,
-otherwise the first artwork seen in it (or of something from it in the
-library), otherwise its icon. The list is remembered from one start to the
-next, so it is there at once, as it was. Meanwhile all of the sources are
-looked for again in the background (local drives and plugins first,
-network servers last), and one that has not been found yet is looked for
-when selected, then opened; one that is not found at all says so, and its
+same keys, each source with its logo where it has one (a plugin's, a media
+server's own icon), shown whole on the colour of its edge, otherwise the
+first artwork seen in it (or of something from it in the library),
+otherwise its icon. The list is remembered from one start to the next, so
+it is there at once, as it was. Meanwhile all of the sources are looked
+for again in the background (local drives and plugins first, network
+servers last), and one that has not been found yet is looked for when
+selected, then opened; one that is not found at all says so, and its
 options menu can forget it. Triangle pins a source to Favorites. Back from
 the top of a source returns to it in the list; back from the list, to the
 tabs.

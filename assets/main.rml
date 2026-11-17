@@ -197,11 +197,15 @@
 						<!-- (Up on the tabs over the list of sources: none is.) -->
 						<div class="entry-row" data-for="e : entries"
 						     data-class-selected="it_index == sel_window && !browse_tabs">
+							<!-- (A source's logo: whole, on the colour of its edge where it
+							     has one, so that it seems to fill the tile; see EntryRow.) -->
 							<div class="art-tile"
 							     data-class-k-folder="e.kind == 'folder'"
 							     data-class-k-audio="e.kind == 'audio'"
 							     data-class-k-video="e.kind == 'video'"
-							     data-class-k-image="e.kind == 'image'">
+							     data-class-k-image="e.kind == 'image'"
+							     data-class-logo="e.logo && e.art != 'none'" data-class-edge="e.bg != ''">
+								<div class="art-bg" data-if="e.bg != ''" data-style-background-color="e.bg"/>
 								<div class="art-img" data-if="e.art != 'none'" data-style-decorator="e.art"/>
 								<div class="art-glyph" data-if="e.art == 'none'">{{e.icon}}</div>
 								<span class="art-check" data-if="e.watched">&#xE070;</span>
@@ -252,8 +256,10 @@
 						     data-class-k-folder="detail_kind == 'folder'"
 						     data-class-k-audio="detail_kind == 'audio'"
 						     data-class-k-video="detail_kind == 'video'"
-						     data-class-k-image="detail_kind == 'image'">
-							<div class="detail-ambient" data-if="detail_image != ''" data-style-decorator="detail_cover"/>
+						     data-class-k-image="detail_kind == 'image'"
+						     data-class-logo="detail_logo" data-class-edge="detail_bg != ''">
+							<div class="art-bg" data-if="detail_image != '' && detail_bg != ''" data-style-background-color="detail_bg"/>
+							<div class="detail-ambient" data-if="detail_image != '' && !detail_logo" data-style-decorator="detail_cover"/>
 							<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
 							<div class="detail-glyph" data-if="detail_image == ''">{{detail_icon}}</div>
 						</div>

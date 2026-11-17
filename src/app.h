@@ -146,6 +146,12 @@ private:
     bool favorite = false;
     bool watched = false;
     bool playing = false; // the item in the player right now
+    // A source's logo (on the list of sources), drawn whole on its own
+    // background rather than cropped to fill the tile; 'bg' is the colour
+    // of its edge when that is one colour ("" otherwise: see
+    // artcache::EdgeColor).
+    bool logo = false;
+    Rml::String bg;
   };
   struct ChildRow {     // the info panel: one entry of the focused folder
     Rml::String icon;
@@ -410,6 +416,13 @@ private:
   void UpdateVisibleArt();
   // "image(\"path\" cover)" for a decorator, "none" for no path.
   static std::string CoverDecorator(const std::string& path);
+  // The same, the whole picture, within the box (a logo).
+  static std::string LogoDecorator(const std::string& path);
+  // artcache::EdgeColor, once per picture.
+  std::string EdgeColorOf(const std::string& path);
+  std::map<std::string, std::string> edge_colors_;
+  // The entry is a source on the list of sources with a logo of its own.
+  bool ShowsLogo(const browse::Entry& e) const;
   const browse::Entry* SelectedEntry() const;
   BrowseLevel* CurrentLevel();
 
@@ -455,6 +468,7 @@ private:
     std::string key, name;
     std::string icon;
     browse::SourcePtr source;
+    bool logo = false; // its picture is its own logo, not artwork seen in it
   };
   std::map<std::string, ListedSource> listed_sources_; // by entry id
   const ListedSource* ListedSourceOf(const browse::Entry& e) const;
@@ -783,6 +797,8 @@ private:
   Rml::String bind_detail_image_;  // local image path, "" = none
   Rml::String bind_detail_cover_ = "none"; // the same as a decorator
   bool bind_detail_favorite_ = false;
+  bool bind_detail_logo_ = false;      // the picture is a logo (see EntryRow)
+  Rml::String bind_detail_bg_;         // ... and its edge colour, or ""
 
   bool bind_saver_ = false;        // screensaver up
   Rml::String bind_saver_x_ = "0px";

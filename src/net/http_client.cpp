@@ -18,6 +18,15 @@
 #include "net/clock.h"
 #include "net/http_client.h"
 
+
+// Who is asking, for servers that want to know: some (Wikimedia's among
+// them) turn away requests that say nothing, or only a program's name. A
+// request's own User-Agent header goes instead.
+#ifndef JTPLAY_VERSION
+#define JTPLAY_VERSION "dev"
+#endif
+static const char* const kUserAgent =
+  "jtplay/" JTPLAY_VERSION " (+https://github.com/ps4-homebrew-dev/jtplay)";
 namespace net {
   namespace {
 
@@ -195,7 +204,7 @@ namespace net {
     ::curl_easy_setopt(curl_, CURLOPT_NOBODY, 1L);
     ::curl_easy_setopt(curl_, CURLOPT_HEADERFUNCTION, WriteHeader);
     ::curl_easy_setopt(curl_, CURLOPT_HEADERDATA, &headers);
-    ::curl_easy_setopt(curl_, CURLOPT_USERAGENT, "jtplay");
+    ::curl_easy_setopt(curl_, CURLOPT_USERAGENT, kUserAgent);
     ::curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 0L);
     ::curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 0L);
     ::curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, kConnectTimeoutMs);
@@ -234,7 +243,7 @@ namespace net {
     ::curl_easy_setopt(curl, CURLOPT_WRITEDATA, &t.sink);
     ::curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, WriteHeader);
     ::curl_easy_setopt(curl, CURLOPT_HEADERDATA, &res.headers);
-    ::curl_easy_setopt(curl, CURLOPT_USERAGENT, "jtplay");
+    ::curl_easy_setopt(curl, CURLOPT_USERAGENT, kUserAgent);
     ::curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, ""); // gzip if built in
     ::curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, req.follow_redirects ? 1L : 0L);
     ::curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);

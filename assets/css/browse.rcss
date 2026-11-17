@@ -353,6 +353,18 @@
 .detail-artbox.k-video  { background-color: #163633; }
 .detail-artbox.k-audio  { background-color: #2d2147; }
 .detail-artbox.k-image  { background-color: #1a2c47; }
+
+/* A source's logo (see .art-tile.logo): on its own edge colour, large;
+ * otherwise in a margin, on a lighter box. */
+.detail-artbox.logo {
+	background-color: #2b3449;
+}
+.detail-artbox.logo .detail-art {
+	height: 208px;
+}
+.detail-artbox.logo.edge .detail-art {
+	height: 320px;
+}
 .k-folder .detail-glyph { color: #9fb0cc; opacity: 0.85; }
 .k-video .detail-glyph  { color: #4dd6b8; opacity: 0.85; }
 .k-audio .detail-glyph  { color: #a68bf0; opacity: 0.85; }

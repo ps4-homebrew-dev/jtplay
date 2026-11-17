@@ -134,6 +134,7 @@ void App::StartDiscovery(browse::Source::Group group,
         known.name = s->Name();
         known.detail = s->Detail();
         known.icon = s->Icon();
+        known.logo = s->Image();
         library_.RememberSource(known);
       }
       library_.Save();
@@ -223,8 +224,12 @@ browse::Listing App::SourcesListing() {
     e.name = s ? s->Name() : known.name;
     e.description = s ? s->Detail()
       : scan.scanned && !scan.running ? std::string("Not found right now") : known.detail;
-    e.image = s && !s->Image().empty() ? s->Image() : known.image;
+    // Its own picture (as it said the last time it was found, until it is
+    // found again), else what was seen in it.
+    const std::string logo = s ? s->Image() : known.logo;
+    e.image = !logo.empty() ? logo : known.image;
     ListedSource listed;
+    listed.logo = !logo.empty();
     listed.key = known.key;
     listed.name = e.name;
     listed.icon = s ? s->Icon() : !known.icon.empty() ? known.icon : icon::kFolder;
@@ -240,6 +245,11 @@ const App::ListedSource* App::ListedSourceOf(const browse::Entry& e) const {
     return nullptr;
   const auto it = listed_sources_.find(e.id);
   return it == listed_sources_.end() ? nullptr : &it->second;
+}
+
+bool App::ShowsLogo(const browse::Entry& e) const {
+  const ListedSource* listed = ListedSourceOf(e);
+  return listed && listed->logo;
 }
 
 const char* App::EntryIcon(const browse::Entry& e) const {

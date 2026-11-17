@@ -95,11 +95,16 @@ state on it.
 The icon is named with an emoji, which is shown as the matching icon of the
 UI's own set where there is one: 📺 📻 🎙 🎤 🎧 🎵 🎬 🎞 🎥 📷 🖼 📁 🖥 💾.
 
-The `image` is the source's picture in the list of sources (its artwork in
-the grid view, its thumbnail in the list view), landscape (16:9).
-Without one the list takes the first artwork seen while browsing the
-source, or of something from it in the library, and until then shows the
-icon.
+The `image` is the source's logo in the list of sources (its tile in the
+grid view, its thumbnail in the list view, and large beside the list). It
+is shown whole, never cropped: on the colour of its own edge when that is
+one colour, so an app icon on a background of its own (an
+`apple-touch-icon.png`) seems to fill the tile, and otherwise inside a
+margin on a plain tile, as a logo on a transparent background is. A PNG
+or JPEG (not SVG or ICO), square or wider, of 180 pixels or more: a
+smaller one is scaled up, and blurs. Without one the list takes the
+first artwork seen while browsing the source, or of something from it in
+the library, and until then shows the icon.
 
 Functions may be `async`. There is nothing asynchronous to wait for (`http`
 answers before it returns), but code written with `await` works as is.

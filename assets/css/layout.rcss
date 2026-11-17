@@ -318,6 +318,32 @@ body.home.featured #backdrop-shade {
 	bottom: 0px;
 }
 
+/* A source's logo: the whole picture, not cropped. On the colour of its
+ * own edge (.art-bg) it fills the height, and so seems to fill the tile;
+ * one with a transparent edge sits inside a margin, on a lighter tile. */
+.art-bg {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+}
+.art-tile.logo {
+	background-color: #2b3449;
+}
+.art-tile.logo .art-img {
+	left: 16%;
+	top: 16%;
+	right: 16%;
+	bottom: 16%;
+}
+.art-tile.logo.edge .art-img {
+	left: 4%;
+	top: 4%;
+	right: 4%;
+	bottom: 4%;
+}
+
 .art-glyph {
 	font-weight: bold;
 	color: #ffffff;

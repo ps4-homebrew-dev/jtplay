@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <map>
@@ -488,6 +489,55 @@ std::string Fetch(const std::string& uri) {
   if (!full.empty())
     g_ondisk[HashKey(uri)] = full;
   return full;
+}
+
+std::string EdgeColor(const std::string& path) {
+  SDL_Surface* loaded = IMG_Load(path.c_str());
+  if (!loaded)
+    return {};
+  SDL_Surface* s = SDL_ConvertSurfaceFormat(loaded, SDL_PIXELFORMAT_RGBA32, 0);
+  SDL_FreeSurface(loaded);
+  if (!s)
+    return {};
+  // Every pixel of the outermost ring: their average, and how far they
+  // stray from it.
+  std::vector<const uint8_t*> ring;
+  auto at = [s](int x, int y) {
+    return (const uint8_t*)s->pixels + (size_t)y * s->pitch + (size_t)x * 4;
+  };
+  for (int x = 0; x < s->w; x++) {
+    ring.push_back(at(x, 0));
+    ring.push_back(at(x, s->h - 1));
+  }
+  for (int y = 1; y + 1 < s->h; y++) {
+    ring.push_back(at(0, y));
+    ring.push_back(at(s->w - 1, y));
+  }
+  std::string out;
+  if (!ring.empty()) {
+    double sum[4] = {0, 0, 0, 0};
+    for (const uint8_t* p : ring)
+      for (int c = 0; c < 4; c++)
+        sum[c] += p[c];
+    const double n = (double)ring.size();
+    const double mean[4] = {sum[0] / n, sum[1] / n, sum[2] / n, sum[3] / n};
+    // One colour: hardly any pixel of the ring more than a little off.
+    size_t off = 0;
+    for (const uint8_t* p : ring) {
+      const double d = std::abs(p[0] - mean[0]) + std::abs(p[1] - mean[1]) +
+                       std::abs(p[2] - mean[2]);
+      if (d > 36.0 || p[3] < 240)
+        off++;
+    }
+    if (mean[3] >= 245.0 && off * 20 <= ring.size()) {
+      char buf[8];
+      std::snprintf(buf, sizeof(buf), "#%02x%02x%02x", (int)(mean[0] + 0.5),
+                    (int)(mean[1] + 0.5), (int)(mean[2] + 0.5));
+      out = buf;
+    }
+  }
+  SDL_FreeSurface(s);
+  return out;
 }
 
 } // namespace artcache

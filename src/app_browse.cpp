@@ -471,6 +471,7 @@ void App::RebuildEntryRows() {
       EntryRow row;
       row.icon = EntryIcon(e);
       row.kind = browse::TypeName(e.type);
+      row.logo = ShowsLogo(e);
       row.name = DisplayName(e);
       row.meta = EntryMeta(e);
       row.folder = e.IsFolder();
@@ -1454,7 +1455,9 @@ void App::UpdateVisibleArt() {
         continue;
       const std::string path = ImagePathFor(uri, true);
       if (!path.empty()) {
-        row.art = CoverDecorator(path);
+        row.art = row.logo ? LogoDecorator(path) : CoverDecorator(path);
+        if (row.logo)
+          row.bg = EdgeColorOf(path);
         changed = true;
       }
     }
