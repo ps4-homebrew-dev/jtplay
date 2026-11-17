@@ -267,7 +267,9 @@
 
 				<div id="details" class="pane">
 					<div class="detail-body" data-if="detail_name != ''">
-						<div class="detail-artbox"
+						<!-- A folder without artwork of its own: what is in it takes the
+						     place of its glyph (src/app_browse.cpp, RequestPreview). -->
+						<div class="detail-artbox" data-if="!(detail_preview && detail_image == '')"
 						     data-class-k-folder="detail_kind == 'folder'"
 						     data-class-k-audio="detail_kind == 'audio'"
 						     data-class-k-video="detail_kind == 'video'"
@@ -284,6 +286,13 @@
 							</div>
 						</div>
 						<div class="detail-desc" data-if="detail_description != ''">{{detail_description}}</div>
+						<div class="detail-children" data-if="detail_preview">
+							<div class="child" data-for="c : detail_children">
+								<span class="child-icon">{{c.icon}}</span>
+								<span class="child-name">{{c.name}}</span>
+							</div>
+							<div class="child-more" data-if="detail_more != ''">{{detail_more}}</div>
+						</div>
 					</div>
 				</div>
 			</div>

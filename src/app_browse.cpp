@@ -118,6 +118,7 @@ void App::OpenSource(const browse::SourcePtr& source) {
   if (!source)
     return;
   CancelForegroundLaunch();
+  RememberPlace(); // the one on screen, if any
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
@@ -131,17 +132,57 @@ void App::OpenSource(const browse::SourcePtr& source) {
   view_ = View::Browse;
   Set("view", bind_view_, Rml::String("browse"));
 
+  // Where it was left: the folders above it are named in the path at
+  // once, and listed when back reaches them; the one it was left in is
+  // listed now, on the entry it was left on. A place that is not there
+  // any more says so, and back leads out of it as from any folder.
+  std::vector<library::PlaceLevel> place = library_.Place(source->Key());
+  if (place.empty() || place.front().id != source->RootId())
+    place = {{source->RootId(), source->Name(), std::string()}};
+  for (size_t i = 0; i + 1 < place.size(); i++) {
+    BrowseLevel level;
+    level.id = place[i].id;
+    level.name = place[i].name;
+    level.keep = place[i].selected;
+    level.stale = true;
+    path_.push_back(std::move(level));
+  }
+
   RebuildEntryRows();
   RebuildCrumb();
   RebuildDetail();
-  RequestBrowse(current_source_->RootId(), current_source_->Name(), false);
+  RequestBrowse(place.back().id, place.back().name, false, place.back().selected);
+}
+
+bool App::LibraryView(const browse::SourcePtr& source) const {
+  return source && (source == favorites_source_ || source == continue_source_ ||
+                    source == search_source_);
+}
+
+void App::RememberPlace() {
+  if (view_ != View::Browse || !current_source_ || LibraryView(current_source_))
+    return;
+  // The folders, not search results; down to the last one that was listed.
+  std::vector<library::PlaceLevel> levels;
+  for (const BrowseLevel& level : path_) {
+    if (!level.query.empty() || !level.error.empty())
+      break;
+    library::PlaceLevel place{level.id, level.name, level.keep};
+    if (!level.stale && level.selection >= 0 && level.selection < (int)level.entries.size())
+      place.selected = level.entries[level.selection].id;
+    levels.push_back(std::move(place));
+  }
+  // The top of it, on its first entry: nothing worth remembering.
+  if (levels.size() == 1 && levels[0].selected.empty())
+    levels.clear();
+  library_.SetPlace(current_source_->Key(), levels);
 }
 
 // Lists 'id' on the worker. The result is pushed as a new level, or with
 // 'replace' takes the place of the current one (a refresh), keeping the
 // cursor on the same entry if it is still there.
 void App::RequestBrowse(const std::string& id, const std::string& name,
-                        bool replace) {
+                        bool replace, const std::string& keep_id) {
   if (!current_source_)
     return;
 
@@ -149,7 +190,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
   const uint32_t request = ticket.id;
   const browse::SourcePtr source = current_source_;
 
-  PostTask(Lane::Browse, [this, ticket, request, source, id, name, replace] {
+  PostTask(Lane::Browse, [this, ticket, request, source, id, name, replace, keep_id] {
     browse::Listing result;
     std::string error;
     {
@@ -158,7 +199,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
         source->Browse(id, result, error);
     }
 
-    Reply([this, request, id, name, replace, result = std::move(result),
+    Reply([this, request, id, name, replace, keep_id, result = std::move(result),
            error]() mutable {
       if (request != browse_request_)
         return; // superseded while it was in flight
@@ -186,7 +227,10 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
         return;
       }
 
-      std::string keep, filter;
+      std::string keep = keep_id, filter;
+      // Listed now for the first time since the source was reopened below
+      // it (see OpenSource).
+      const bool was_stale = replace && !path_.empty() && path_.back().stale;
       if (replace) {
         if (const browse::Entry* e = SelectedEntry())
           keep = e->id;
@@ -208,6 +252,21 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
           break;
         }
       }
+      // A folder that holds one folder and nothing else (a server's
+      // "Video" holding only "All video"): that one is opened in its place,
+      // and back passes over it. Not while coming back up to it.
+      const bool through = !replace && keep_id.empty() && level.raw.size() == 1 &&
+                           level.raw[0].IsFolder() && level.filter.empty();
+      const browse::Entry only = through ? level.raw[0] : browse::Entry();
+      level.passthrough = through;
+      // Back reached a folder above a reopened one, and it holds nothing
+      // but that one: passed over, as it was on the way down.
+      if (was_stale && level.raw.size() == 1 && level.raw[0].IsFolder()) {
+        level.passthrough = true;
+        path_.push_back(std::move(level));
+        LeaveContainer();
+        return;
+      }
       sel_entry_ = level.selection;
       path_.push_back(std::move(level));
 
@@ -215,6 +274,8 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       RebuildCrumb();
       RebuildDetail();
       scroll_entries_pending_ = true;
+      if (through)
+        RequestBrowse(only.id, only.name, false);
     });
   });
 }
@@ -243,12 +304,28 @@ void App::RefreshContainer() {
 void App::LeaveContainer() {
   CancelForegroundLaunch(); // ... otherwise playback pops up over another folder
   AbandonBrowse(); // any browse that is still in flight
-  if (path_.size() <= 1) {
-    GoHome(); // at the root: back home, where the rail still points here
+  // Past the folders that were only passed through, and out of a search
+  // of everything (which has no folder of its own to return to).
+  size_t depth = path_.empty() ? 0 : path_.size() - 1;
+  while (depth > 0 && path_[depth - 1].passthrough)
+    depth--;
+  if (depth == 0 || (current_source_ == search_source_ && depth == 1)) {
+    // At the top: back home, to the tile it was opened from. (Left as it
+    // is until then, so that it is remembered as it was left.)
+    GoHome();
     return;
   }
-  path_.pop_back();
-  sel_entry_ = path_.back().selection;
+  path_.resize(depth);
+  BrowseLevel& level = path_.back();
+  if (level.stale) {
+    // Named only (the source was reopened below it): listed now.
+    RebuildEntryRows();
+    RebuildCrumb();
+    RebuildDetail();
+    RequestBrowse(level.id, level.name, true, level.keep);
+    return;
+  }
+  sel_entry_ = level.selection;
   RebuildEntryRows();
   RebuildCrumb();
   RebuildDetail();
@@ -361,7 +438,87 @@ void App::RebuildDetail() {
     model_.DirtyVariable("detail_props");
   }
 
+  // A folder: what is in it, once the focus has rested on it a moment.
+  // Only where listing is quick and can run beside the browse itself:
+  // drives and media servers (a plugin's script runs one call at a time,
+  // so a preview would hold up opening the folder).
+  preview_key_.clear();
+  preview_at_ = 0.0;
+  if (e && e->IsFolder() && current_source_ && view_ == View::Browse) {
+    std::string key, id;
+    if (!library::DecodeId(e->id, key, id))
+      key = current_source_->Key();
+    if (key.compare(0, 3, "fs:") == 0 || key.compare(0, 5, "dlna:") == 0) {
+      preview_key_ = current_source_->Key() + '\n' + e->id;
+      if (!previews_.count(preview_key_))
+        preview_at_ = Now() + kPreviewDelaySec;
+    }
+  }
+  ShowPreview();
+
   RefreshImageBindings();
+}
+
+void App::ShowPreview() {
+  std::vector<ChildRow> children;
+  Rml::String more;
+  auto it = preview_key_.empty() ? previews_.end() : previews_.find(preview_key_);
+  if (it != previews_.end() && it->second.count != size_t(-1)) {
+    children = it->second.children;
+    if (it->second.count == 0)
+      more = "Empty";
+    else if (it->second.count > children.size())
+      more = "and " + std::to_string(it->second.count - children.size()) + " more";
+  }
+  bool same = children.size() == detail_children_.size();
+  for (size_t i = 0; same && i < children.size(); i++)
+    same = children[i].name == detail_children_[i].name;
+  if (!same) {
+    detail_children_ = std::move(children);
+    model_.DirtyVariable("detail_children");
+  }
+  Set("detail_more", bind_detail_more_, more);
+  Set("detail_preview", bind_detail_preview_, !detail_children_.empty() || !more.empty());
+}
+
+void App::RequestPreview() {
+  preview_at_ = 0.0;
+  const browse::Entry* e = SelectedEntry();
+  if (!e || !e->IsFolder() || !current_source_ || preview_key_.empty() ||
+      previews_.count(preview_key_))
+    return;
+  preview_running_ = true;
+  const std::string key = preview_key_;
+  const std::string id = e->id;
+  const browse::SourcePtr source = current_source_;
+  PostTask(Lane::Preview, [this, key, id, source] {
+    browse::Listing out;
+    std::string error;
+    const bool ok = source->Browse(id, out, error);
+    Reply([this, key, ok, out = std::move(out)] {
+      preview_running_ = false;
+      // What it holds, folders first as the list shows them; a folder that
+      // cannot be listed shows nothing, and is not asked again.
+      Preview preview;
+      if (ok) {
+        preview.count = out.size();
+        for (int pass = 0; pass < 2; pass++)
+          for (const browse::Entry& child : out)
+            if (child.IsFolder() == (pass == 0) && preview.children.size() < kPreviewEntries)
+              preview.children.push_back({IconFor(child), DisplayName(child)});
+      }
+      if (previews_.size() > kPreviewsKept)
+        previews_.clear();
+      if (ok)
+        previews_[key] = std::move(preview);
+      else
+        previews_[key] = Preview{{}, size_t(-1)};
+      if (key == preview_key_)
+        ShowPreview();
+      else if (!preview_key_.empty() && !previews_.count(preview_key_))
+        preview_at_ = Now(); // the focus moved on meanwhile: that one next
+    });
+  }, false);
 }
 
 void App::MoveSelection(int delta) {
@@ -472,7 +629,13 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
   case Rml::Input::KI_HOME:  MoveSelection(-entry_count_); break;
   case Rml::Input::KI_END:   MoveSelection(+entry_count_); break;
   case Rml::Input::KI_SPACE: CycleSortMode(+1); break;
-  case Rml::Input::KI_T:     SetSort(sort_mode_, !sort_desc_); break;
+  // Triangle: pins the item (or folder) in focus to Home's Favorites, or
+  // unpins it. (Reversing the order is in the options menu.)
+  case Rml::Input::KI_T:
+  case Rml::Input::KI_TAB:
+    if (const browse::Entry* e = SelectedEntry())
+      ToggleFavorite(*e);
+    break;
   case gamepad::kKeyOptions: OpenMenu(); break;
   case Rml::Input::KI_RETURN:
   case Rml::Input::KI_NUMPADENTER:
@@ -487,8 +650,12 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
       ShowToast("Cancelled", icon::kStop);
     } else if (browse_pending_ && !path_.empty()) {
       // Likewise a folder that is still being opened (or listed again):
-      // back gives up on that, and stays where it was asked from.
+      // back gives up on that, and stays where it was asked from -- unless
+      // that is the page a search of everything is made from, which has
+      // nothing on it: then home.
       AbandonBrowse();
+      if (current_source_ == search_source_ && path_.size() == 1)
+        GoHome();
     } else if (const BrowseLevel* level = CurrentLevel();
                level && !level->filter.empty()) {
       ClearFilter(); // back out of the filter before the folder
@@ -751,6 +918,23 @@ void App::OpenMenu() {
     MenuSection("Go to");
     AddMenuItem({"Top of the list", nullptr,
       [this](int) { MoveSelection(-entry_count_); }});
+    if (path_.size() > 1 && !LibraryView(current_source_)) {
+      AddMenuItem({"Top of " + current_source_->Name(), nullptr, [this](int) {
+        AbandonBrowse();
+        path_.resize(1);
+        BrowseLevel& top = path_.front();
+        RebuildCrumb();
+        if (top.stale || top.passthrough) {
+          top.passthrough = false;
+          RequestBrowse(top.id, top.name, true, top.keep);
+          return;
+        }
+        sel_entry_ = top.selection;
+        RebuildEntryRows();
+        RebuildDetail();
+        scroll_entries_pending_ = true;
+      }});
+    }
     AddMenuItem({"Home", nullptr, [this](int) { GoHome(); }});
 
     // The plugin this is from: of the source, or in Favorites and Continue
@@ -1271,8 +1455,7 @@ void App::OpenSearch() {
   }
   // "Search Podcasts"; under Favorites it is the favorite's own source that
   // is asked, whose name is not at hand.
-  const bool library = current_source_ == favorites_source_ ||
-                       current_source_ == continue_source_;
+  const bool library = LibraryView(current_source_);
   Set("search_title", bind_search_title_,
       library ? std::string("Search") : "Search " + current_source_->Name());
   // The field is only hidden between searches (data-if), so it still holds
@@ -1367,6 +1550,35 @@ void App::HandleKeySearch(Rml::Event& event, int key) {
 // screen). The hits become a level of their own above the folder, or replace
 // the one on top when that is a list of hits, so back always returns to the
 // folder.
+void App::OpenGlobalSearch() {
+  if (FullscreenPlayback() || bind_photo_)
+    return;
+  OpenTextEntry("Search everything", std::string(), kSearchMaxLength, false,
+                [this](const std::string& query) {
+    if (query.empty())
+      return;
+    // Searched from a page of its own, the one level the results are
+    // pushed over; back from them leads home.
+    RememberPlace();
+    CancelForegroundLaunch();
+    AbandonBrowse();
+    current_source_ = search_source_;
+    path_.clear();
+    BrowseLevel top;
+    top.id = search_source_->RootId();
+    top.name = search_source_->Name();
+    path_.push_back(std::move(top));
+    sel_entry_ = 0;
+    view_ = View::Browse;
+    Set("view", bind_view_, Rml::String("browse"));
+    Set("source_name", bind_source_name_, search_source_->Name());
+    RebuildEntryRows();
+    RebuildCrumb();
+    RebuildDetail();
+    RequestSearch(query);
+  });
+}
+
 void App::RequestSearch(const std::string& query) {
   if (!current_source_ || path_.empty())
     return;
@@ -1396,12 +1608,24 @@ void App::RequestSearch(const std::string& query) {
       if (request != browse_request_ || scope >= path_.size())
         return; // superseded while it was in flight
       BrowseArrived();
+      // A search of everything that found nothing has no page to stay on:
+      // back to the Search tab, to try something else.
+      auto nowhere = [this] {
+        if (current_source_ != search_source_ || path_.size() != 1)
+          return;
+        GoHome();
+        home_rows_wanted_ = false;
+        RebuildHome("search");
+        Set("home_shelves", bind_home_shelves_, false);
+      };
       if (!error.empty()) {
         ShowToast(error, icon::kWarning);
+        nowhere();
         return;
       }
       if (result.empty()) {
         ShowToast("Nothing found for \"" + query + "\"", icon::kSearch);
+        nowhere();
         return;
       }
 
@@ -1410,7 +1634,9 @@ void App::RequestSearch(const std::string& query) {
       BrowseLevel level;
       // Never the id of a folder: the play order and the like are keyed on it.
       level.id = "search:" + folder + "\n" + query;
-      level.name = "Search: " + query;
+      // (A search of everything is under "Search" already.)
+      level.name = current_source_ == search_source_ ? "\u201C" + query + "\u201D"
+                                                    : "Search: " + query;
       level.query = query;
       level.raw = std::move(result);
       SortLevel(level);

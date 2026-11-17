@@ -9,10 +9,10 @@
 //                                      the playback controls
 //   circle / B            Backspace    back; in full screen: the menus,
 //                                      playing on (held: stop)
-//   square / X            Space        search a source group again, next sort
-//                                      key; in full screen: play / pause
-//   triangle / Y          T            full screen and back (Kodi's FullScreen);
-//                                      browsing: reverse the order
+//   square / X            Space        Home: look for sources again; lists:
+//                                      next sort key; full screen: play / pause
+//   triangle / Y          T, Tab       Home, lists: pin / unpin (Favorites);
+//                                      full screen: the menus (Kodi's FullScreen)
 //   L1 / R1               PageUp/Down  page; in full screen: previous / next
 //                                      chapter or item (repeats)
 //   L2 / R2               Home / End   first / last row

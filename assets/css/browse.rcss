@@ -425,6 +425,40 @@
 	text-overflow: ellipsis;
 }
 
+/* A folder's first entries, under its name. */
+.detail-children {
+	margin-top: 22px;
+}
+
+.child {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 46px;
+}
+
+.child-icon {
+	width: 44px;
+	font-size: 24px;
+	color: #6f7b92;
+}
+
+.child-name {
+	flex: 1;
+	font-size: 23px;
+	color: #c5cee0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.child-more {
+	margin-top: 8px;
+	padding-left: 44px;
+	font-size: 20px;
+	color: #6f7b92;
+}
+
 .detail-desc {
 	margin-top: 18px;
 	font-size: 23px;

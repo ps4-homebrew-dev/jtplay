@@ -50,6 +50,14 @@ struct Recent {
   int64_t updated = 0;  // epoch seconds
 };
 
+// Where a source was left: the folders down to the one on screen, and the
+// entry selected in each (by id, as the listing may have changed).
+struct PlaceLevel {
+  std::string id;
+  std::string name;
+  std::string selected;
+};
+
 struct Progress {
   int64_t position = 0;     // seconds; 0 = start from the beginning
   int64_t duration = 0;     // seconds, 0 = unknown
@@ -99,6 +107,12 @@ public:
   void ForgetSource(const std::string& key);
   std::vector<KnownSource> KnownSources() const;
 
+  // Where each source was left, to open it there again; an empty list
+  // forgets it. Not a change of the library as views see it (no new
+  // generation): nothing on screen shows it.
+  void SetPlace(const std::string& source_key, const std::vector<PlaceLevel>& levels);
+  std::vector<PlaceLevel> Place(const std::string& source_key) const;
+
   // Bumped on every change, so views can tell when to refresh.
   uint64_t Generation() const;
 
@@ -120,6 +134,7 @@ private:
   std::map<std::string, Item> progress_;
   std::vector<Recent> recent_;          // most recent first
   std::vector<KnownSource> sources_;    // in the order they were found
+  std::map<std::string, std::vector<PlaceLevel>> places_; // by source key
 };
 
 // The real sources by key, so a LibrarySource can find the one a ref
@@ -129,6 +144,7 @@ class SourceRegistry {
 public:
   void Set(const std::vector<browse::SourcePtr>& sources);
   browse::SourcePtr Find(const std::string& key) const;
+  std::vector<browse::SourcePtr> All() const;
 
 private:
   mutable std::mutex mutex_;
@@ -142,7 +158,9 @@ bool DecodeId(const std::string& encoded, std::string& source_key, std::string& 
 
 class LibrarySource : public browse::Source {
 public:
-  enum class Kind { Favorites, ContinueWatching };
+  // Search: lists nothing; searched at its root, it searches the library
+  // (by name) and every source that can search, and lists what they found.
+  enum class Kind { Favorites, ContinueWatching, Search };
 
   LibrarySource(Kind kind, Library& library, SourceRegistry& registry);
 
@@ -166,6 +184,8 @@ public:
   size_t Count() const;
 
 private:
+  bool SearchEverything(const std::string& query, browse::Listing& out, std::string& error);
+
   Kind kind_;
   Library& library_;
   SourceRegistry& registry_;

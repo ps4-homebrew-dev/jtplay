@@ -3,8 +3,15 @@
 #include "icons.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <chrono>
+#include <thread>
 #include <cstdio>
 #include <ctime>
+#include <set>
+
+#include "net/cancel.h"
 
 #include <tinyxml2.h>
 
@@ -24,6 +31,13 @@ constexpr size_t kMaxProgress = 1000;   // remembered items, oldest dropped
 constexpr size_t kMaxInProgress = 50;   // shown under "Continue watching"
 constexpr size_t kMaxRecent = 30;       // remembered lately played
 constexpr size_t kMaxSources = 200;     // remembered sources
+constexpr size_t kMaxPlaceDepth = 32;   // folders remembered per source
+
+std::string Lower(std::string s) {
+  for (char& c : s)
+    c = (char)std::tolower((unsigned char)c);
+  return s;
+}
 
 std::string Attr(const XMLElement* e, const char* name) {
   const char* v = e->Attribute(name);
@@ -74,6 +88,7 @@ void Library::Load(const std::string& path) {
   progress_.clear();
   recent_.clear();
   sources_.clear();
+  places_.clear();
 
   XMLDocument doc;
   if (doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS || !doc.RootElement())
@@ -81,6 +96,15 @@ void Library::Load(const std::string& path) {
 
   for (const XMLElement* e = doc.RootElement()->FirstChildElement(); e;
        e = e->NextSiblingElement()) {
+    if (std::string(e->Name()) == "place") {
+      std::vector<PlaceLevel> levels;
+      for (const XMLElement* l = e->FirstChildElement("level"); l;
+           l = l->NextSiblingElement("level"))
+        levels.push_back({Attr(l, "id"), Attr(l, "name"), Attr(l, "selected")});
+      if (!Attr(e, "source").empty() && !levels.empty())
+        places_[Attr(e, "source")] = std::move(levels);
+      continue;
+    }
     if (std::string(e->Name()) == "source") {
       KnownSource s;
       s.key = Attr(e, "key");
@@ -149,6 +173,19 @@ void Library::Save() {
     if (!s.icon.empty())   e->SetAttribute("icon", s.icon.c_str());
     if (s.uses > 0)        e->SetAttribute("uses", s.uses);
     if (s.used > 0)        e->SetAttribute("used", s.used);
+    root->InsertEndChild(e);
+  }
+  for (const auto& kv : places_) {
+    XMLElement* e = doc.NewElement("place");
+    e->SetAttribute("source", kv.first.c_str());
+    for (const PlaceLevel& level : kv.second) {
+      XMLElement* l = doc.NewElement("level");
+      l->SetAttribute("id", level.id.c_str());
+      l->SetAttribute("name", level.name.c_str());
+      if (!level.selected.empty())
+        l->SetAttribute("selected", level.selected.c_str());
+      e->InsertEndChild(l);
+    }
     root->InsertEndChild(e);
   }
   for (const auto& kv : progress_) {
@@ -387,6 +424,42 @@ std::vector<KnownSource> Library::KnownSources() const {
   return out;
 }
 
+void Library::SetPlace(const std::string& key, const std::vector<PlaceLevel>& levels) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (levels.empty()) {
+    if (places_.erase(key))
+      dirty_ = true;
+    return;
+  }
+  std::vector<PlaceLevel> kept(levels.begin(),
+                               levels.begin() + std::min(levels.size(), kMaxPlaceDepth));
+  auto same = [](const std::vector<PlaceLevel>& a, const std::vector<PlaceLevel>& b) {
+    if (a.size() != b.size())
+      return false;
+    for (size_t i = 0; i < a.size(); i++)
+      if (a[i].id != b[i].id || a[i].selected != b[i].selected)
+        return false;
+    return true;
+  };
+  auto it = places_.find(key);
+  if (it != places_.end() && same(it->second, kept))
+    return;
+  places_[key] = std::move(kept);
+  // Only for sources still remembered: a place without one would linger.
+  for (auto p = places_.begin(); p != places_.end();) {
+    const bool known = std::any_of(sources_.begin(), sources_.end(),
+      [&p](const KnownSource& s) { return s.key == p->first; });
+    p = known ? std::next(p) : places_.erase(p);
+  }
+  dirty_ = true; // saved with the rest; views need not know
+}
+
+std::vector<PlaceLevel> Library::Place(const std::string& key) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = places_.find(key);
+  return it == places_.end() ? std::vector<PlaceLevel>() : it->second;
+}
+
 // ---------------------------------------------------------------------------
 // SourceRegistry
 // ---------------------------------------------------------------------------
@@ -397,6 +470,14 @@ void SourceRegistry::Set(const std::vector<browse::SourcePtr>& sources) {
     map.emplace(s->Key(), s);
   std::lock_guard<std::mutex> lock(mutex_);
   sources_ = std::move(map);
+}
+
+std::vector<browse::SourcePtr> SourceRegistry::All() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<browse::SourcePtr> out;
+  for (const auto& kv : sources_)
+    out.push_back(kv.second);
+  return out;
 }
 
 browse::SourcePtr SourceRegistry::Find(const std::string& key) const {
@@ -430,20 +511,27 @@ bool DecodeId(const std::string& encoded, std::string& key, std::string& id) {
 
 LibrarySource::LibrarySource(Kind kind, Library& library, SourceRegistry& registry)
   : kind_(kind), library_(library), registry_(registry),
-    name_(kind == Kind::Favorites ? "Favorites" : "Continue watching") {
+    name_(kind == Kind::Favorites ? "Favorites"
+          : kind == Kind::Search  ? "Search"
+                                  : "Continue watching") {
   UpdateDetail();
 }
 
 const char* LibrarySource::Icon() const {
-  return kind_ == Kind::Favorites ? icon::kStar : icon::kResume;
+  return kind_ == Kind::Favorites ? icon::kStar
+       : kind_ == Kind::Search    ? icon::kSearch
+                                  : icon::kResume;
 }
 
 std::string LibrarySource::Key() const {
-  return kind_ == Kind::Favorites ? "library:favorites" : "library:continue";
+  return kind_ == Kind::Favorites ? "library:favorites"
+       : kind_ == Kind::Search    ? "library:search"
+                                  : "library:continue";
 }
 
 size_t LibrarySource::Count() const {
   return kind_ == Kind::Favorites ? library_.Favorites().size()
+       : kind_ == Kind::Search    ? 0
                                   : library_.InProgress().size();
 }
 
@@ -471,6 +559,8 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
     if (kind_ == Kind::Favorites) {
       for (const Ref& ref : library_.Favorites())
         add(ref);
+    } else if (kind_ == Kind::Search) {
+      // Nothing of its own: it only searches.
     } else {
       for (const auto& item : library_.InProgress())
         add(item.first);
@@ -500,7 +590,7 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
 bool LibrarySource::CanSearch(const std::string& folder_id) const {
   std::string key, inner;
   if (!DecodeId(folder_id, key, inner))
-    return false; // the root of the library
+    return kind_ == Kind::Search; // the root: of everything, or of the library
   const browse::SourcePtr source = registry_.Find(key);
   return source && source->CanSearch(inner);
 }
@@ -509,6 +599,8 @@ bool LibrarySource::Search(const std::string& folder_id, const std::string& quer
                            browse::Listing& out, std::string& error) {
   std::string key, inner;
   if (!DecodeId(folder_id, key, inner)) {
+    if (kind_ == Kind::Search)
+      return SearchEverything(query, out, error);
     error = "this source cannot search";
     return false;
   }
@@ -521,6 +613,97 @@ bool LibrarySource::Search(const std::string& folder_id, const std::string& quer
     return false;
   for (browse::Entry& e : out)
     e.id = EncodeId(key, e.id);
+  return true;
+}
+
+// The library first (what was played, pinned or left unfinished, by name:
+// quick, and most likely what is meant), then every source that can
+// search, most used first. A source that fails is left out, not the lot.
+bool LibrarySource::SearchEverything(const std::string& query, browse::Listing& out,
+                                     std::string& error) {
+  const std::string needle = Lower(query);
+  std::set<std::string> seen;
+  auto add = [&](const Ref& ref) {
+    if (Lower(ref.entry.name).find(needle) == std::string::npos)
+      return;
+    if (!seen.insert(ref.source_key + '\n' + ref.entry.id).second)
+      return;
+    browse::Entry e = ref.entry;
+    e.id = EncodeId(ref.source_key, ref.entry.id);
+    out.push_back(std::move(e));
+  };
+  for (const auto& item : library_.InProgress())
+    add(item.first);
+  for (const Recent& r : library_.RecentItems())
+    add(r.ref);
+  for (const Ref& ref : library_.Favorites())
+    add(ref);
+
+  // Most used first; those not remembered (none, normally) after them.
+  std::vector<browse::SourcePtr> sources;
+  for (const KnownSource& known : library_.KnownSources())
+    if (const browse::SourcePtr s = registry_.Find(known.key))
+      sources.push_back(s);
+  for (const browse::SourcePtr& s : registry_.All())
+    if (std::find(sources.begin(), sources.end(), s) == sources.end())
+      sources.push_back(s);
+
+  // All at once, each on a thread of its own: a search is mostly waiting
+  // for a server, and the slowest should not add up with the others. They
+  // are given up on together, as the search they belong to is.
+  struct Job {
+    browse::SourcePtr source;
+    browse::Listing found;
+    std::string why;
+    bool ok = false;
+  };
+  std::vector<Job> jobs;
+  for (const browse::SourcePtr& s : sources)
+    if (s->CanSearch(s->RootId()))
+      jobs.push_back({s, {}, {}, false});
+  const net::CancelToken token = net::MakeCancelToken();
+  std::atomic<size_t> left(jobs.size());
+  std::vector<std::thread> threads;
+  for (Job& job : jobs) {
+    threads.emplace_back([&job, &left, token, query] {
+      net::CancelScope scope(token);
+      job.ok = job.source->Search(job.source->RootId(), query, job.found, job.why);
+      left--;
+    });
+  }
+  while (left > 0) {
+    if (net::Cancelled())
+      net::Cancel(token);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  for (std::thread& t : threads)
+    t.join();
+  if (net::Cancelled()) {
+    error = net::kCancelledError;
+    return false;
+  }
+
+  std::string failures;
+  for (Job& job : jobs) {
+    const browse::SourcePtr& s = job.source;
+    if (!job.ok) {
+      if (!failures.empty())
+        failures += "; ";
+      failures += s->Name() + (job.why.empty() ? "" : ": " + job.why);
+      continue;
+    }
+    for (browse::Entry& e : job.found) {
+      if (!seen.insert(s->Key() + '\n' + e.id).second)
+        continue;
+      e.id = EncodeId(s->Key(), e.id);
+      out.push_back(std::move(e));
+    }
+  }
+  // Something found: what failed is not worth spoiling it for.
+  if (out.empty() && !failures.empty()) {
+    error = failures;
+    return false;
+  }
   return true;
 }
 

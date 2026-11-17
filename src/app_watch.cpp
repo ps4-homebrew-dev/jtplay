@@ -1121,10 +1121,6 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
 
 bool App::HandleKeyBehind(int key) {
   switch (key) {
-  case Rml::Input::KI_T:     // triangle / Tab: back to full screen
-  case Rml::Input::KI_TAB:
-    SetFullscreen(true);
-    return true;
   case Rml::Input::KI_X:     // keyboard: stop
     StopPlayback();
     ShowToast("Playback stopped", icon::kStop);

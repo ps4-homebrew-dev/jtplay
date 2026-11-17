@@ -55,14 +55,21 @@ the background (local drives and plugins first, network servers last),
 and a source that has not been found yet is looked for when selected,
 then opened. One that is not found at all is dimmed and says so; the
 options menu can forget it. Square looks for every source again. Back
-from a source returns to its tile.
+from a source returns to its tile. Triangle pins the card in focus to
+Favorites, or unpins it.
+
+The **Search** tab (or Ctrl+S on Home) searches everything at once: your
+library by name (Continue watching, Recent and Favorites), then every
+source that can search, most used first, all of them side by side so the
+slowest sets the pace rather than the sum. A source that fails is left
+out; back from the results leads home.
 
 The banner shows the card in focus, large, over its artwork across the
 top of the screen -- where it is from, what is left of it, its
 description -- and follows the focus along the rows; the focused row
 sits right under it. Whatever a card has no data for is left out. Up from
-the first row reaches two tabs, Home and Settings (the gear); down or back
-returns to the rows. Back on the rows goes to the first card, or to what
+the first row reaches three tabs, Home, Search and Settings (the gear);
+down or back returns to the rows. Back on the rows goes to the first card, or to what
 plays behind the menus.
 
 ## Browsing
@@ -86,6 +93,17 @@ Moving past the last row of a list (or the last row of the grid) wraps
 around to the first, and the other way round. In a list sorted by name,
 left and right jump to the previous / next letter (shown large for a
 moment) instead of paging.
+
+A source opens where it was left: in the folder it was left in, on the
+entry it was left on, with the folders above it in the path (listed as
+back reaches them). *Top of* the source, in the options menu, goes back to
+its first page. A folder that holds nothing but one folder (a media
+server's "Video" holding only "All video") is passed over to that one,
+both on the way down and on the way back up.
+
+With the focus on a folder from a drive or a media server, the info panel
+lists what is in it (the first eight entries, folders first, and how many
+more) in place of its icon, a moment after the focus stops there.
 
 A folder on a slow server says so where the eyes are: the focused row
 pulses while what it opens is on its way, and back gives up on it and
@@ -141,7 +159,8 @@ texture, and photos are turned upright from their EXIF orientation.
 
 ## Favorites and Continue watching
 
-Any folder or item, from any source, can be added to **Favorites**. A
+Any folder or item, from any source, can be added to **Favorites**, with
+triangle or the options menu. A
 favorite folder is a shortcut: it browses (and plays) through the source it
 came from, so a DLNA folder works as long as that server is on the network.
 
@@ -168,8 +187,8 @@ What plays is in the top bar, by the clock, with its time; Home's first
 row, **Now playing**, holds its card. The way back to full screen is the
 way out of it: back, step by step (from a list to Home, from the rows to
 the video), as on any remote; or selecting the
-Now playing card or the item that is playing, triangle (Tab on a
-keyboard), or the options menu's **Back to full screen**. The stop button
+Now playing card or the item that is playing, or the options menu's
+**Back to full screen**. The stop button
 of the controls, holding back in full screen, the options menu's **Stop
 playback**, a remote's stop key or X on a keyboard stops it.
 
@@ -352,7 +371,7 @@ that is not on the d-pad.
 | back            | first card; full screen*    | back (Home from a source root); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
 | options         | options for the card or tile | options menu; closes a menu      | info bar / away                             | photo menu         |
 | square          | look for sources again      | next sort key                     | play / pause                                | slideshow on / off |
-| triangle        | back to full screen*        | reverse sort order; back to full screen* | the menus, playing on                | rotate             |
+| triangle        | pin / unpin                 | pin / unpin (Favorites)           | the menus, playing on                       | rotate             |
 | previous / next | a page of rows              | page up / down                    | previous / next chapter or item             | previous / next    |
 | page / channel  | a page of rows              | page up / down                    | up: next item; down: previous item          | up: next; down: previous |
 | first / last    | first / last in the row     | first / last                      | on the controls: first / last button        | first / last       |
@@ -379,7 +398,7 @@ on, holding OK (Return) for a moment is options too. What a TV remote connected 
 the console and the TV; Settings > Show input shows it.
 
 Held directions repeat. Ctrl+Q quits, Ctrl+F filters the folder on screen and
-Ctrl+S searches the source.
+Ctrl+S searches the source (on Home: everything).
 The mapping lives in `src/gamepad.cpp` and `RmlSDL::ConvertKey`.
 
 ## Playback

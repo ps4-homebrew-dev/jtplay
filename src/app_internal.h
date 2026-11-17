@@ -55,6 +55,11 @@ inline constexpr int kScrollMarginRows = 2;
 
 // Rows jumped by page up/down (L1/R1, left/right in the browse list).
 inline constexpr int kPageRows = 10;
+// A folder's preview in the info panel: asked for once the focus has
+// rested on it this long; this many of its entries shown; previews kept.
+inline constexpr double kPreviewDelaySec = 0.35;
+inline constexpr size_t kPreviewEntries = 8;
+inline constexpr size_t kPreviewsKept = 300;
 // ... and by them on Home's rows of cards and on the Settings page, where
 // a screen holds fewer.
 inline constexpr int kPageShelves = 3;

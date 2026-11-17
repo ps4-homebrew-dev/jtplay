@@ -84,6 +84,8 @@ bool App::Initialize(Rml::Context* context, const Options& options, std::string&
     library::LibrarySource::Kind::Favorites, library_, registry_);
   continue_source_ = std::make_shared<library::LibrarySource>(
     library::LibrarySource::Kind::ContinueWatching, library_, registry_);
+  search_source_ = std::make_shared<library::LibrarySource>(
+    library::LibrarySource::Kind::Search, library_, registry_);
 
   providers_.push_back(std::make_unique<browse::FsProvider>());
   providers_.push_back(std::make_unique<browse::DlnaProvider>(kDiscoveryWaitMs));
@@ -168,6 +170,7 @@ void App::Shutdown() {
 
   if (bind_watching_)
     RecordProgress(true);
+  RememberPlace();
   library_.Save();
 
   visualizer_.Shutdown(); // GL context still current
@@ -389,6 +392,11 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
 
+  if (auto row = ctor.RegisterStruct<ChildRow>()) {
+    row.RegisterMember("icon", &ChildRow::icon);
+    row.RegisterMember("name", &ChildRow::name);
+  }
+  ctor.RegisterArray<std::vector<ChildRow>>();
   if (auto row = ctor.RegisterStruct<PropRow>()) {
     row.RegisterMember("label", &PropRow::label);
     row.RegisterMember("value", &PropRow::value);
@@ -475,6 +483,9 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("detail_kind", &bind_detail_kind_);
   ctor.Bind("detail_description", &bind_detail_description_);
   ctor.Bind("detail_props", &detail_props_);
+  ctor.Bind("detail_children", &detail_children_);
+  ctor.Bind("detail_more", &bind_detail_more_);
+  ctor.Bind("detail_preview", &bind_detail_preview_);
   ctor.Bind("detail_image", &bind_detail_image_);
   ctor.Bind("detail_cover", &bind_detail_cover_);
   ctor.Bind("detail_favorite", &bind_detail_favorite_);
@@ -720,6 +731,9 @@ void App::Update() {
   // system keyboard hands over its text all at once anyway.)
   if (bind_filter_open_ && !filter_focus_pending_)
     ApplyFilter(FilterFieldText());
+  if (preview_at_ > 0.0 && Now() >= preview_at_ && !preview_running_)
+    RequestPreview();
+
   if (scroll_sources_pending_ && ScrollRows())
     scroll_sources_pending_ = false;
 
@@ -876,6 +890,15 @@ void App::ProcessEvent(Rml::Event& event) {
     SDL_Event quit = {};
     quit.type = SDL_QUIT;
     SDL_PushEvent(&quit);
+    event.StopPropagation();
+    return;
+  }
+
+  // Home: Ctrl+S searches everything (as its Search tab does).
+  if (key == Rml::Input::KI_S && event.GetParameter<int>("ctrl_key", 0) != 0 &&
+      view_ == View::Home && !bind_search_open_ && !bind_menu_open_ && !bind_photo_ &&
+      !FullscreenPlayback()) {
+    OpenGlobalSearch();
     event.StopPropagation();
     return;
   }

@@ -46,6 +46,8 @@ constexpr size_t kRecentShown = 10;
 void App::GoHome() {
   CancelForegroundLaunch();
   AbandonBrowse(); // any browse that is still in flight
+  RememberPlace(); // to open the source there the next time
+  library_.Save();
   path_.clear();
   current_source_.reset();
   view_ = View::Home;
@@ -213,7 +215,11 @@ void App::OpenKnownSource(const std::string& key, const std::string& name) {
 // ---------------------------------------------------------------------------
 
 std::string App::RailKey(const RailItem& item) {
-  return item.kind == RailKind::Settings ? "settings" : "home";
+  switch (item.kind) {
+  case RailKind::Search:   return "search";
+  case RailKind::Settings: return "settings";
+  default:                 return "home";
+  }
 }
 
 void App::RebuildHome(const std::string& select) {
@@ -225,6 +231,8 @@ void App::RebuildHome(const std::string& select) {
   rail_rows_.clear();
   rail_.push_back({RailKind::Home});
   rail_rows_.push_back({icon::kHome, "Home", ""});
+  rail_.push_back({RailKind::Search});
+  rail_rows_.push_back({icon::kSearch, "Search", ""});
   rail_.push_back({RailKind::Settings});
   rail_rows_.push_back({icon::kSettings, "", ""}); // a gear, no word
 
@@ -260,6 +268,10 @@ void App::ActivateRail() {
     return;
   if (rail_[sel_rail_].kind == RailKind::Settings) {
     EnterSettings();
+    return;
+  }
+  if (rail_[sel_rail_].kind == RailKind::Search) {
+    OpenGlobalSearch();
     return;
   }
   home_rows_wanted_ = true;
@@ -491,7 +503,7 @@ void App::FocusHomeCard(const std::string& id) {
 bool App::FeaturedIndex(int& shelf, int& card) const {
   if (view_ != View::Home || shelves_.empty())
     return false;
-  if (sel_rail_ >= (int)rail_.size() || rail_[sel_rail_].kind != RailKind::Home)
+  if (sel_rail_ >= (int)rail_.size() || rail_[sel_rail_].kind == RailKind::Settings)
     return false;
   if (bind_home_shelves_) {
     shelf = sel_shelf_;
@@ -620,11 +632,15 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     case Rml::Input::KI_RIGHT: MoveRail(+1); break;
     case Rml::Input::KI_HOME:  MoveRail(-sel_rail_); break;
     case Rml::Input::KI_END:   MoveRail((int)rail_.size() - 1 - sel_rail_); break;
-    case Rml::Input::KI_DOWN:
-      if (bind_settings_page_)
+    case Rml::Input::KI_DOWN:  // into the page under the tab
+      if (bind_settings_page_) {
         EnterSettings();
-      else
-        ActivateRail();
+      } else {
+        home_rows_wanted_ = true;
+        if (!shelves_.empty())
+          Set("home_shelves", bind_home_shelves_, true);
+        RefreshImageBindings();
+      }
       break;
     case Rml::Input::KI_UP:
       break; // nothing above the tabs
@@ -642,8 +658,6 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
       // back down to the rows.
       if (bind_watching_) {
         SetFullscreen(true);
-      } else if (!bind_settings_page_) {
-        ActivateRail();
       } else {
         MoveRail(-sel_rail_);
         ActivateRail();
@@ -692,6 +706,21 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     break;
   case Rml::Input::KI_SPACE:
     SearchAllSources();
+    break;
+  // Triangle: pins the card in focus to Favorites, or unpins it.
+  case Rml::Input::KI_T:
+  case Rml::Input::KI_TAB:
+    if (SourceShelf(sel_shelf_)) {
+      if (const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_])
+        ToggleSourceFavorite(source);
+      else
+        ShowToast("Not found right now", icon::kWarning);
+    } else if (!NowPlayingShelf(sel_shelf_)) {
+      if (const browse::Entry* card = SelectedCard()) {
+        const browse::Entry entry = *card; // the rows are made again
+        ToggleFavorite(entry);
+      }
+    }
     break;
   case Rml::Input::KI_HOME:  select(sel_shelf_, 0); break;
   case Rml::Input::KI_END:   select(sel_shelf_, cards - 1); break;

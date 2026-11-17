@@ -17,6 +17,7 @@
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -99,6 +100,13 @@ private:
     // is on the stack all the same, so the screen says where the trouble
     // is, select tries again and back leaves the usual way.
     std::string error;
+    // A folder above the one a source was reopened in (see RememberPlace):
+    // known by name, listed only when back reaches it, on the entry 'keep'.
+    bool stale = false;
+    std::string keep;
+    // A folder that held nothing but one folder, which was opened in its
+    // place: back passes over it.
+    bool passthrough = false;
   };
 
   // Rows exposed to the RmlUi data model.
@@ -138,6 +146,10 @@ private:
     bool favorite = false;
     bool watched = false;
     bool playing = false; // the item in the player right now
+  };
+  struct ChildRow {     // the info panel: one entry of the focused folder
+    Rml::String icon;
+    Rml::String name;
   };
   struct PropRow {      // one "label: value" line in the info panel
     Rml::String label;
@@ -204,7 +216,9 @@ private:
   // main thread in the next Update() -- the only place the UI and the data
   // model are touched. With 'busy', the task counts towards the activity
   // indicator in the top bar from the moment it is posted.
-  enum class Lane { Discovery, Browse, Playback, Count };
+  // (Preview: what is in the focused folder, see RequestPreview; apart, so
+  // it never holds up opening a folder.)
+  enum class Lane { Discovery, Browse, Playback, Preview, Count };
   void PostTask(Lane lane, std::function<void()> task, bool busy = true);
   void Reply(std::function<void()> apply);
   void RunReplies();
@@ -267,7 +281,7 @@ private:
   // watching, Recent (live streams and the folders things were played
   // from), Favorites and, last, every source there is, most used first.
   // Above them two tabs, Home and Settings (a gear).
-  enum class RailKind { Home, Settings };
+  enum class RailKind { Home, Search, Settings };
   struct RailItem {
     RailKind kind;
   };
@@ -350,8 +364,17 @@ private:
   void EnterContainer(const browse::Entry& entry);
   void LeaveContainer();                 // back one level (or to sources)
   void RefreshContainer();               // re-list the current folder
+  // 'keep': the entry to put the cursor on (by id), if it is there.
   void RequestBrowse(const std::string& id, const std::string& name,
-                     bool replace);
+                     bool replace, const std::string& keep = std::string());
+  // Where the source on screen was left, remembered for the next time it
+  // is opened (OpenSource reopens it there). Not for the library's views.
+  void RememberPlace();
+  bool LibraryView(const browse::SourcePtr& source) const;
+  // The focused folder's first entries, in the info panel: listed in the
+  // background a moment after the focus stops on it, and kept.
+  void RequestPreview();
+  void ShowPreview();
   void RebuildEntryRows();
   void RebuildDetail();
   void RebuildCrumb();
@@ -395,6 +418,9 @@ private:
   // back returns to the folder, selection and all. Unlike the filter it
   // reaches content that is not listed.
   void OpenSearch();
+  // Asks what to look for, then searches the library and every source that
+  // can search (the Search tab on Home).
+  void OpenGlobalSearch();
   // The search dialog asking for something else (OpenTextEntry): who gets
   // the text. Empty while it asks for a search.
   std::function<void(const std::string&)> text_entry_;
@@ -626,6 +652,17 @@ private:
   Rml::String bind_detail_kind_;  // "video", ...: tints the art box
   Rml::String bind_detail_description_;
   std::vector<PropRow> detail_props_;
+  std::vector<ChildRow> detail_children_; // a folder's, see RequestPreview
+  Rml::String bind_detail_more_;          // "and 12 more", "Empty", ""
+  bool bind_detail_preview_ = false;      // the panel shows a folder's entries
+  struct Preview {
+    std::vector<ChildRow> children;
+    size_t count = 0;
+  };
+  std::map<std::string, Preview> previews_; // by source key and folder id
+  std::string preview_key_;                 // the one the panel waits for
+  double preview_at_ = 0.0;                 // when to ask for it; 0 = not
+  bool preview_running_ = false;
   bool bind_busy_ = false;         // a browse/discovery is in flight
   // The browse view's own account of waiting: a listing is on its way
   // (said in place of the list while that is empty), or the focused row is
@@ -862,6 +899,7 @@ private:
   library::SourceRegistry registry_;
   std::shared_ptr<library::LibrarySource> favorites_source_;
   std::shared_ptr<library::LibrarySource> continue_source_;
+  std::shared_ptr<library::LibrarySource> search_source_;
   std::vector<browse::SourcePtr> discovered_;   // from the providers
   uint64_t library_seen_ = 0;          // generation the UI reflects
 
