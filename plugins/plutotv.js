@@ -1278,6 +1278,7 @@ return {
             name: "Pluto TV",
             detail: "Free live channels and on-demand TV",
             icon: "📺",
+            image: "https://pluto.tv/favicon/large.png",
             root: "",
 
             browse(id) {

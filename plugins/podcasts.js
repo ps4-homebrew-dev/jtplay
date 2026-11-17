@@ -516,6 +516,7 @@ return {
             name: "Podcasts",
             detail: "Apple Podcasts charts by country and genre",
             icon: "🎙",
+            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Podcasts_%28iOS%29.svg/330px-Podcasts_%28iOS%29.svg.png",
             root: "/",
             // In the store of the country of the folder on screen.
             search(query, folderId) {

@@ -290,6 +290,33 @@ bool DescribeServer(const std::string& location, MediaServer& out, std::string& 
   if (out.friendly_name.empty())
     out.friendly_name = out.model.empty() ? "Media server" : out.model;
 
+  // The device's own icons (UPnP device description, <iconList>): the
+  // picture the server wants to be known by. Take the biggest raster one,
+  // PNG preferred over JPEG on a tie; the UI can draw neither an SVG nor an
+  // .ico, so those are skipped rather than handed to the artwork cache.
+  if (const XMLElement* icons = FirstChildLocal(device, "iconList")) {
+    long best = -1;
+    for (const XMLElement* icon = icons->FirstChildElement(); icon;
+         icon = icon->NextSiblingElement()) {
+      if (!NameIs(icon, "icon"))
+        continue;
+      const std::string url = ChildText(icon, "url");
+      if (url.empty())
+        continue;
+      const std::string mime = ChildText(icon, "mimetype");
+      const bool png = mime == "image/png";
+      if (!png && mime != "image/jpeg" && mime != "image/gif")
+        continue;
+      const int w = std::atoi(ChildText(icon, "width").c_str());
+      const int h = std::atoi(ChildText(icon, "height").c_str());
+      const long score = static_cast<long>(w) * h * 10 + (png ? 1 : 0);
+      if (score <= best)
+        continue;
+      best = score;
+      out.icon_url = ResolveUrl(base, url);
+    }
+  }
+
   const XMLElement* services = FirstChildLocal(device, "serviceList");
   if (services) {
     for (const XMLElement* svc = services->FirstChildElement(); svc;

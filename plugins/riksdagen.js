@@ -186,6 +186,7 @@ return {
             name: "Riksdagen",
             detail: "Debates of the Swedish parliament",
             icon: "🎤",
+            image: "https://www.riksdagen.se/icons/apple-touch-icon-180x180.png",
             root: "/",
 
             browse(id) {

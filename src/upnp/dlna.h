@@ -22,6 +22,9 @@ struct MediaServer {
   std::string udn;         // uuid:... from the description
   std::string location;    // description document URL (shown as the host)
   std::string control_url; // absolute ContentDirectory control URL
+  // The server's own icon from the description's <iconList>, absolute; ""
+  // when it announces none.
+  std::string icon_url;
 };
 
 // One entry of a DIDL-Lite listing: either a container ("folder") or an

@@ -26,6 +26,7 @@ return {
             name: "Sveriges Radio",
             detail: "Live radio from Swedish public service",
             icon: "📻",
+            image: "https://sverigesradio.se/apple-icon.png",
             browse(id) {
                 return fetchChannels();
             }

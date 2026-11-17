@@ -643,6 +643,7 @@ return {
             name: "SVT Play",
             detail: "TV from Swedish public service",
             icon: "📺",
+            image: "https://www.svtplay.se/apple-touch-icon.png",
             root: "",
 
             browse(id) {

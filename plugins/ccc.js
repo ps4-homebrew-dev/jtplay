@@ -137,6 +137,7 @@ return {
             name: "media.ccc.de",
             detail: "Talks from the Chaos Computer Club and friends",
             icon: "🎤",
+            image: "https://media.ccc.de/favicon-96x96.png",
             root: "/",
 
             browse(id) {

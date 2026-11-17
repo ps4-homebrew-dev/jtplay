@@ -97,6 +97,7 @@ return {
             name: "SomaFM",
             detail: "Listener-supported, commercial-free radio",
             icon: "📻",
+            image: "https://somafm.com/apple-touch-icon.png",
             root: "/",
             browse(id) {
                 if (id !== "/")

@@ -113,6 +113,7 @@ return {
             name: "Art gallery",
             detail: "The Art Institute of Chicago, as a picture frame",
             icon: "🖼",
+            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Art_Institute_of_Chicago_logo.svg/330px-Art_Institute_of_Chicago_logo.svg.png",
             root: "/",
             imageHeaders: {
                 "https://www.artic.edu/": Object.assign({ Referer: "https://www.artic.edu/" },

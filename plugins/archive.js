@@ -192,6 +192,7 @@ return {
             name: "Internet Archive",
             detail: "Public domain films, concerts, old radio",
             icon: "🎞",
+            image: "https://archive.org/offshoot_assets/apple-touch-icon.png",
             root: "/",
 
             browse(id) {

@@ -619,6 +619,7 @@ return {
             name: "TV4 Play",
             detail: "TV4, Sjuan, TV12: series, films, news",
             icon: "📺",
+            image: "https://www.tv4play.se/static/tv4/apple-touch-icon.png",
             root: "/",
             browse(id) {
                 if (id === "/")

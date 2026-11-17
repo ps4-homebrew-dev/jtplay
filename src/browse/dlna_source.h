@@ -17,6 +17,8 @@ public:
   const std::string& Name() const override { return server_.friendly_name; }
   const std::string& Detail() const override { return detail_; }
   const char* Icon() const override { return icon::kServer; }
+  // The server's own icon, when its description carries one.
+  const std::string& Image() const override { return server_.icon_url; }
   std::string Key() const override {
     return "dlna:" + (server_.udn.empty() ? server_.location : server_.udn);
   }
