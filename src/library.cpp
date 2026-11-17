@@ -111,6 +111,7 @@ void Library::Load(const std::string& path) {
       s.name = Attr(e, "name");
       s.detail = Attr(e, "detail");
       s.icon = Attr(e, "icon");
+      s.image = Attr(e, "image");
       s.uses = e->IntAttribute("uses", 0);
       s.used = e->Int64Attribute("used", 0);
       if (!s.key.empty() && !s.name.empty())
@@ -171,6 +172,7 @@ void Library::Save() {
     e->SetAttribute("name", s.name.c_str());
     if (!s.detail.empty()) e->SetAttribute("detail", s.detail.c_str());
     if (!s.icon.empty())   e->SetAttribute("icon", s.icon.c_str());
+    if (!s.image.empty())  e->SetAttribute("image", s.image.c_str());
     if (s.uses > 0)        e->SetAttribute("uses", s.uses);
     if (s.used > 0)        e->SetAttribute("used", s.used);
     root->InsertEndChild(e);
@@ -374,6 +376,7 @@ void Library::RememberSource(const KnownSource& source) {
   KnownSource s = source;
   s.uses = 0;
   s.used = 0;
+  s.image.clear();
   sources_.push_back(std::move(s));
   if (sources_.size() > kMaxSources) {
     // The one opened least (and longest ago) makes way.
@@ -396,6 +399,20 @@ void Library::SourceUsed(const std::string& key) {
       return;
     }
   }
+}
+
+bool Library::SetSourceImage(const std::string& key, const std::string& image) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (KnownSource& s : sources_) {
+    if (s.key != key)
+      continue;
+    if (!s.image.empty() || image.empty())
+      return false;
+    s.image = image;
+    Changed();
+    return true;
+  }
+  return false;
 }
 
 void Library::ForgetSource(const std::string& key) {

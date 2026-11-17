@@ -24,12 +24,13 @@ class JsSource : public Source {
 public:
   // Takes ownership of 'source' (a reference to the source object).
   JsSource(JsPluginPtr plugin, JSValue source, std::string name, std::string detail,
-           std::string icon, std::string root, bool can_search);
+           std::string icon, std::string image, std::string root, bool can_search);
   ~JsSource() override;
 
   const std::string& Name() const override { return name_; }
   const std::string& Detail() const override { return detail_; }
   const char* Icon() const override { return icon_.c_str(); }
+  const std::string& Image() const override { return image_; }
   std::string RootId() const override { return root_; }
   std::string Key() const override;
 
@@ -55,6 +56,7 @@ private:
   std::string name_;
   std::string detail_;
   std::string icon_;
+  std::string image_;
   std::string root_;
   bool can_search_;
 };

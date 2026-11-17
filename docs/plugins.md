@@ -58,6 +58,7 @@ return {
         name: "My source",         // the tile's title
         detail: "somewhere",       // its second line (optional)
         icon: "📻",                // an emoji (optional; see below)
+        image: "https://example.com/logo.png", // its tile on Home (optional)
         root: "/",                 // id of the root folder (optional, "/")
         browse(id) {               // list the folder 'id'
           return [
@@ -94,6 +95,11 @@ state on it.
 
 The icon is named with an emoji, which is shown as the matching icon of the
 UI's own set where there is one: 📺 📻 🎙 🎤 🎧 🎵 🎬 🎞 🎥 📷 🖼 📁 🖥 💾.
+
+The `image` is the picture on the source's tile on Home, landscape (16:9)
+like the other cards. Without one the tile takes the first artwork seen
+while browsing the source, or of something from it in the library, and
+until then shows the icon.
 
 Functions may be `async`. There is nothing asynchronous to wait for (`http`
 answers before it returns), but code written with `await` works as is.

@@ -166,21 +166,6 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
   // its own).
   const browse::SourcePtr source = from_queue ? queue_.source : current_source_;
   if (!from_queue) {
-    // The folder it is played from, for Recent: not a list of search
-    // results, nor the top of a source (that has its own tile on Home).
-    // In the library's own views every folder carries its source.
-    launch_has_folder_ = false;
-    if (view_ == View::Browse && !path_.empty() && path_.back().query.empty()) {
-      const BrowseLevel& level = path_.back();
-      std::string key, id;
-      if (library::DecodeId(level.id, key, id) || path_.size() > 1) {
-        browse::Entry folder;
-        folder.id = level.id;
-        folder.name = level.name;
-        folder.type = browse::Entry::Type::Folder;
-        launch_has_folder_ = IdentifyIn(folder, current_source_, launch_folder_);
-      }
-    }
     launch_queue_ = PlayQueue{current_source_, std::string(), browse::Listing{entry}};
     if (view_ == View::Browse && !path_.empty()) {
       const BrowseLevel& level = path_.back();
@@ -275,11 +260,8 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
         progress_saved_at_ = Now();
         watch_last_pos_us_ = watch_last_dur_us_ = -1;
         watch_last_seekable_ = false;
-        if (!launch_from_queue_) {
+        if (!launch_from_queue_)
           queue_ = std::move(launch_queue_);
-          playing_folder_ = launch_folder_;
-          playing_has_folder_ = launch_has_folder_;
-        }
         const bool behind = launch_behind_;
         CancelLaunch();
         EnterWatch(playing_, !behind);

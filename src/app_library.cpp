@@ -115,16 +115,8 @@ void App::RecordRecent() {
   // Never got going: nothing to come back to.
   if (!playing_identified_ || watch_last_pos_us_ < 0)
     return;
-  // A live stream is what is wanted again (the channel); anything else is
-  // in Continue watching while unfinished, and the folder it came from is
-  // where the next one is.
   // (Live: the player cannot seek in it, or it has no length.)
-  if (!watch_last_seekable_ || watch_last_dur_us_ <= 0)
-    library_.AddRecent(playing_ref_, true);
-  else if (playing_has_folder_)
-    library_.AddRecent(playing_folder_, false);
-  else
-    return;
+  library_.AddRecent(playing_ref_, !watch_last_seekable_ || watch_last_dur_us_ <= 0);
   library_.Save();
 }
 

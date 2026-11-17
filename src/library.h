@@ -38,6 +38,9 @@ struct KnownSource {
   std::string name;
   std::string detail;
   std::string icon;     // a glyph of icons.h
+  // Artwork seen in it, for its tile when it has no picture of its own
+  // (see App::NoteSourceArt). Not changed by RememberSource.
+  std::string image;
   int uses = 0;
   int64_t used = 0;     // epoch seconds it was last opened, 0 = never
 };
@@ -104,6 +107,8 @@ public:
   // counts an opening.
   void RememberSource(const KnownSource& source);
   void SourceUsed(const std::string& key);
+  // Artwork for the tile of a source that has none yet; true if taken.
+  bool SetSourceImage(const std::string& key, const std::string& image);
   void ForgetSource(const std::string& key);
   std::vector<KnownSource> KnownSources() const;
 

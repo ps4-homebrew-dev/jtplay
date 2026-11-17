@@ -227,11 +227,12 @@ bool FileStamp(const std::string& path, int64_t& mtime, int64_t& size) {
 // ---------------------------------------------------------------------------
 
 JsSource::JsSource(JsPluginPtr plugin, JSValue source, std::string name, std::string detail,
-                   std::string icon, std::string root, bool can_search)
+                   std::string icon, std::string image, std::string root, bool can_search)
   : plugin_(std::move(plugin)), source_(source), name_(std::move(name)),
     detail_(std::move(detail)),
     // A plugin names its icon as an emoji; the UI draws its own icons.
-    icon_(icon::FromEmoji(icon)), root_(std::move(root)), can_search_(can_search) {}
+    icon_(icon::FromEmoji(icon)), image_(std::move(image)), root_(std::move(root)),
+    can_search_(can_search) {}
 
 JsSource::~JsSource() {
   // Not freed here: that would mean waiting for the plugin's lock, which a
@@ -338,6 +339,7 @@ bool DiscoverJsSources(const JsPluginPtr& plugin, std::vector<SourcePtr>& out,
     }
     const std::string detail = FieldString(ctx, item.get(), "detail", plugin->ProviderName());
     const std::string icon = FieldString(ctx, item.get(), "icon", "\U0001F9E9");
+    const std::string image = FieldString(ctx, item.get(), "image", "");
     const std::string root = FieldString(ctx, item.get(), "root", "/");
     // Looked up here, with the plugin's mutex held, so that asking
     // whether it can search later (on the main thread) never enters it.
@@ -358,8 +360,8 @@ bool DiscoverJsSources(const JsPluginPtr& plugin, std::vector<SourcePtr>& out,
         ClearException(ctx);
     }
 
-    found.push_back(std::make_shared<JsSource>(plugin, item.release(), name, detail, icon, root,
-                                               can_search));
+    found.push_back(std::make_shared<JsSource>(plugin, item.release(), name, detail, icon, image,
+                                               root, can_search));
   }
 
   out.insert(out.end(), std::make_move_iterator(found.begin()),

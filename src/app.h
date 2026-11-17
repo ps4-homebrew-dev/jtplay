@@ -125,6 +125,7 @@ private:
     Rml::String art = "none";
     Rml::String progress = "0%"; // never empty, see EntryRow
     bool watched = false;
+    bool missing = false; // a source not found this time: dimmed
   };
   struct ShelfRow {
     Rml::String title;  // "" for a row that goes on from the one above
@@ -270,9 +271,11 @@ private:
   // watched once it is (nearly) over. 'final': playback is ending;
   // 'ended': it played to the end.
   void RecordProgress(bool final, bool ended = false);
-  // Puts what played into Recent as it ends: a live stream as itself,
-  // anything else as the folder it was played from.
+  // Puts what played into Recently played as it ends.
   void RecordRecent();
+  // Artwork from a listing of 'source', for its tile on Home when it has
+  // no picture of its own yet.
+  void NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& entries);
   // Library changed: refresh what shows it (rows, counts, library views).
   void OnLibraryChanged();
 
@@ -297,7 +300,7 @@ private:
     // The row of what is playing (Home's first, while something does):
     // one card, the way back to it.
     bool now_playing = false;
-    // Recent: which of its cards are live streams (the rest are folders).
+    // Recently played: which of its cards are live streams.
     bool recent = false;
     std::vector<bool> live;
   };
@@ -891,10 +894,6 @@ private:
   };
   PlayQueue queue_;
   PlayQueue launch_queue_;             // what a launch from the menus brings
-  // The folder an item was played from, for Recent (see RecordRecent):
-  // that of a launch, and of what plays once it does.
-  library::Ref launch_folder_, playing_folder_;
-  bool launch_has_folder_ = false, playing_has_folder_ = false;
   bool launch_from_queue_ = false;     // the launch in flight is queue_'s
   bool launch_behind_ = false;         // ... and stays behind the menus
 

@@ -5,8 +5,7 @@
 //
 //   Now playing         while something does: the way back to it
 //   Continue watching   unfinished items; select resumes, at once
-//   Recent              live streams as themselves, and the folders other
-//                       things were played from (where the next one is)
+//   Recently played     what was played lately, live streams included
 //   Favorites           anything pinned, most recently first
 //   Sources             every source there is, local, network or plugin,
 //                       most used first
@@ -327,13 +326,14 @@ void App::RebuildShelves() {
       shelves_.push_back(std::move(resume));
 
     // Opened through the library's own source, which hands every browse
-    // and resolve to the source the id names.
-    Shelf recent{"Recent", favorites_source_, {}, {}, {}};
+    // and resolve to the source the id names. Folders (kept by an earlier
+    // version) are left out: their names say little ("Season 1").
+    Shelf recent{"Recently played", favorites_source_, {}, {}, {}};
     recent.recent = true;
     for (const library::Recent& r : library_.RecentItems()) {
       if (recent.entries.size() >= kRecentShown)
         break;
-      if (resuming.count(r.ref.source_key + '\n' + r.ref.entry.id))
+      if (r.ref.entry.IsFolder() || resuming.count(r.ref.source_key + '\n' + r.ref.entry.id))
         continue;
       browse::Entry e = r.ref.entry;
       e.id = library::EncodeId(r.ref.source_key, r.ref.entry.id);
@@ -354,14 +354,36 @@ void App::RebuildShelves() {
     if (!favs.entries.empty())
       shelves_.push_back(std::move(favs));
 
+    // Artwork for a source's tile: its own picture, or one seen in it, or
+    // that of something from it in the library (a snapshot will do: it is
+    // only shown, not kept).
+    std::map<std::string, std::string> library_art;
+    auto note = [&library_art](const library::Ref& ref) {
+      if (!ref.entry.image.empty())
+        library_art.emplace(ref.source_key, ref.entry.image);
+    };
+    for (const auto& item : library_.InProgress())
+      note(item.first);
+    for (const library::Recent& r : library_.RecentItems())
+      note(r.ref);
+    for (const library::Ref& ref : library_.Favorites())
+      note(ref);
+
     Shelf row{"Sources", nullptr, {}, {}, {}};
     for (const library::KnownSource& known : library_.KnownSources()) {
+      const browse::SourcePtr found = registry_.Find(known.key);
       browse::Entry stand_in;
       stand_in.id = StandInId(known.key);
       stand_in.name = known.name;
       stand_in.type = browse::Entry::Type::Folder;
+      stand_in.image = found && !found->Image().empty() ? found->Image() : known.image;
+      if (stand_in.image.empty()) {
+        auto it = library_art.find(known.key);
+        if (it != library_art.end())
+          stand_in.image = it->second;
+      }
       row.entries.push_back(std::move(stand_in));
-      row.sources.push_back(registry_.Find(known.key));
+      row.sources.push_back(found);
       row.known.push_back(known);
     }
     if (!row.entries.empty())
@@ -421,8 +443,8 @@ void App::RebuildCards() {
         card.subtitle = s ? s->Detail()
           : scan.scanned && !scan.running ? std::string("Not found") : known.detail;
         card.glyph = s ? s->Icon() : !known.icon.empty() ? known.icon.c_str() : icon::kFolder;
-        card.kind = "source"; // drawn as a launcher tile (main.rml)
-        card.watched = !s && scan.scanned && !scan.running; // dimmed (main.rml)
+        card.kind = "source"; // a card like the others, tinted (main.rml)
+        card.missing = !s && scan.scanned && !scan.running;
         row.cards.push_back(std::move(card));
       }
       shelf_rows_.push_back(std::move(row));

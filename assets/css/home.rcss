@@ -250,84 +250,17 @@ body.compact .shelves-end {
 	padding-top: 8px;
 }
 
-/* The row of sources: tiles lower than cards. */
-.shelf-in.sources {
-	height: auto;
-	padding-bottom: 10px;
+/* A source's card without a picture: its icon on a tint of its own. One
+ * not found this time is dimmed. */
+.art-tile.k-source {
+	background-color: #173a3d;
 }
-/* The first row after them: a gap between the grid and the next section. */
-.shelf-in.gap {
-	height: 404px;
-	padding-top: 32px;
-}
-
-.source-tile {
-	box-sizing: border-box;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	width: 384px;
-	height: 112px;
-	padding: 0px 22px;
-	background-color: #ffffff0f;
-	border: 3px transparent;
-	border-radius: 14px;
-}
-
-.source-icon {
-	flex-shrink: 0;
-	width: 64px;
-	height: 64px;
-	margin-right: 20px;
-	font-size: 36px;
-	line-height: 64px;
-	text-align: center;
+.art-tile.k-source .art-glyph {
 	color: #4dd6b8;
-	background-color: #4dd6b81a;
-	border-radius: 14px;
 }
-
-.source-text {
-	display: flex;
-	flex-direction: column;
-	flex: 1;
-	overflow: hidden;
+.art-tile.missing {
+	opacity: 0.45;
 }
-
-.source-name {
-	font-size: 25px;
-	font-weight: bold;
-	color: #c5cee0;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.source-detail {
-	margin-top: 4px;
-	font-size: 19px;
-	color: #6f7b92;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-/* Remembered, but not found this time (a server that is off). */
-.source-tile.missing .source-icon,
-.source-tile.missing .source-name {
-	color: #5a6478;
-}
-.source-tile.missing .source-icon {
-	background-color: #ffffff0a;
-}
-
-.card.selected .source-tile {
-	background-color: #4dd6b81f;
-	border: 3px #4dd6b8;
-	box-shadow: #4dd6b855 0px 0px 24px 0px;
-}
-.card.selected .source-name { color: #ffffff; }
-.card.selected .source-detail { color: #aab6cc; }
 
 /* The rows scroll so that the focused one is at the top (src/app.cpp);
  * room after the last, so that it can get there too. */

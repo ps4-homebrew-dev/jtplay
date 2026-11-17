@@ -43,8 +43,8 @@ so that what you last watched or listened to is a press of select away:
 - **Now playing**, while something does: the way back to it.
 - **Continue watching**: unfinished items. Select resumes at once; the
   options menu has *Play from beginning*.
-- **Recent**: live streams you played, as themselves, and the folders
-  other things were played from, where the next episode or song is.
+- **Recently played**: what you played lately, live streams included
+  (what is still in Continue watching is not repeated here).
 - **Favorites**: anything you pinned, the latest first.
 - **Sources**: every source there is, local drives, network servers and
   plugins alike, the ones you open most first.
@@ -53,13 +53,16 @@ The sources are remembered from one start to the next, so their row is
 there at once, as it was. Meanwhile all of them are looked for again in
 the background (local drives and plugins first, network servers last),
 and a source that has not been found yet is looked for when selected,
-then opened. One that is not found at all is dimmed and says so; the
+then opened. A source's card shows its own picture where a plugin gives
+one, otherwise the first artwork seen in it (or of something from it in
+the library), otherwise its icon. One that is not found at all is dimmed
+and says so; the
 options menu can forget it. Square looks for every source again. Back
 from a source returns to its tile. Triangle pins the card in focus to
 Favorites, or unpins it.
 
 The **Search** tab (or Ctrl+S on Home) searches everything at once: your
-library by name (Continue watching, Recent and Favorites), then every
+library by name (Continue watching, Recently played and Favorites), then every
 source that can search, most used first, all of them side by side so the
 slowest sets the pace rather than the sum. A source that fails is left
 out; back from the results leads home.
@@ -171,7 +174,7 @@ bar on their art and gather under **Continue watching**, and anything played
 past 92% is marked watched with a tick. A video without artwork of its own
 gets a snapshot of the frame it was stopped on, so its card shows where you
 left off. Moving to the next item in a folder resumes it without asking.
-All of this, and Recent and the sources seen, is stored in `library.xml`
+All of this, and Recently played and the sources seen, is stored in `library.xml`
 in the cache directory.
 
 ## Playing

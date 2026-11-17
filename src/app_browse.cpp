@@ -154,6 +154,20 @@ void App::OpenSource(const browse::SourcePtr& source) {
   RequestBrowse(place.back().id, place.back().name, false, place.back().selected);
 }
 
+void App::NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& entries) {
+  if (!source || LibraryView(source) || !source->Image().empty())
+    return;
+  // The first picture listed: a show's poster, an album's cover, a folder's
+  // artwork. Taken once; the tile keeps it.
+  for (const browse::Entry& e : entries) {
+    if (e.image.empty())
+      continue;
+    if (library_.SetSourceImage(source->Key(), e.image))
+      library_.Save();
+    return;
+  }
+}
+
 bool App::LibraryView(const browse::SourcePtr& source) const {
   return source && (source == favorites_source_ || source == continue_source_ ||
                     source == search_source_);
@@ -240,6 +254,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
         }
       }
 
+      NoteSourceArt(current_source_, result);
       BrowseLevel level;
       level.id = id;
       level.name = name;

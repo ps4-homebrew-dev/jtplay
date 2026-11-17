@@ -116,16 +116,11 @@
 								<div class="cards" data-attr-id="'cards-' + si">
 									<div class="card" data-for="c, ci : sh.cards"
 									     data-class-selected="home_shelves && si == sel_shelf && ci == sel_card">
-										<!-- A source: its icon, name and what it is, in one tile;
-										     dimmed while it is not found. -->
-										<div class="source-tile" data-if="c.kind == 'source'" data-class-missing="c.watched">
-											<div class="source-icon">{{c.glyph}}</div>
-											<div class="source-text">
-												<div class="source-name">{{c.title}}</div>
-												<div class="source-detail" data-if="c.subtitle != ''">{{c.subtitle}}</div>
-											</div>
-										</div>
-										<div class="art-tile" data-if="c.kind != 'source'"
+										<!-- (A source: its picture, or its icon on a tint of its own;
+										     dimmed while it is not found.) -->
+										<div class="art-tile"
+										     data-class-k-source="c.kind == 'source'"
+										     data-class-missing="c.missing"
 										     data-class-k-folder="c.kind == 'folder'"
 										     data-class-k-audio="c.kind == 'audio'"
 										     data-class-k-video="c.kind == 'video' || c.kind == 'playing'"
@@ -145,8 +140,8 @@
 												<div class="art-prog-bar" data-style-width="watch_progress"/>
 											</div>
 										</div>
-										<div class="card-title" data-if="c.kind != 'source'">{{c.title}}</div>
-										<div class="card-sub" data-if="c.kind != 'source' && c.kind != 'playing'">{{c.subtitle}}</div>
+										<div class="card-title">{{c.title}}</div>
+										<div class="card-sub" data-if="c.kind != 'playing'">{{c.subtitle}}</div>
 										<div class="card-sub" data-if="c.kind == 'playing'">{{watch_pos}}<span data-if="watch_dur != ''">  /  {{watch_dur}}</span></div>
 									</div>
 								</div>

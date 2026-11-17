@@ -366,6 +366,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("art", &CardRow::art);
     row.RegisterMember("progress", &CardRow::progress);
     row.RegisterMember("watched", &CardRow::watched);
+    row.RegisterMember("missing", &CardRow::missing);
   }
   ctor.RegisterArray<std::vector<CardRow>>();
 
@@ -578,10 +579,10 @@ void App::Update() {
     Set("date", bind_date_, Rml::String(buf));
   }
 
-  Set("busy", bind_busy_, busy_ops_.load() > 0);
   // Waiting, said where the eyes are: in place of the list while there is
   // nothing in it, on the focused row once there is. (Not for the first moments: a
-  // local folder answers before anyone could read it.)
+  // local folder answers before anyone could read it.) The dots by the
+  // clock are for anything else -- one sign of waiting at a time.
   {
     const bool browsing = view_ == View::Browse;
     const bool slow = browse_pending_ && now - browse_started_at_ >= kLaunchFeedbackSec;
@@ -591,6 +592,11 @@ void App::Update() {
     const bool starting_item =
       launch_request_ && !launch_from_queue_ && now >= launch_visible_at_;
     Set("row_busy", bind_row_busy_, browsing && (opening_folder || starting_item));
+    // A folder, a search or an item from the list: the list says so (or
+    // will in a moment), not the corner as well.
+    const bool list_says =
+      browsing && (browse_pending_ || (launch_request_ && !launch_from_queue_));
+    Set("busy", bind_busy_, busy_ops_.load() > 0 && !list_says);
   }
 
   // How far an in-flight launch has got. Only shown once the open has been

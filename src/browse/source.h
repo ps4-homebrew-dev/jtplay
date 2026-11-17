@@ -115,6 +115,12 @@ public:
   virtual const std::string& Name() const = 0;   // row title
   virtual const std::string& Detail() const = 0; // row subtitle (host, path)
   virtual const char* Icon() const = 0;          // emoji glyph for the row
+  // A picture for its tile on Home (a logo, a channel's artwork); "" for
+  // none, when the tile shows artwork seen in the source, or its icon.
+  virtual const std::string& Image() const {
+    static const std::string none;
+    return none;
+  }
 
   // Identifies the source across rescans and restarts ("dlna:uuid:...",
   // "fs:/mnt/usb0"), so favorites and resume points saved against it can
