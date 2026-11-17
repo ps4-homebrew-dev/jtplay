@@ -108,7 +108,6 @@ void App::SetWatched(const browse::Entry& entry, bool watched) {
   DropSnapshot(library_.ImageFor(ref.source_key, ref.entry.id));
   library_.SetWatched(ref, watched);
   library_.Save();
-  ShowToast(watched ? "Marked as watched" : "Marked as unwatched", icon::kCheck);
 }
 
 void App::RecordRecent() {

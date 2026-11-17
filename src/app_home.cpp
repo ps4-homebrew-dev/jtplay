@@ -1020,14 +1020,13 @@ void App::AddPluginSettings(const std::shared_ptr<browse::JsPlugin>& plugin,
             return std::string("Not set");
           return spec.secret ? std::string("Set") : value;
         },
-        [this, id, spec, menu, name = plugin->ProviderName()](int d) {
+        [this, id, spec, menu](int d) {
           // Left or right forgets it (signing out, for a token).
           if (d != 0) {
             if (plugin_settings_->Get(id, spec.key).empty())
               return;
             plugin_settings_->Set(id, spec.key, "");
             SaveSettings();
-            ShowToast(name + ": " + spec.label + " cleared", icon::kClear);
             return;
           }
           // A secret is typed afresh; it is not shown back.
@@ -1106,7 +1105,6 @@ void App::ConfirmForgetContinue() {
       }
       library_.Save();
       RebuildSettingRows();
-      ShowToast("Cleared " + std::to_string(items.size()) + " in progress", icon::kClear);
     }});
   menu_items_.push_back({"Cancel", nullptr, [](int) {}});
   Set("menu_title", bind_menu_title_, Rml::String("Forget Continue watching?"));

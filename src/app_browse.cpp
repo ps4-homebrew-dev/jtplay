@@ -811,7 +811,6 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     // (not the next item of what plays behind the menus).
     if (launch_request_ && !launch_behind_) {
       CancelLaunch();
-      ShowToast("Cancelled", icon::kStop);
     } else if (browse_pending_ && !path_.empty()) {
       // Likewise a folder that is still being opened (or listed again):
       // back gives up on that, and stays where it was asked from.
@@ -980,10 +979,8 @@ void App::AddEntryActions(const browse::Entry& entry) {
         [this, entry, at](int) { Launch(entry, at); }});
       AddMenuItem({"Play from beginning", nullptr,
         [this, entry](int) { Launch(entry, 0); }});
-    } else {
-      AddMenuItem({"Play", nullptr,
-        [this, entry](int) { Launch(entry, 0); }});
     }
+    // (Anything else plays with select: no entry for that.)
   }
   const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
   AddMenuItem({fav ? "Remove from favorites" : "Add to favorites",

@@ -629,10 +629,8 @@ void App::Update() {
     if (back_held_ && now - back_down_at_ >= kHoldStopSec) {
       back_held_ = false;
       back_swallow_ = true;
-      if (bind_fullscreen_) {
+      if (bind_fullscreen_)
         StopPlayback();
-        ShowToast("Playback stopped", icon::kStop);
-      }
     }
   }
 

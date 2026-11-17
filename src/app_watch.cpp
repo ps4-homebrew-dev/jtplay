@@ -225,7 +225,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
       error = "this item has nothing to play";
     }
 
-    Reply([this, request, ok, error, ref, identified, start_seconds] {
+    Reply([this, request, ok, error, ref, identified] {
       if (!launch_request_ || request != launch_request_) {
         // Abandoned while it was opening (back, or another item started).
         // If it did open, take it down again rather than showing it.
@@ -276,8 +276,6 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
         const bool behind = launch_behind_;
         CancelLaunch();
         EnterWatch(playing_, !behind);
-        if (start_seconds > 0)
-          ShowToast("Resumed at " + FormatTime(start_seconds * 1000000), icon::kResume);
       }
     });
   });
@@ -893,7 +891,6 @@ void App::SetShuffle(bool on) {
     }
   }
   SaveSettings();
-  ShowToast(on ? "Shuffle on" : "Shuffle off", icon::kShuffle);
 }
 
 // Finds the next (direction=+1) or previous (direction=-1) playable item
@@ -1149,7 +1146,6 @@ bool App::HandleKeyBehind(int key) {
   switch (key) {
   case Rml::Input::KI_X:     // keyboard: stop
     StopPlayback();
-    ShowToast("Playback stopped", icon::kStop);
     return true;
   default:
     return HandleMediaKey(key);
@@ -1178,17 +1174,13 @@ bool App::HandleMediaKey(int key) {
   switch (key) {
   case Rml::Input::KI_PAUSE:            // a remote's pause key; again: play on
   case Rml::Input::KI_MEDIA_PLAY_PAUSE: {
-    const bool was_paused = player_->IsPaused();
     player_->TogglePause();
     if (bind_fullscreen_)
-      PeekWatchInfo();
-    else
-      ShowToast(was_paused ? "Playing" : "Paused", was_paused ? icon::kPlay : icon::kPause);
+      PeekWatchInfo(); // (behind the menus, the chip by the clock says so)
     return true;
   }
   case Rml::Input::KI_MEDIA_STOP:
     StopPlayback();
-    ShowToast("Playback stopped", icon::kStop);
     return true;
   case Rml::Input::KI_MEDIA_NEXT_TRACK:
     SkipChapter(+1);

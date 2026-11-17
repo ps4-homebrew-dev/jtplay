@@ -28,7 +28,6 @@ inline constexpr const char* kVideo = "\uE29B";         // clapperboard
 inline constexpr const char* kFilm = "\uE0D4";          // film
 inline constexpr const char* kImage = "\uE0F9";         // image
 inline constexpr const char* kFile = "\uE0C4";          // file
-inline constexpr const char* kCheck = "\uE070";         // check
 inline constexpr const char* kStar = "\uE17A";          // star
 inline constexpr const char* kSearch = "\uE155";        // search
 inline constexpr const char* kPlay = "\uE140";          // play
