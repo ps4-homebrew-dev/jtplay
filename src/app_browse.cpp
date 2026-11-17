@@ -1457,7 +1457,8 @@ void App::UpdateVisibleArt() {
       if (!path.empty()) {
         row.art = row.logo ? LogoDecorator(path) : CoverDecorator(path);
         if (row.logo)
-          row.bg = EdgeColorOf(path);
+          if (const std::string edge = EdgeColorOf(path); !edge.empty())
+            row.bg = edge;
         changed = true;
       }
     }

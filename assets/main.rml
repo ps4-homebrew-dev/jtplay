@@ -204,8 +204,8 @@
 							     data-class-k-audio="e.kind == 'audio'"
 							     data-class-k-video="e.kind == 'video'"
 							     data-class-k-image="e.kind == 'image'"
-							     data-class-logo="e.logo && e.art != 'none'" data-class-edge="e.bg != ''">
-								<div class="art-bg" data-if="e.bg != ''" data-style-background-color="e.bg"/>
+							     data-class-logo="e.logo && e.art != 'none'" data-class-edge="e.bg != 'transparent'">
+								<div class="art-bg" data-if="e.bg != 'transparent'" data-style-background-color="e.bg"/>
 								<div class="art-img" data-if="e.art != 'none'" data-style-decorator="e.art"/>
 								<div class="art-glyph" data-if="e.art == 'none'">{{e.icon}}</div>
 								<span class="art-check" data-if="e.watched">&#xE070;</span>
@@ -257,8 +257,8 @@
 						     data-class-k-audio="detail_kind == 'audio'"
 						     data-class-k-video="detail_kind == 'video'"
 						     data-class-k-image="detail_kind == 'image'"
-						     data-class-logo="detail_logo" data-class-edge="detail_bg != ''">
-							<div class="art-bg" data-if="detail_image != '' && detail_bg != ''" data-style-background-color="detail_bg"/>
+						     data-class-logo="detail_logo" data-class-edge="detail_bg != 'transparent'">
+							<div class="art-bg" data-if="detail_image != '' && detail_bg != 'transparent'" data-style-background-color="detail_bg"/>
 							<div class="detail-ambient" data-if="detail_image != '' && !detail_logo" data-style-decorator="detail_cover"/>
 							<img class="detail-art" data-if="detail_image != ''" data-attr-src="detail_image"/>
 							<div class="detail-glyph" data-if="detail_image == ''">{{detail_icon}}</div>

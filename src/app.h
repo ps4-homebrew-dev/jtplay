@@ -148,10 +148,11 @@ private:
     bool playing = false; // the item in the player right now
     // A source's logo (on the list of sources), drawn whole on its own
     // background rather than cropped to fill the tile; 'bg' is the colour
-    // of its edge when that is one colour ("" otherwise: see
-    // artcache::EdgeColor).
+    // of its edge when that is one colour (see artcache::EdgeColor), and
+    // "transparent" otherwise: never empty, as a data-style binding is
+    // evaluated even where its data-if hides it.
     bool logo = false;
-    Rml::String bg;
+    Rml::String bg = "transparent";
   };
   struct ChildRow {     // the info panel: one entry of the focused folder
     Rml::String icon;
@@ -798,7 +799,7 @@ private:
   Rml::String bind_detail_cover_ = "none"; // the same as a decorator
   bool bind_detail_favorite_ = false;
   bool bind_detail_logo_ = false;      // the picture is a logo (see EntryRow)
-  Rml::String bind_detail_bg_;         // ... and its edge colour, or ""
+  Rml::String bind_detail_bg_ = "transparent"; // ... and its edge colour
 
   bool bind_saver_ = false;        // screensaver up
   Rml::String bind_saver_x_ = "0px";

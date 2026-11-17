@@ -1092,7 +1092,8 @@ void App::RefreshImageBindings() {
   Set("detail_image", bind_detail_image_, detail);
   Set("detail_cover", bind_detail_cover_, CoverDecorator(detail));
   Set("detail_logo", bind_detail_logo_, logo);
-  Set("detail_bg", bind_detail_bg_, Rml::String(logo ? EdgeColorOf(detail) : ""));
+  const std::string edge = logo ? EdgeColorOf(detail) : std::string();
+  Set("detail_bg", bind_detail_bg_, Rml::String(edge.empty() ? "transparent" : edge));
 
   // Now-playing card / transport bar follows the playing item.
   Rml::String watch;
