@@ -1,3 +1,12 @@
+/* The one sign of waiting: three dots taking turns, by the clock (and
+ * where that is hidden, in its corner; see main.rml). */
+.busy {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 6dp;
+}
+
 .busy-dot {
 	width: 16dp;
 	height: 16dp;

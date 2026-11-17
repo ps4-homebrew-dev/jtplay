@@ -713,13 +713,7 @@ private:
   // been for long enough to say so; and what went wrong with the folder on
   // screen.
   bool bind_browse_loading_ = false;
-  bool bind_browse_slow_ = false;   // ... and has been for a moment
-  bool bind_row_busy_ = false;
   Rml::String bind_browse_error_;
-  // Phase of an in-flight launch ("Opening stream..."), or "" when idle.
-  // The browse view's own feedback is the topbar busy indicator, which
-  // keeps running because the shell is not hidden until the player is up.
-  Rml::String bind_launch_status_;
   bool bind_watching_ = false;     // a playback session is on
   bool bind_fullscreen_ = false;   // ... and has the screen (chrome hidden)
   // Video plays behind the menus: their background turns see-through.
@@ -998,14 +992,10 @@ private:
   uint32_t browse_request_ = 0;     // id of the browse we are waiting for
   net::CancelToken browse_cancel_;  // ... and the way to give up on it
   bool browse_pending_ = false;     // ... while it has not arrived
-  double browse_started_at_ = 0.0;
   std::atomic<int> busy_ops_{0};
 
-  // In-flight PlayEntry. The worker moves through the phases; the main
-  // thread only reads them, and stops caring as soon as launch_request_ no
-  // longer matches the result that comes back.
-  enum LaunchPhase { kLaunchIdle = 0, kLaunchResolving, kLaunchOpening };
-  std::atomic<int> launch_phase_{kLaunchIdle};
+  // In-flight PlayEntry. The main thread stops caring as soon as
+  // launch_request_ no longer matches the result that comes back.
   uint32_t launch_seq_ = 0;         // ever-increasing ticket source
   uint32_t launch_request_ = 0;     // ticket we are waiting for; 0 = idle
   net::CancelToken launch_cancel_;  // gives up on its resolve()
@@ -1013,7 +1003,6 @@ private:
   // Direction of a next/previous (or auto-advance) launch, so an item that
   // fails to open is skipped the same way; 0 for an explicit choice.
   int launch_direction_ = 0;
-  double launch_visible_at_ = 0.0;  // suppress the phase line before this
 
   double toast_deadline_ = 0.0;
   double info_deadline_ = 0.0;      // watch info bar auto-hide
@@ -1024,9 +1013,10 @@ private:
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
   bool scroll_sources_pending_ = false;
-  // Home's focus belongs on its rows (it starts there, and goes back there
-  // with Home), unless it was taken up to the tabs.
-  bool home_rows_wanted_ = true;
+  // Home's focus belongs on its rows (it goes back there with Home),
+  // unless it was taken up to the tabs. At the start it is on the tabs,
+  // on Home.
+  bool home_rows_wanted_ = false;
   // The card to focus when Home is back (the source just left).
   std::string home_return_id_;
 };

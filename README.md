@@ -37,11 +37,12 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-Across the top are three tabs: **Home**, **Sources** and **Settings**. Up
-from a page reaches them; down, select or back returns.
+Across the top are three tabs: **Home**, **Sources** and **Settings**; at
+the start the focus is on Home. Up from a page reaches them; down, select
+or back returns.
 
-Home is rows of cards, with the focus on the first from the start, so that
-what you last watched or listened to is a press of select away:
+Home is rows of cards, the first of them a press of down away, so that
+what you last watched or listened to is a press of select after that:
 
 - **Now playing**, while something does: the way back to it.
 - **Continue watching**: unfinished items. Select resumes at once, back in
@@ -114,9 +115,11 @@ With the focus on a folder from a drive or a media server, the info panel
 lists what is in it (the first eight entries, folders first, and how many
 more) in place of its icon, a moment after the focus stops there.
 
-A folder on a slow server says so where the eyes are: the focused row
-pulses while what it opens is on its way, and back gives up on it and
-stays put. A folder that cannot be listed says why in place of the list;
+Waiting of any kind -- a folder on a slow server, an item opening,
+sources being looked for, a picture loading -- has one sign: the dots by
+the clock (over full-screen video and pictures, in that corner, beside the
+time when a bar is up). Back gives up on a folder on its way and stays
+put. A folder that cannot be listed says why in place of the list;
 select tries again. The item that is playing is marked in the list.
 
 The options button opens a side menu, in groups under headings that come
@@ -229,14 +232,16 @@ and what that one is (the name of the previous or next item, what a track
 is set to) stands beside the row. Back takes the focus off them again. Without the focus the keys steer playback
 directly: left and right seek, up and down seek five minutes on or back.
 
-The video bar comes up by itself when an item starts, when it pauses or
+When an item starts, the thin bar along the top (below) shows it for five
+seconds -- unless it was started from the bar's own buttons, which then
+stay up as they were. The video bar comes up by itself when it pauses or
 plays on, and with options, and goes again five seconds after the last
 key. Brought up with select, for its buttons, it stays until back (or
 options) sends it away; once its buttons start another item or play on
 from a pause, it goes by itself again. Select does not pause: a second
 press, on play / pause, does. A seek with the bar away shows on a thin
 bar along the top instead -- the title, the time, the timeline and where
-the seek lands -- which goes three seconds after the last seek. Artwork, where an item has any, is at the
+the seek lands (a live stream: LIVE, no timeline) -- which goes three seconds after the last seek. Artwork, where an item has any, is at the
 left of the bar, as tall as its rows.
 
 Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s

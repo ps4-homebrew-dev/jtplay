@@ -306,7 +306,6 @@ App::BrowseTicket App::NewBrowseRequest() {
   AbandonBrowse();
   browse_cancel_ = net::MakeCancelToken();
   browse_pending_ = true;
-  browse_started_at_ = Now();
   return {browse_request_, browse_cancel_};
 }
 
@@ -439,10 +438,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("date", &bind_date_);
   ctor.Bind("busy", &bind_busy_);
   ctor.Bind("browse_loading", &bind_browse_loading_);
-  ctor.Bind("browse_slow", &bind_browse_slow_);
-  ctor.Bind("row_busy", &bind_row_busy_);
   ctor.Bind("browse_error", &bind_browse_error_);
-  ctor.Bind("launch_status", &bind_launch_status_);
 
   ctor.Bind("rail", &rail_rows_);
   ctor.Bind("sel_rail", &sel_rail_);
@@ -581,39 +577,11 @@ void App::Update() {
     Set("date", bind_date_, Rml::String(buf));
   }
 
-  // Waiting, said where the eyes are: in place of the list while there is
-  // nothing in it, on the focused row once there is. (Not for the first moments: a
-  // local folder answers before anyone could read it.) The dots by the
-  // clock are for anything else -- one sign of waiting at a time.
-  {
-    const bool browsing = view_ == View::Browse;
-    const bool slow = browse_pending_ && now - browse_started_at_ >= kLaunchFeedbackSec;
-    Set("browse_loading", bind_browse_loading_, browsing && browse_pending_);
-    Set("browse_slow", bind_browse_slow_, browsing && slow);
-    const bool opening_folder = slow && !path_.empty();
-    const bool starting_item =
-      launch_request_ && !launch_from_queue_ && now >= launch_visible_at_;
-    Set("row_busy", bind_row_busy_, browsing && (opening_folder || starting_item));
-    // A folder, a search or an item from the list: the list says so (or
-    // will in a moment), not the corner as well.
-    const bool list_says =
-      browsing && (browse_pending_ || (launch_request_ && !launch_from_queue_));
-    Set("busy", bind_busy_, busy_ops_.load() > 0 && !list_says);
-  }
-
-  // How far an in-flight launch has got. Only shown once the open has been
-  // slow enough to be worth mentioning.
-  {
-    Rml::String status;
-    if (launch_request_ && now >= launch_visible_at_) {
-      switch (launch_phase_.load()) {
-      case kLaunchResolving: status = "Resolving..."; break;
-      case kLaunchOpening:   status = "Opening stream..."; break;
-      default:               break;
-      }
-    }
-    Set("launch_status", bind_launch_status_, status);
-  }
+  // Waiting: the dots by the clock, one sign of it for everything (a
+  // folder, a search, an item opening, sources looked for, a picture).
+  // Over full-screen playback and pictures they are in the corner there.
+  Set("browse_loading", bind_browse_loading_, view_ == View::Browse && browse_pending_);
+  Set("busy", bind_busy_, busy_ops_.load() > 0 || bind_photo_loading_);
 
   RunReplies();
 

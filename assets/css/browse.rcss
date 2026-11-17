@@ -79,32 +79,6 @@
 	color: #4dd6b8;
 }
 
-/* The focused row, while what it opens is on its way. */
-.row-busy {
-	display: flex;
-	flex-shrink: 0;
-	margin-left: 14px;
-	align-items: center;
-}
-.row-busy .busy-dot {
-	width: 10dp;
-	height: 10dp;
-	margin-left: 5dp;
-	border-radius: 5dp;
-	background-color: #06231d;
-}
-#browse.grid .row-busy {
-	position: absolute;
-	top: 10px;
-	left: 10px;
-	padding: 6px 8px 6px 3px;
-	border-radius: 12px;
-	background-color: #0b1020cc;
-}
-#browse.grid .row-busy .busy-dot {
-	background-color: #4dd6b8;
-}
-
 /* Grid: what plays, marked on its tile. */
 .art-playing {
 	display: none;
@@ -121,24 +95,10 @@
 	display: block;
 }
 
-/* In place of the list: waiting for it, or why there is none. (The whole
+/* In place of the list: why there is none. (The whole
    width, also where the list is a grid: a flex row of tiles.) */
 #entry-list .empty {
 	width: 100%;
-}
-.empty.loading {
-	display: flex;
-	justify-content: center;
-	align-items: center;
-}
-.empty.loading .busy-dot {
-	width: 12dp;
-	height: 12dp;
-	margin-right: 8dp;
-	border-radius: 6dp;
-}
-.loading-label {
-	margin-left: 10px;
 }
 .empty.failed {
 	margin-top: 96px;

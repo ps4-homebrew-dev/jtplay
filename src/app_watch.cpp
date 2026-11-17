@@ -154,8 +154,6 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
   launch_direction_ = 0; // PlayNeighbor() sets it after this returns
   launch_request_ = ++launch_seq_;
   launch_cancel_ = net::MakeCancelToken();
-  launch_phase_ = kLaunchResolving;
-  launch_visible_at_ = Now() + kLaunchFeedbackSec;
   launch_from_queue_ = from_queue;
   // Moving on through the queue behind the menus stays behind them;
   // anything chosen from the menus starts full screen.
@@ -202,7 +200,6 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
     playable.uri = item.uri;
     bool ok;
     if (source) {
-      launch_phase_ = kLaunchResolving;
       net::CancelScope scope(cancel);
       ok = !net::Cancelled() && source->Resolve(item, playable, error);
     } else {
@@ -215,7 +212,6 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
       error = net::kCancelledError;
     }
     if (ok) {
-      launch_phase_ = kLaunchOpening;
       Player::Media media;
       media.url = playable.uri;
       media.headers = playable.headers;
@@ -296,10 +292,8 @@ void App::CancelLaunch() {
   launch_cancel_.reset();
   player_->AbortOpen();
   launch_request_ = 0;
-  launch_phase_ = kLaunchIdle;
   launch_from_queue_ = false;
   launch_behind_ = false;
-  Set("launch_status", bind_launch_status_, Rml::String());
 }
 
 void App::CancelForegroundLaunch() {
@@ -336,13 +330,18 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
     model_.DirtyVariable("chapter_marks");
   }
   RefreshImageBindings();
-  // The bar shows the new item for a moment, and goes by itself, however
-  // the item came to play. A focus on its buttons stays where it was
-  // meanwhile: "next", pressed again, is the one after.
+  // The top bar shows the new item for a moment, and goes by itself,
+  // however the item came to play (audio: its card, always up). Unless it
+  // came from the bottom bar's buttons: that stays, the focus where it was
+  // ("next", pressed again, is the one after), and goes by itself too.
   Set("seekbar_visible", bind_seekbar_visible_, false);
-  if (fullscreen) {
+  if (fullscreen && (bind_watch_audio_ || (bind_info_visible_ && bind_control_focus_))) {
     PeekWatchInfo();
     info_stay_ = false;
+  } else if (fullscreen) {
+    HideWatchInfo();
+    seekbar_deadline_ = Now() + kWatchInfoSec;
+    Set("seekbar_visible", bind_seekbar_visible_, true);
   } else {
     HideWatchInfo();
     FocusControls(false);

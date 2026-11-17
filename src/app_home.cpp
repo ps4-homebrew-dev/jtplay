@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The home screen: tabs across the top -- Home, Sources and Settings --
-// and the page of the one in focus below them. Home is rows of cards, the
-// focus on the first, so that what was last watched or listened to is a
-// press of select away:
+// and the page of the one in focus below them; at the start the focus is
+// on the Home tab. Home is rows of cards, the first a press of down away,
+// so that what was last watched or listened to is close at hand:
 //
 //   Now playing         while something does: the way back to it
 //   Continue watching   unfinished items; select resumes, at once

@@ -66,10 +66,6 @@ inline constexpr int kPageShelves = 3;
 inline constexpr int kPageSettings = 5;
 
 inline constexpr double kToastSec = 3.0;
-// A local file opens in a few milliseconds; showing a spinner for one frame
-// on every launch just looks like a glitch, so the launch feedback only
-// appears once the open has taken at least this long.
-inline constexpr double kLaunchFeedbackSec = 0.3;
 inline constexpr double kWatchInfoSec = 5.0;      // watch info bar auto-hide
 inline constexpr double kSeekBarSec = 3.0;        // top seek bar: after the last seek
 // Back held this long in full screen stops playback; shorter, it leaves

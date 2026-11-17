@@ -123,6 +123,13 @@ body.behind #shell {
 	text-overflow: ellipsis;
 }
 
+.sb-row .busy {
+	margin-left: 40px;
+}
+.sb-live {
+	margin-left: 40px;
+}
+
 .sb-time {
 	margin-left: 40px;
 	font-size: 30px;
@@ -623,6 +630,21 @@ body.behind #shell {
 	font-weight: bold;
 	color: #ffffff;
 	font-effect: shadow(2px 2px #000000b0);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+#osd-clock .busy {
+	margin-right: 28px;
+}
+
+/* Waiting, with neither bar up (the dots by the clock are hidden): where
+ * they would be. */
+.corner-busy {
+	z-index: 6;
+	position: absolute;
+	top: 64px;
+	right: 64px;
 }
 
 #pause-badge {
@@ -646,26 +668,6 @@ body.behind #shell {
 @keyframes pause-in {
 	from { transform: scale(0.7); opacity: 0; }
 	to   { transform: scale(1); opacity: 1; }
-}
-
-#launch-overlay {
-	z-index: 5;
-	position: absolute;
-	top: 48px;
-	left: 64px;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	gap: 8dp;
-	padding: 14px 26px;
-	background-color: #0a0e18cc;
-	border-radius: 10px;
-}
-
-#launch-overlay .launch-label {
-	margin-left: 10px;
-	font-size: 24px;
-	color: #e8edf7;
 }
 
 /* ------------------------------------------------------------------ */
@@ -739,9 +741,7 @@ body.behind #shell {
 #upnext {
 	z-index: 6;
 	position: absolute;
-	/* Top left, where the launch indicator (#launch-overlay) takes over
-	   once the next item starts opening; clear of the clock (top right)
-	   and the OSD bar (bottom). */
+	/* Top left: clear of the clock (top right) and the OSD bar (bottom). */
 	top: 48px;
 	left: 64px;
 	display: flex;

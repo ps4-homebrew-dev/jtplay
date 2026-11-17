@@ -82,13 +82,6 @@ body.photo #backdrop-shade {
 	to   { transform: scale(1.16) translate(40px, -10px); }
 }
 
-.photo-loading {
-	position: absolute;
-	right: 72px;
-	top: 60px;
-	z-index: 2;
-}
-
 .photo-caption {
 	z-index: 2;
 	position: absolute;
