@@ -258,6 +258,7 @@ void App::OpenSourcesList(const std::string& select_key) {
   const std::string want = !select_key.empty() ? select_key : sources_list_key_;
   current_source_ = sources_source_;
   path_.clear();
+  view_root_ = default_view_;
   SetBrowseTabs(false);
   // (Under its tab.)
   if (rail_.empty())
@@ -692,6 +693,7 @@ void App::OpenCard(const browse::Entry& entry,
   if (entry.IsFolder()) {
     home_return_id_ = entry.id; // back from it: to this card
     path_.clear();
+    view_root_ = default_view_;
     sel_entry_ = 0;
     view_ = View::Browse;
     Set("view", bind_view_, Rml::String("browse"));

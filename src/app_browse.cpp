@@ -123,6 +123,8 @@ void App::OpenSource(const browse::SourcePtr& source) {
   from_sources_list_ = current_source_ && current_source_ == sources_source_;
   if (from_sources_list_)
     sources_list_key_ = source->Key();
+  // Its top, without a view of its own, is shown as the list of sources.
+  view_root_ = SourcesListView();
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
@@ -185,6 +187,7 @@ bool App::ResumeInPlace(const browse::Entry& card) {
     library_.SourceUsed(key);
   }
   home_return_id_ = library ? place.front().id : std::string();
+  view_root_ = library ? default_view_ : SourcesListView();
   current_source_ = source;
   path_.clear();
   for (size_t i = 0; i + 1 < place.size(); i++) {
@@ -459,6 +462,9 @@ void App::LeaveContainer() {
 }
 
 void App::RebuildEntryRows() {
+  // The folder on screen is shown as it was set to be (or inherits).
+  if (!path_.empty())
+    ShowViewMode(LevelView(path_.size() - 1));
   entry_rows_.clear();
   if (const BrowseLevel* level = CurrentLevel()) {
     for (const browse::Entry& e : level->entries) {
@@ -1017,10 +1023,16 @@ void App::OpenMenu() {
   Set("menu_title", bind_menu_title_, Rml::String("Options"));
 
   if (view_ == View::Browse && bind_browse_tabs_ && OnSourcesList()) {
-    // Up on the Sources tab: what is done to all of them.
+    // Up on the Sources tab: what is done to all of them, and how they
+    // are shown.
     Set("menu_title", bind_menu_title_, Rml::String("Sources"));
     AddMenuItem({"Search", nullptr, [this](int) { OpenSearch(); }});
     AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
+    AddMenuItem({"View",
+      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
+      [this](int) {
+        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
+      }});
   } else if (view_ == View::Browse) {
     // The item in focus first: it is what the menu was most likely opened
     // for, and its name is the menu's title.
@@ -1315,13 +1327,48 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
 // ---------------------------------------------------------------------------
 
 void App::SetViewMode(ViewMode mode) {
+  BrowseLevel* level = CurrentLevel();
+  if (!level || !current_source_)
+    return;
+  level->view = (int)mode;
+  // Remembered for a folder, not for results of a search (nor a folder
+  // that failed to list, whose id may be anything).
+  if (level->query.empty() && level->error.empty()) {
+    library_.SetView(current_source_->Key(), level->id, mode == ViewMode::Grid);
+    library_.Save();
+  }
+  ShowViewMode(mode);
+}
+
+App::ViewMode App::LevelView(size_t index) {
+  if (index >= path_.size())
+    return view_root_;
+  BrowseLevel& level = path_[index];
+  if (level.view < 0) {
+    bool grid = false;
+    if (current_source_ && level.query.empty() &&
+        library_.GetView(current_source_->Key(), level.id, grid))
+      level.view = (int)(grid ? ViewMode::Grid : ViewMode::List);
+    else
+      level.view = (int)(index == 0 ? view_root_ : LevelView(index - 1));
+  }
+  return (ViewMode)level.view;
+}
+
+void App::ShowViewMode(ViewMode mode) {
   if (mode == view_mode_)
     return;
   view_mode_ = mode;
-  SaveSettings();
   Set("view_mode", bind_view_mode_, Rml::String(mode == ViewMode::Grid ? "grid" : "list"));
   scroll_entries_pending_ = true;
   art_scan_pending_ = true;
+}
+
+App::ViewMode App::SourcesListView() const {
+  bool grid = false;
+  if (library_.GetView(sources_source_->Key(), sources_source_->RootId(), grid))
+    return grid ? ViewMode::Grid : ViewMode::List;
+  return default_view_;
 }
 
 // Brings the rows the document has (window_rows_) in line with entry_rows_

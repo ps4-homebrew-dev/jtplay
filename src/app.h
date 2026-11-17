@@ -107,6 +107,9 @@ private:
     // A folder that held nothing but one folder, which was opened in its
     // place: back passes over it.
     bool passthrough = false;
+    // How it is shown (a ViewMode), once worked out: see LevelView. -1
+    // until then.
+    int view = -1;
   };
 
   // Rows exposed to the RmlUi data model.
@@ -390,7 +393,18 @@ private:
   void JumpLetter(int direction);
   void ActivateSelection();
   void HandleKeyBrowse(Rml::Event& event, int key);
+  // List or grid is a choice per folder: the one set for it (options menu
+  // > View, remembered in the library), or else the one of the folder it
+  // is in. Above a source's top there is the list of sources (opened from
+  // there; otherwise the default, as the list of sources' own is), so a
+  // choice made there goes for every source that has none of its own.
+  // SetViewMode: the user's choice for the folder on screen.
   void SetViewMode(ViewMode mode);
+  ViewMode LevelView(size_t index);
+  void ShowViewMode(ViewMode mode);          // the folder on screen's, shown
+  ViewMode SourcesListView() const;          // the list of sources'
+  ViewMode default_view_ = ViewMode::List;   // settings.ini "view"
+  ViewMode view_root_ = ViewMode::List;      // what a top folder inherits
   // Asks for the artwork of the rows (or cards) on screen and around them,
   // and fills in what has arrived. Cheap when nothing changed.
   void UpdateVisibleArt();
@@ -951,7 +965,7 @@ private:
 
   SortMode sort_mode_ = SortMode::Default;
   bool sort_desc_ = false;
-  ViewMode view_mode_ = ViewMode::List;
+  ViewMode view_mode_ = ViewMode::List;  // shown now (see LevelView)
   std::string settings_path_;          // "" = settings are not persisted
   std::string cache_dir_;              // snapshots of where videos stopped
 

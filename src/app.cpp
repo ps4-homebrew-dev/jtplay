@@ -210,7 +210,7 @@ void App::LoadSettings() {
     } else if (key == "sort_desc") {
       sort_desc_ = value == "1";
     } else if (key == "view") {
-      view_mode_ = value == "grid" ? ViewMode::Grid : ViewMode::List;
+      default_view_ = view_mode_ = value == "grid" ? ViewMode::Grid : ViewMode::List;
     } else if (key == "photo_interval") {
       photo_interval_ = std::clamp(std::atoi(value.c_str()), 2, 120);
     } else if (key == "photo_effect") {
@@ -257,7 +257,7 @@ void App::SaveSettings() const {
   std::ostringstream out;
   out << "sort=" << (int)sort_mode_ << "\n"
       << "sort_desc=" << (sort_desc_ ? 1 : 0) << "\n"
-      << "view=" << (view_mode_ == ViewMode::Grid ? "grid" : "list") << "\n"
+      << "view=" << (default_view_ == ViewMode::Grid ? "grid" : "list") << "\n"
       << "photo_interval=" << photo_interval_ << "\n"
       << "photo_effect=" << (int)photo_effect_ << "\n"
       << "photo_shuffle=" << (photo_shuffle_ ? 1 : 0) << "\n"

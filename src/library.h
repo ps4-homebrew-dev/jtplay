@@ -4,7 +4,8 @@
 // folder or item, from any source), playback progress (resume points,
 // where they were played from, and watched marks), what was played lately,
 // the sources seen so far (so the list of sources is there before they are
-// found again) and where each was left. All of it is remembered across
+// found again), where each was left and how folders are shown (list or
+// grid). All of it is remembered across
 // restarts in one small XML file in the cache directory.
 //
 // Everything is stored against a Ref: the key of the source an entry came
@@ -123,6 +124,12 @@ public:
   void SetPlace(const std::string& source_key, const std::vector<PlaceLevel>& levels);
   std::vector<PlaceLevel> Place(const std::string& source_key) const;
 
+  // How a folder is shown, if it was ever set for it: as a grid, or a
+  // list. False when not (the app then goes by the folder above it). Not
+  // a change views need to know of either.
+  void SetView(const std::string& source_key, const std::string& id, bool grid);
+  bool GetView(const std::string& source_key, const std::string& id, bool& grid) const;
+
   // Bumped on every change, so views can tell when to refresh.
   uint64_t Generation() const;
 
@@ -149,6 +156,11 @@ private:
   std::vector<Recent> recent_;          // most recent first
   std::vector<KnownSource> sources_;    // in the order they were found
   std::map<std::string, std::vector<PlaceLevel>> places_; // by source key
+  struct View {
+    bool grid = false;
+    int64_t updated = 0;  // epoch seconds, to forget the oldest
+  };
+  std::map<std::string, View> views_;   // by Id()
 };
 
 // The real sources by key, so a LibrarySource can find the one a ref

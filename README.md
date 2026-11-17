@@ -90,15 +90,19 @@ extension ("Episode 1", not "Episode 1.mkv"). A folder is shown as a
 **list** (with a thumbnail per row and an info panel with artwork, type,
 size, duration, date and resume point) or as a **grid** of artwork tiles
 with the focused item's details along the bottom; switch with View in the
-options menu. Artwork is loaded in the background, newest request first,
-and shrunk to thumbnails so even a folder of camera photos stays light;
-the selected item's artwork is the backdrop.
+options menu. List or grid is set per folder and remembered; a folder that
+has not been set is shown as the folder it is in, and the top of a source
+as the list of sources (whose View, also in the options menu on the
+Sources tab, so goes for every source not set otherwise). Artwork is
+loaded in the background, newest request first, and shrunk to thumbnails
+so even a folder of camera photos stays light; the selected item's artwork
+is the backdrop.
 
 The list can be sorted by name (natural order, so "Episode 2" comes before
 "Episode 10"), date or size, ascending or descending, or kept in the order
 the source returned it ("Default", which is track order on most DLNA
 servers). The right-hand column of the list shows whatever it is sorted by.
-View and sort are remembered between sessions.
+The sort is remembered between sessions.
 
 Moving past the last row of a list (or the last row of the grid) wraps
 around to the first, and the other way round. In a list sorted by name,

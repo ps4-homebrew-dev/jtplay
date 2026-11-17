@@ -32,6 +32,7 @@ constexpr size_t kMaxInProgress = 50;   // shown under "Continue watching"
 constexpr size_t kMaxRecent = 30;       // remembered lately played
 constexpr size_t kMaxSources = 200;     // remembered sources
 constexpr size_t kMaxPlaceDepth = 32;   // folders remembered per source
+constexpr size_t kMaxViews = 500;       // folders whose view was set
 
 std::string Lower(std::string s) {
   for (char& c : s)
@@ -89,6 +90,7 @@ void Library::Load(const std::string& path) {
   recent_.clear();
   sources_.clear();
   places_.clear();
+  views_.clear();
 
   XMLDocument doc;
   if (doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS || !doc.RootElement())
@@ -103,6 +105,14 @@ void Library::Load(const std::string& path) {
         levels.push_back({Attr(l, "id"), Attr(l, "name"), Attr(l, "selected")});
       if (!Attr(e, "source").empty() && !levels.empty())
         places_[Attr(e, "source")] = std::move(levels);
+      continue;
+    }
+    if (std::string(e->Name()) == "view") {
+      View v;
+      v.grid = e->BoolAttribute("grid", false);
+      v.updated = e->Int64Attribute("updated", 0);
+      if (!Attr(e, "source").empty())
+        views_[Id(Attr(e, "source"), Attr(e, "id"))] = v;
       continue;
     }
     if (std::string(e->Name()) == "source") {
@@ -190,6 +200,15 @@ void Library::Save() {
         l->SetAttribute("selected", level.selected.c_str());
       e->InsertEndChild(l);
     }
+    root->InsertEndChild(e);
+  }
+  for (const auto& kv : views_) {
+    const size_t sep = kv.first.find('\n');
+    XMLElement* e = doc.NewElement("view");
+    e->SetAttribute("source", kv.first.substr(0, sep).c_str());
+    e->SetAttribute("id", kv.first.substr(sep + 1).c_str());
+    e->SetAttribute("grid", kv.second.grid);
+    e->SetAttribute("updated", kv.second.updated);
     root->InsertEndChild(e);
   }
   for (const auto& kv : progress_) {
@@ -502,6 +521,31 @@ std::vector<PlaceLevel> Library::Place(const std::string& key) const {
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = places_.find(key);
   return it == places_.end() ? std::vector<PlaceLevel>() : it->second;
+}
+
+void Library::SetView(const std::string& key, const std::string& id, bool grid) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  View& v = views_[Id(key, id)];
+  v.grid = grid;
+  v.updated = (int64_t)std::time(nullptr);
+  // Keep the file small: forget the folders set longest ago.
+  if (views_.size() > kMaxViews) {
+    auto oldest = views_.begin();
+    for (auto it = views_.begin(); it != views_.end(); ++it)
+      if (it->second.updated < oldest->second.updated)
+        oldest = it;
+    views_.erase(oldest);
+  }
+  dirty_ = true; // saved with the rest; views need not know
+}
+
+bool Library::GetView(const std::string& key, const std::string& id, bool& grid) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = views_.find(Id(key, id));
+  if (it == views_.end())
+    return false;
+  grid = it->second.grid;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
