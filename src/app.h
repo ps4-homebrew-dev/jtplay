@@ -451,7 +451,16 @@ private:
   const char* EntryIcon(const browse::Entry& e) const;
   std::string sources_list_key_;      // last opened from the list
   bool from_sources_list_ = false;    // the source on screen was
-  bool return_to_sources_tab_ = false; // GoHome: onto the Sources tab
+  // The list of sources is the Sources tab's page: on screen, it has the
+  // tabs above it, and the focus may be up on them (moving along them
+  // leaves it for the others).
+  bool bind_sources_tab_ = false;
+  bool bind_browse_tabs_ = false;
+  void SetBrowseTabs(bool on);
+  // From the list's tabs to another tab ("home", "settings"), the focus
+  // staying on the tabs; or down into Home's rows ('rows').
+  void LeaveSourcesTab(const std::string& tab, bool rows);
+  void HandleKeySourcesTabs(Rml::Event& event, int key);
   // The search dialog asking for something else (OpenTextEntry): who gets
   // the text. Empty while it asks for a search.
   std::function<void(const std::string&)> text_entry_;

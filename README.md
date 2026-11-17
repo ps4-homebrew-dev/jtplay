@@ -57,8 +57,10 @@ sits right under it. Whatever a card has no data for is left out. Back on
 the rows goes to the first card, or to what plays behind the menus.
 Triangle pins the card in focus to Favorites, or unpins it.
 
-**Sources** opens the list of every source there is, local drives, network
-servers and plugins alike, the ones you open most first. It is a folder
+**Sources** has for its page the list of every source there is, local
+drives, network servers and plugins alike, the ones you open most first,
+shown as soon as the tab has the focus; down (or select) moves into it, up
+from its first row returns to the tabs. It is a folder
 like any other (see Browsing): a list or a grid, sorted and filtered the
 same way, with the same keys, each source with its picture where a plugin
 gives one, otherwise the first artwork seen in it (or of something from it
@@ -69,10 +71,12 @@ first, network servers last), and one that has not been found yet is
 looked for when selected, then opened; one that is not found at all says
 so, and its options menu can forget it. Triangle pins a source to
 Favorites. Back from the top of a source returns to it in the list; back
-from the list, to the Sources tab.
+from the list, to the tabs.
 
-In the list's options menu, **Refresh** looks for every source again, and
-**Search all sources** (or Ctrl+S) searches everything at once: your
+The options menu on the Sources tab has **Search** and **Refresh** (also
+in the list's options menu, as *Search all sources* and *Refresh*; square
+on the tab refreshes too). Refresh looks for every source again; Search
+(or Ctrl+S on the list) searches everything at once: your
 library by name (Continue watching, what you played lately and Favorites),
 then every source that can search, most used first, all of them side by
 side so the slowest sets the pace rather than the sum. A source that fails
@@ -102,8 +106,7 @@ moment) instead of paging.
 
 A source opens where it was left: in the folder it was left in, on the
 entry it was left on, with the folders above it in the path (listed as
-back reaches them). *Top of* the source, in the options menu, goes back to
-its first page. A folder that holds nothing but one folder (a media
+back reaches them). A folder that holds nothing but one folder (a media
 server's "Video" holding only "All video") is passed over to that one,
 both on the way down and on the way back up.
 
@@ -121,8 +124,7 @@ in the same order in every menu: first what can be done with the selected
 item (play, resume, play from the beginning, add to favorites, mark as
 watched); then **Folder** (play it all in order or shuffled, a slideshow
 of its pictures, refresh), **Find** (search, where the source has it, and
-filter), **View** (list or grid, sort key and order), **Go to** (the top of
-the list, Home), **Plugin** (the settings of the plugin the folder is
+filter), **View** (list or grid, sort key and order), **Plugin** (the settings of the plugin the folder is
 from, see Settings) and, while something plays behind the menus, **Now
 playing** (back to full screen, stop).
 

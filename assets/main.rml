@@ -25,9 +25,11 @@
 
 		<div id="shell">
 			<div id="topbar">
-				<!-- Home: the tabs (src/app_home.cpp), Home, Sources, Search and
-				     Settings; up from the first row reaches them. -->
-				<div id="tabs" data-if="view == 'home'" data-class-away="home_shelves || home_settings">
+				<!-- Home: the tabs (src/app_home.cpp), Home, Sources and Settings;
+				     up from the first row reaches them. Sources' page is the list
+				     of sources, in the browse view, under them as well. -->
+				<div id="tabs" data-if="view == 'home' || (view == 'browse' && sources_tab)"
+				     data-class-away="view == 'home' ? (home_shelves || home_settings) : !browse_tabs">
 					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail"
 					     data-class-icon-only="r.label == ''">
 						<span class="tab-icon">{{r.icon}}</span>
@@ -35,8 +37,8 @@
 					</div>
 				</div>
 				<!-- (The tabs keep their width; what plays gives way to them.) -->
-				<div class="spacer" data-if="view == 'home'"/>
-				<div class="location" data-if="view != 'home'">
+				<div class="spacer" data-if="view == 'home' || (view == 'browse' && sources_tab)"/>
+				<div class="location" data-if="view != 'home' && !(view == 'browse' && sources_tab)">
 					<span class="location-source" data-if="view == 'browse'">{{source_name}}</span>
 					<span class="location-path" data-if="view == 'browse' && crumb != ''">›  {{crumb}}</span>
 				</div>
@@ -201,8 +203,9 @@
 						<!-- Only the rows around the selection are here; these stand
 						     in for the rest (see App::SyncEntryWindow). -->
 						<div class="entry-spacer" data-if="spacer_top != '0px'" data-style-height="spacer_top"/>
+						<!-- (Up on the tabs over the list of sources: none is.) -->
 						<div class="entry-row" data-for="e : entries"
-						     data-class-selected="it_index == sel_window">
+						     data-class-selected="it_index == sel_window && !browse_tabs">
 							<div class="art-tile"
 							     data-class-k-folder="e.kind == 'folder'"
 							     data-class-k-audio="e.kind == 'audio'"

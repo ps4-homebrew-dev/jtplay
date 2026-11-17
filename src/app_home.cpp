@@ -52,13 +52,10 @@ void App::GoHome() {
   current_source_.reset();
   view_ = View::Home;
   Set("view", bind_view_, Rml::String("home"));
-  // Back on Home: on its rows, on the card it was left from; from the list
-  // of sources, on the Sources tab.
-  home_rows_wanted_ = !return_to_sources_tab_;
-  RebuildHome(return_to_sources_tab_ ? "sources" : "home");
-  if (return_to_sources_tab_)
-    Set("home_shelves", bind_home_shelves_, false);
-  return_to_sources_tab_ = false;
+  SetBrowseTabs(false);
+  // Back on Home: on its rows, on the card it was left from.
+  home_rows_wanted_ = true;
+  RebuildHome("home");
   if (!home_return_id_.empty()) {
     FocusHomeCard(home_return_id_);
     home_return_id_.clear();
@@ -269,6 +266,16 @@ void App::OpenSourcesList(const std::string& select_key) {
   const std::string want = !select_key.empty() ? select_key : sources_list_key_;
   current_source_ = sources_source_;
   path_.clear();
+  SetBrowseTabs(false);
+  // (Under its tab.)
+  if (rail_.empty())
+    RebuildHome("sources");
+  for (size_t i = 0; i < rail_.size(); i++) {
+    if (rail_[i].kind == RailKind::Sources && sel_rail_ != (int)i) {
+      sel_rail_ = (int)i;
+      model_.DirtyVariable("sel_rail");
+    }
+  }
   BrowseLevel top;
   top.id = sources_source_->RootId();
   top.name = sources_source_->Name();
@@ -366,8 +373,76 @@ void App::MoveRail(int delta) {
   sel_rail_ = to;
   model_.DirtyVariable("sel_rail");
   home_rows_wanted_ = false; // along the tabs: the focus stays on them
+  // Sources: its page is the list of them, in the browse view, at once.
+  if (rail_[to].kind == RailKind::Sources) {
+    OpenSourcesList();
+    SetBrowseTabs(true);
+    // What went wrong looking for them (a plugin that failed to load).
+    std::string errors;
+    for (Group group : kGroups)
+      if (!scans_[(int)group].errors.empty())
+        errors += (errors.empty() ? "" : "; ") + scans_[(int)group].errors;
+    if (!errors.empty())
+      ShowToast(errors, icon::kWarning);
+    return;
+  }
   RebuildShelves();
   scroll_sources_pending_ = true;
+}
+
+void App::SetBrowseTabs(bool on) {
+  Set("browse_tabs", bind_browse_tabs_, on);
+  RefreshImageBindings();
+}
+
+void App::LeaveSourcesTab(const std::string& tab, bool rows) {
+  GoHome();
+  if (rows)
+    return;
+  home_rows_wanted_ = false;
+  RebuildHome(tab);
+  Set("home_shelves", bind_home_shelves_, false);
+  UpdateBackdrop();
+}
+
+// The tabs over the list of sources: along them to the other tabs, down
+// (or select) into the list; back, as from any tab, to Home's rows (or
+// to what plays behind the menus). Options: what is done to all of them.
+void App::HandleKeySourcesTabs(Rml::Event& event, int key) {
+  switch (key) {
+  case Rml::Input::KI_LEFT:
+  case Rml::Input::KI_HOME:
+    LeaveSourcesTab("home", false);
+    break;
+  case Rml::Input::KI_RIGHT:
+  case Rml::Input::KI_END:
+    LeaveSourcesTab("settings", false);
+    break;
+  case Rml::Input::KI_DOWN:
+  case Rml::Input::KI_RETURN:
+  case Rml::Input::KI_NUMPADENTER:
+    SetBrowseTabs(false);
+    scroll_entries_pending_ = true;
+    break;
+  case Rml::Input::KI_UP:
+    break;
+  case Rml::Input::KI_SPACE:
+    RefreshContainer();
+    break;
+  case gamepad::kKeyOptions:
+    OpenMenu();
+    break;
+  case Rml::Input::KI_BACK:
+  case Rml::Input::KI_ESCAPE:
+    if (bind_watching_)
+      SetFullscreen(true);
+    else
+      LeaveSourcesTab("home", true);
+    break;
+  default:
+    return;
+  }
+  event.StopPropagation();
 }
 
 void App::ActivateRail() {

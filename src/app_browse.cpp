@@ -432,9 +432,12 @@ void App::LeaveContainer() {
       OpenSourcesList(current_source_->Key());
       return;
     }
-    // The list itself: home, onto its tab. Anything else: home, to the
-    // card it was opened from.
-    return_to_sources_tab_ = current_source_ == sources_source_;
+    // The list itself: up to its tab. Anything else: home, to the card
+    // it was opened from.
+    if (current_source_ == sources_source_) {
+      SetBrowseTabs(true);
+      return;
+    }
     GoHome();
     return;
   }
@@ -508,6 +511,10 @@ void App::RebuildCrumb() {
     crumb += path_[i].name;
   }
   Set("crumb", bind_crumb_, crumb);
+  // The list of sources is the Sources tab's page: the tabs over it.
+  Set("sources_tab", bind_sources_tab_, OnSourcesList());
+  if (!bind_sources_tab_ && bind_browse_tabs_)
+    SetBrowseTabs(false);
 }
 
 void App::RebuildDetail() {
@@ -716,7 +723,18 @@ void App::ActivateSelection() {
 }
 
 void App::HandleKeyBrowse(Rml::Event& event, int key) {
+  if (bind_browse_tabs_ && OnSourcesList()) {
+    HandleKeySourcesTabs(event, key);
+    return;
+  }
   const bool grid = view_mode_ == ViewMode::Grid;
+  // The list of sources: up from its first row reaches the tabs over it.
+  if (key == Rml::Input::KI_UP && OnSourcesList() &&
+      sel_entry_ < (grid ? kGridColumns : 1)) {
+    SetBrowseTabs(true);
+    event.StopPropagation();
+    return;
+  }
   // Grid: up/down move a row, staying in the column, and wrap from the
   // last row to the first (and back) like the list does.
   auto grid_row = [this](int direction) {
@@ -942,7 +960,6 @@ void App::AddEntryActions(const browse::Entry& entry) {
   if (!Identify(entry, ref))
     return;
   if (entry.IsImage()) {
-    AddMenuItem({"Open", nullptr, [this, entry](int) { PlayEntry(entry); }});
     AddMenuItem({"Slideshow from here", nullptr, [this, entry](int) {
       int index = 0;
       const browse::Listing photos = FolderPhotos(entry, index);
@@ -999,17 +1016,21 @@ void App::OpenMenu() {
   Set("menu_dialog", bind_menu_dialog_, false);
   Set("menu_title", bind_menu_title_, Rml::String("Options"));
 
-  if (view_ == View::Browse) {
+  if (view_ == View::Browse && bind_browse_tabs_ && OnSourcesList()) {
+    // Up on the Sources tab: what is done to all of them.
+    Set("menu_title", bind_menu_title_, Rml::String("Sources"));
+    AddMenuItem({"Search", nullptr, [this](int) { OpenSearch(); }});
+    AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
+  } else if (view_ == View::Browse) {
     // The item in focus first: it is what the menu was most likely opened
     // for, and its name is the menu's title.
     const browse::Entry* e = SelectedEntry();
     const ListedSource* listed = e ? ListedSourceOf(*e) : nullptr;
     if (listed) {
-      // A source, on the list of them: open it; one that is found can be
-      // a favorite, one that is not (any more) can be forgotten.
+      // A source, on the list of them: one that is found can be a
+      // favorite, one that is not (any more) can be forgotten.
       const ListedSource source = *listed;
       Set("menu_title", bind_menu_title_, Rml::String(source.name));
-      AddMenuItem({"Open", nullptr, [this](int) { ActivateSelection(); }});
       if (source.source) {
         const bool fav = library_.IsFavorite(source.key, source.source->RootId());
         AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
@@ -1075,28 +1096,6 @@ void App::OpenMenu() {
       [this] { return std::string(sort_desc_ ? "Descending" : "Ascending"); },
       [this](int) { SetSort(sort_mode_, !sort_desc_); }});
 
-    MenuSection("Go to");
-    AddMenuItem({"Top of the list", nullptr,
-      [this](int) { MoveSelection(-entry_count_); }});
-    if (path_.size() > 1 && !LibraryView(current_source_)) {
-      AddMenuItem({"Top of " + current_source_->Name(), nullptr, [this](int) {
-        AbandonBrowse();
-        path_.resize(1);
-        BrowseLevel& top = path_.front();
-        RebuildCrumb();
-        if (top.stale || top.passthrough) {
-          top.passthrough = false;
-          RequestBrowse(top.id, top.name, true, top.keep);
-          return;
-        }
-        sel_entry_ = top.selection;
-        RebuildEntryRows();
-        RebuildDetail();
-        scroll_entries_pending_ = true;
-      }});
-    }
-    AddMenuItem({"Home", nullptr, [this](int) { GoHome(); }});
-
     // The plugin this is from: of the source, or in Favorites and Continue
     // watching, of the item in focus.
     library::Ref ref;
@@ -1111,8 +1110,6 @@ void App::OpenMenu() {
   } else if (bind_home_shelves_ && SelectedCard()) {
     const browse::Entry card = *SelectedCard();
     Set("menu_title", bind_menu_title_, DisplayName(card));
-    if (card.IsFolder())
-      AddMenuItem({"Open", nullptr, [this](int) { ActivateCard(); }});
     AddEntryActions(card);
     if (shelves_[sel_shelf_].source == continue_source_)
       AddMenuItem({"Remove from Continue watching", nullptr,
