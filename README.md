@@ -218,14 +218,17 @@ track and subtitles, each where there is a choice, picked from a list;
 shuffle and repeat (all / one). Select puts the focus on them, on play /
 pause: left and right then go along them, select presses the one in focus,
 and what that one is (the name of the previous or next item, what a track
-is set to) stands beside the row. Back, or five seconds without a key,
-takes the focus off them again. Without the focus the keys steer playback
+is set to) stands beside the row. Back takes the focus off them again. Without the focus the keys steer playback
 directly: left and right seek, up and down seek five minutes on or back.
 
-The video bar comes up when an item starts, with a seek and with select,
-and always goes again five seconds after the last key (back or options
-send it away at once), paused or not. Select does not pause: a second
-press, on play / pause, does. Artwork, where an item has any, is at the
+The video bar comes up by itself when an item starts, when it pauses or
+plays on, and with options, and goes again five seconds after the last
+key. Brought up with select, for its buttons, it stays until back (or
+options) sends it away; once its buttons start another item or play on
+from a pause, it goes by itself again. Select does not pause: a second
+press, on play / pause, does. A seek with the bar away shows on a thin
+bar along the top instead -- the title, the time, the timeline and where
+the seek lands -- which goes three seconds after the last seek. Artwork, where an item has any, is at the
 left of the bar, as tall as its rows.
 
 Holding (or repeatedly pressing) left / right seeks faster and faster: 10 s

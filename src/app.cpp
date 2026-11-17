@@ -527,6 +527,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("fullscreen", &bind_fullscreen_);
   ctor.Bind("video_behind", &bind_video_behind_);
   ctor.Bind("info_visible", &bind_info_visible_);
+  ctor.Bind("seekbar_visible", &bind_seekbar_visible_);
   ctor.Bind("controls", &control_rows_);
   ctor.Bind("sel_control", &bind_sel_control_);
   ctor.Bind("control_focus", &bind_control_focus_);
@@ -638,17 +639,20 @@ void App::Update() {
     // the folder and left the player at its end.
     if (!launch_request_ && player_->IsPlaying() && player_->AtEnd())
       HandlePlaybackEnd();
-    // The info bar always goes after a while without a key, however it
-    // came up and paused or not (a paused video says so in its middle);
-    // only a list of tracks open over it holds it. (The now-playing card
-    // always stays.)
-    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ &&
+    // The info bar that came by itself (an item started, a pause, a seek,
+    // the options key) goes after a while without a key; the one select
+    // brought up, for its buttons, stays until back sends it away. A list
+    // of tracks open over it holds it. (The now-playing card always stays.)
+    if (bind_info_visible_ && !bind_watch_audio_ && !bind_menu_open_ && !info_stay_ &&
         now > info_deadline_)
       HideWatchInfo();
     // On the card the focus leaves its buttons the same way.
-    if (bind_watch_audio_ && bind_control_focus_ && !bind_menu_open_ &&
+    if (bind_watch_audio_ && bind_control_focus_ && !bind_menu_open_ && !info_stay_ &&
         now > info_deadline_)
       FocusControls(false);
+    // The top seek bar: always a moment after the last seek.
+    if (bind_seekbar_visible_ && now > seekbar_deadline_)
+      Set("seekbar_visible", bind_seekbar_visible_, false);
     if (!bind_watch_seek_.empty() && now > seek_bubble_until_)
       Set("watch_seek", bind_watch_seek_, Rml::String());
     // Back held long enough in full screen: stop (see HandleKeyUp).

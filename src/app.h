@@ -528,6 +528,9 @@ private:
   void ShowControls();
   void PeekWatchInfo();
   void HideWatchInfo();
+  // A seek: shown on the bottom bar if that is up, otherwise on a thin bar
+  // of its own along the top, which goes again a moment after the last.
+  void ShowSeek();
   void SeekStep(int sign, bool large = false);
   void UpdateWatchOverlay();
   // AtEnd(): audio advances to the next track in the folder, video exits.
@@ -971,6 +974,9 @@ private:
 
   double toast_deadline_ = 0.0;
   double info_deadline_ = 0.0;      // watch info bar auto-hide
+  bool info_stay_ = false;          // ... not: select brought it up
+  bool bind_seekbar_visible_ = false; // the top seek bar
+  double seekbar_deadline_ = 0.0;
   bool scroll_entries_pending_ = false;
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;

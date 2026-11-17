@@ -71,6 +71,7 @@ inline constexpr double kToastSec = 3.0;
 // appears once the open has taken at least this long.
 inline constexpr double kLaunchFeedbackSec = 0.3;
 inline constexpr double kWatchInfoSec = 5.0;      // watch info bar auto-hide
+inline constexpr double kSeekBarSec = 3.0;        // top seek bar: after the last seek
 // Back held this long in full screen stops playback; shorter, it leaves
 // full screen (as a long press of back does in Kodi).
 inline constexpr double kHoldStopSec = 0.6;

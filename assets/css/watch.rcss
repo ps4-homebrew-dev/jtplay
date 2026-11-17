@@ -75,7 +75,7 @@ body.behind #shell {
 	right: 0px;
 	bottom: 0px;
 	box-sizing: border-box;
-	padding: 26px 72px 26px 72px;
+	padding: 26px 40px 26px 40px;
 	background-color: #0a0e18f2;
 	animation: 0.2s cubic-out osd-in;
 }
@@ -83,6 +83,81 @@ body.behind #shell {
 @keyframes osd-in {
 	from { transform: translateY(40px); opacity: 0; }
 	to   { transform: translateY(0px); opacity: 1; }
+}
+
+/* A seek with the bottom bar away: a thin bar along the top, over a shade
+ * that fades into the picture. The timeline's parts are the bottom bar's
+ * (.osd-played and the rest); the bubble hangs under the knob. */
+#seekbar {
+	z-index: 5;
+	position: absolute;
+	left: 0px;
+	right: 0px;
+	top: 0px;
+	height: 170px;
+	box-sizing: border-box;
+	padding: 30px 40px 0px 40px;
+	decorator: linear-gradient(180deg, #0a0e18e6 0%, #0a0e1800 100%);
+	animation: 0.2s cubic-out seekbar-in;
+}
+
+@keyframes seekbar-in {
+	from { transform: translateY(-40px); opacity: 0; }
+	to   { transform: translateY(0px); opacity: 1; }
+}
+
+.sb-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 42px;
+}
+
+.sb-title {
+	flex: 1;
+	font-size: 30px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sb-time {
+	margin-left: 40px;
+	font-size: 30px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+}
+
+.sb-dur {
+	margin-left: 12px;
+	font-size: 30px;
+	color: #8593ab;
+	white-space: nowrap;
+}
+
+.sb-edge {
+	position: relative;
+	height: 8px;
+	margin-top: 16px;
+	background-color: #ffffff2e;
+	border-radius: 4px;
+}
+
+.sb-seek {
+	position: absolute;
+	top: 24px;
+	width: 200px;
+	margin-left: -100px;
+	padding: 8px 0px;
+	font-size: 26px;
+	font-weight: bold;
+	text-align: center;
+	color: #06231d;
+	background-color: #4dd6b8;
+	border-radius: 10px;
 }
 
 /* The timeline, along the top edge. */
