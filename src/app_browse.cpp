@@ -121,6 +121,11 @@ void App::OpenSource(const browse::SourcePtr& source) {
   current_source_ = source;
   path_.clear();
   sel_entry_ = 0;
+  // Counted, for the order of Home's row of sources; and back from it,
+  // the focus is on its tile.
+  library_.SourceUsed(source->Key());
+  library_.Save();
+  home_return_id_ = "source:" + source->Key();
 
   Set("source_name", bind_source_name_, current_source_->Name());
   view_ = View::Browse;
@@ -756,18 +761,26 @@ void App::OpenMenu() {
     else if (current_source_)
       AddPluginSettingsEntry(current_source_->Key());
   } else if (bind_home_shelves_ && SourceShelf(sel_shelf_) && SelectedCard()) {
-    // A source's tile: open it, or look for the group's sources again.
+    // A source's tile: open it; one that is found can be a favorite, one
+    // that is not (any more) can be forgotten.
+    const library::KnownSource known = shelves_[sel_shelf_].known[sel_card_];
     const browse::SourcePtr source = shelves_[sel_shelf_].sources[sel_card_];
-    Set("menu_title", bind_menu_title_, source->Name());
-    AddMenuItem({"Open", nullptr, [this, source](int) { OpenSource(source); }});
-    const bool fav = library_.IsFavorite(source->Key(), source->RootId());
-    AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
-      [this, source](int) { ToggleSourceFavorite(source); }});
-    AddPluginSettingsEntry(source->Key());
-    const browse::Source::Group group = source->RailGroup();
+    Set("menu_title", bind_menu_title_, Rml::String(known.name));
+    AddMenuItem({"Open", nullptr,
+      [this, known](int) { OpenKnownSource(known.key, known.name); }});
+    if (source) {
+      const bool fav = library_.IsFavorite(source->Key(), source->RootId());
+      AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
+        [this, source](int) { ToggleSourceFavorite(source); }});
+    } else {
+      AddMenuItem({"Forget this source", nullptr, [this, key = known.key](int) {
+        library_.ForgetSource(key);
+        library_.Save();
+      }});
+    }
+    AddPluginSettingsEntry(known.key);
     MenuSection("Sources");
-    AddMenuItem({"Search again", nullptr,
-      [this, group](int) { StartDiscovery(group); }});
+    AddMenuItem({"Search again", nullptr, [this](int) { SearchAllSources(); }});
   } else if (bind_home_shelves_ && NowPlayingShelf(sel_shelf_)) {
     Set("menu_title", bind_menu_title_, bind_watch_name_); // back to it, or stop
   } else if (bind_home_shelves_ && SelectedCard()) {
@@ -779,13 +792,21 @@ void App::OpenMenu() {
     if (shelves_[sel_shelf_].source == continue_source_)
       AddMenuItem({"Remove from Continue watching", nullptr,
         [this, card](int) { SetWatched(card, false); }});
+    if (shelves_[sel_shelf_].recent) {
+      AddMenuItem({"Remove from Recent", nullptr, [this, card](int) {
+        library::Ref ref;
+        if (Identify(card, ref)) {
+          library_.RemoveRecent(ref.source_key, ref.entry.id);
+          library_.Save();
+        }
+      }});
+    }
     library::Ref ref;
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);
-  } else if (browse::Source::Group group; view_ == View::Home && PlaceGroup(group)) {
+  } else if (view_ == View::Home && !bind_home_shelves_ && !bind_settings_page_) {
     MenuSection("Sources");
-    AddMenuItem({"Search again", nullptr,
-      [this, group](int) { StartDiscovery(group); }});
+    AddMenuItem({"Search again", nullptr, [this](int) { SearchAllSources(); }});
   } else if (bind_watching_) {
     // The top level of the rail: only what plays.
     Set("menu_title", bind_menu_title_, bind_watch_name_);

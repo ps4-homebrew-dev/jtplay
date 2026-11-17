@@ -33,13 +33,14 @@ them gives plugins' settings (see [Settings](#settings)). A file of your own wit
 the name of a bundled one replaces it, which is how to try a fix to a
 bundled plugin on a console without rebuilding the package.
 
-Plugins are loaded by the first search of the Plugins tab, and looked at
-again by every later one (square, or Space, on the tab): a new file shows
+Plugins are loaded when jtplay starts looking for its sources, and looked
+at again every time it does so later (square, or Space, on Home): a new file shows
 up, a changed one is loaded afresh, a deleted one goes. An unchanged plugin
 keeps running, with whatever it has cached. So the loop on a console is:
 upload the file over FTP, press square.
 
-A plugin that fails to load says why at the head of the Plugins tab, and
+A plugin that fails to load says why beside the head of Home's row of
+sources, and
 does not hold up the others.
 
 ## The shape of a plugin
@@ -70,7 +71,7 @@ return {
 ```
 
 `discover()` describes the plugin's sources; most have one. It runs when
-the Plugins tab is searched, so it should not fetch anything: return the
+sources are looked for, so it should not fetch anything: return the
 description and do the work in `browse()`.
 
 A source may also have `imageHeaders`, headers the app sends when it
@@ -217,7 +218,7 @@ be given in a file `settings.ini` in the plugin directory of your own
 tv4play.token=eyJhbGciOi...
 ```
 
-It is read with the scripts (at the first search of the Plugins tab, and
+It is read with the scripts (when the sources are first looked for, and
 at a later one when it has changed), and its values replace what the
 settings were. Say so in the setting's `about`. Clearing a setting in the
 app lasts until the next start while the file still has it.

@@ -25,12 +25,13 @@
 
 		<div id="shell">
 			<div id="topbar">
-				<!-- Home: the places, as tabs (src/app_home.cpp); always these five,
-				     a group's sources being the first rows below. -->
+				<!-- Home: two tabs (src/app_home.cpp), Home and Settings, a gear;
+				     up from the first row reaches them. -->
 				<div id="tabs" data-if="view == 'home'" data-class-away="home_shelves || home_settings">
-					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail">
+					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail"
+					     data-class-icon-only="r.label == ''">
 						<span class="tab-icon">{{r.icon}}</span>
-						<span class="tab-label">{{r.label}}</span>
+						<span class="tab-label" data-if="r.label != ''">{{r.label}}</span>
 					</div>
 				</div>
 				<!-- (The tabs keep their width; what plays gives way to them.) -->
@@ -105,8 +106,8 @@
 							<!-- (Bindings to sh go on what is inside: on the repeated
 							     element itself they are looked at once more as rows go.) -->
 							<div class="shelf-in" data-class-sources="sh.sources" data-class-gap="sh.gap">
-								<!-- A group's sources make one grid of several rows: only
-								     the first says what they are. -->
+								<!-- The row of sources says beside its head whether they
+								     are being looked for. -->
 								<div class="shelf-head" data-if="sh.title != ''">
 									<span class="shelf-title">{{sh.title}}</span>
 									<span class="shelf-count" data-if="sh.count > 0">{{sh.count}}</span>
@@ -115,8 +116,9 @@
 								<div class="cards" data-attr-id="'cards-' + si">
 									<div class="card" data-for="c, ci : sh.cards"
 									     data-class-selected="home_shelves && si == sel_shelf && ci == sel_card">
-										<!-- A source: its icon, name and what it is, in one tile. -->
-										<div class="source-tile" data-if="c.kind == 'source'">
+										<!-- A source: its icon, name and what it is, in one tile;
+										     dimmed while it is not found. -->
+										<div class="source-tile" data-if="c.kind == 'source'" data-class-missing="c.watched">
 											<div class="source-icon">{{c.glyph}}</div>
 											<div class="source-text">
 												<div class="source-name">{{c.title}}</div>

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The user's own library on top of the browsable sources: favorites (any
-// folder or item, from any source) and playback progress (resume points
-// and watched marks). Both are remembered across restarts in one small XML
-// file in the cache directory.
+// folder or item, from any source), playback progress (resume points and
+// watched marks), what was played lately, and the sources seen so far
+// (so Home can list them before they are found again). All of it is
+// remembered across restarts in one small XML file in the cache directory.
 //
 // Everything is stored against a Ref: the key of the source an entry came
 // from (browse::Source::Key()) and the entry as that source listed it. The
@@ -28,6 +29,25 @@ struct Ref {
   std::string source_key;
   std::string source_name;  // for display when the source is offline
   browse::Entry entry;      // entry.id is the source's own id
+};
+
+// A source seen before: enough to show its tile before it is found again,
+// and how often it was opened, for the order of the tiles.
+struct KnownSource {
+  std::string key;
+  std::string name;
+  std::string detail;
+  std::string icon;     // a glyph of icons.h
+  int uses = 0;
+  int64_t used = 0;     // epoch seconds it was last opened, 0 = never
+};
+
+// Something played lately: a live stream as itself, anything else as the
+// folder it was played from (where the next one is). See App::RecordRecent.
+struct Recent {
+  Ref ref;
+  bool live = false;
+  int64_t updated = 0;  // epoch seconds
 };
 
 struct Progress {
@@ -65,6 +85,20 @@ public:
   // Unfinished items, most recently played first.
   std::vector<std::pair<Ref, Progress>> InProgress() const;
 
+  // Lately played (see Recent), most recent first. Adding one already
+  // there moves it to the front.
+  void AddRecent(const Ref& ref, bool live);
+  void RemoveRecent(const std::string& source_key, const std::string& id);
+  std::vector<Recent> RecentItems() const;
+
+  // The sources seen: most opened first, then the order they were found
+  // in. Remember adds one or updates what it says about itself; Used
+  // counts an opening.
+  void RememberSource(const KnownSource& source);
+  void SourceUsed(const std::string& key);
+  void ForgetSource(const std::string& key);
+  std::vector<KnownSource> KnownSources() const;
+
   // Bumped on every change, so views can tell when to refresh.
   uint64_t Generation() const;
 
@@ -84,6 +118,8 @@ private:
   uint64_t generation_ = 0;
   std::vector<Ref> favorites_;          // in the order they were added
   std::map<std::string, Item> progress_;
+  std::vector<Recent> recent_;          // most recent first
+  std::vector<KnownSource> sources_;    // in the order they were found
 };
 
 // The real sources by key, so a LibrarySource can find the one a ref

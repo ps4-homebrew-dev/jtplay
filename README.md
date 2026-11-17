@@ -37,38 +37,33 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-The home screen has tabs of places across the top, a banner, and rows
-of cards from your library below it: **Continue watching** and
-**Favorites**. The tabs are always these five, however many sources
-there are:
+Home is one page of rows, with the focus on its first card from the start,
+so that what you last watched or listened to is a press of select away:
 
-- **Home**: the shelves hold everything.
-- **Local filesystem**: USB drives and internal storage on the console,
-  the home folder on a PC, and the entire filesystem.
-- **Local network**: UPnP/DLNA media servers found on the network.
-- **Plugins**: one source per JavaScript plugin source.
-- **Settings**: playback, languages and the screensaver.
+- **Now playing**, while something does: the way back to it.
+- **Continue watching**: unfinished items. Select resumes at once; the
+  options menu has *Play from beginning*.
+- **Recent**: live streams you played, as themselves, and the folders
+  other things were played from, where the next episode or song is.
+- **Favorites**: anything you pinned, the latest first.
+- **Sources**: every source there is, local drives, network servers and
+  plugins alike, the ones you open most first.
 
-Left and right move along the tabs. A group has no banner: right under
-the tabs, the rows begin with the group's sources, a grid of tiles, four
-to a row and as many rows as it takes, headed by how many there are
-(fifty plugins are thirteen rows) and by a search under way or what went
-wrong with the last one. A group with no sources says so where the grid
-would be. Up and down move through it as through any
-rows, keeping the column; select on a tile opens that source. After the
-sources come the group's own Continue watching and Favorites rows.
-The local drives and the plugins are looked for at start-up; network
-servers are searched for the first time their tab is reached, and square
-searches the group again. A card from a group not searched yet searches
-it first, then opens.
+The sources are remembered from one start to the next, so their row is
+there at once, as it was. Meanwhile all of them are looked for again in
+the background (local drives and plugins first, network servers last),
+and a source that has not been found yet is looked for when selected,
+then opened. One that is not found at all is dimmed and says so; the
+options menu can forget it. Square looks for every source again. Back
+from a source returns to its tile.
 
-Down moves from the tabs into the rows, and up from the first row back
-to the tabs. On Home, the banner shows the card in focus, large, over its artwork
-across the top of the screen -- where it is from, what is left of it, its
+The banner shows the card in focus, large, over its artwork across the
+top of the screen -- where it is from, what is left of it, its
 description -- and follows the focus along the rows; the focused row
-sits right under it. Whatever a card has no data for is left out. Select
-on a card plays it (or opens a favorite folder), and select on a source
-browses it.
+sits right under it. Whatever a card has no data for is left out. Up from
+the first row reaches two tabs, Home and Settings (the gear); down or back
+returns to the rows. Back on the rows goes to the first card, or to what
+plays behind the menus.
 
 ## Browsing
 
@@ -151,12 +146,14 @@ favorite folder is a shortcut: it browses (and plays) through the source it
 came from, so a DLNA folder works as long as that server is on the network.
 
 Videos (and audio longer than 20 minutes) remember where they were stopped.
-Playing one again asks whether to resume, unfinished items show a progress
+Playing one again from a folder asks whether to resume (from Continue
+watching it resumes at once), unfinished items show a progress
 bar on their art and gather under **Continue watching**, and anything played
 past 92% is marked watched with a tick. A video without artwork of its own
 gets a snapshot of the frame it was stopped on, so its card shows where you
 left off. Moving to the next item in a folder resumes it without asking.
-All of this is stored in `library.xml` in the cache directory.
+All of this, and Recent and the sources seen, is stored in `library.xml`
+in the cache directory.
 
 ## Playing
 
@@ -170,7 +167,7 @@ the folder it was started from, wherever the menus are by then.
 What plays is in the top bar, by the clock, with its time; Home's first
 row, **Now playing**, holds its card. The way back to full screen is the
 way out of it: back, step by step (from a list to Home, from the rows to
-the tabs, from the tabs to the video), as on any remote; or selecting the
+the video), as on any remote; or selecting the
 Now playing card or the item that is playing, triangle (Tab on a
 keyboard), or the options menu's **Back to full screen**. The stop button
 of the controls, holding back in full screen, the options menu's **Stop
@@ -225,7 +222,7 @@ An item that fails to open while going through a folder is skipped.
 
 ## Settings
 
-Settings, the last of the home tabs, lists the settings right under the
+Settings, the gear beside the Home tab, lists the settings right under the
 tab: down from the tab into the list, left and right change the one in
 focus (select steps it on), and what it does is shown beside the list.
 Select on a setting with many choices (a language, a plugin's country)
@@ -255,7 +252,7 @@ key press only wakes it.
 
 Besides UPnP/DLNA servers and the local filesystem, media sources can be
 added with JavaScript: every `*.js` file in the plugin directories is run by
-QuickJS and becomes a source on the Plugins tab. **[docs/plugins.md](docs/plugins.md)**
+QuickJS and becomes a source on Home. **[docs/plugins.md](docs/plugins.md)**
 is the guide to writing one; in short, a plugin returns an object like this
 
 ```js
@@ -287,7 +284,8 @@ Plugins of your own go in `plugins` in jtplay's preference directory, as
 SDL gives it: in the title's data on a console, `~/.local/share/jtplay/plugins`
 on a PC (or `--user-plugins DIR`); the log names it at start. A file
 with the name of a bundled plugin replaces it. They are picked up, and
-changed ones loaded afresh, whenever the Plugins tab is searched (square):
+changed ones loaded afresh, whenever the sources are looked for again
+(square on Home):
 no restart, no new package.
 
 `jtplay --plugin FILE [--browse ID | --search QUERY | --resolve ID]` runs a
@@ -311,8 +309,8 @@ token the website keeps, as svtplay-dl does:
    `tv4-refresh-token`: a long text starting with `ey`.
 3. On a PC, paste it under Settings, TV4 Play, Sign-in token. On a console,
    put this line in a file `settings.ini` in the folder of your own
-   plugins (see Plugins; the log names it at start) over FTP, then search
-   the Plugins tab (square):
+   plugins (see Plugins; the log names it at start) over FTP, then press
+   square on Home:
 
        tv4play.token=ey...
 
@@ -348,12 +346,12 @@ that is not on the d-pad.
 
 | Button          | Home                        | Lists, menus, Settings            | Playing (full screen)                       | Photos             |
 |-----------------|-----------------------------|-----------------------------------|---------------------------------------------|--------------------|
-| up / down       | tabs ↔ rows; between rows   | move (lists and menus wrap)       | seek +5 / -5 min                            | caption            |
-| left / right    | along the tabs or a row     | list: page or letter; grid: move; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
+| up / down       | between rows; tabs above    | move (lists and menus wrap)       | seek +5 / -5 min                            | caption            |
+| left / right    | along a row (or the tabs)   | list: page or letter; grid: move; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
 | select          | open / play                 | open / play / choose              | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
-| back            | to the tabs; from them, back to full screen* | back (Home from a source root); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
+| back            | first card; full screen*    | back (Home from a source root); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
 | options         | options for the card or tile | options menu; closes a menu      | info bar / away                             | photo menu         |
-| square          | search the group again      | next sort key                     | play / pause                                | slideshow on / off |
+| square          | look for sources again      | next sort key                     | play / pause                                | slideshow on / off |
 | triangle        | back to full screen*        | reverse sort order; back to full screen* | the menus, playing on                | rotate             |
 | previous / next | a page of rows              | page up / down                    | previous / next chapter or item             | previous / next    |
 | page / channel  | a page of rows              | page up / down                    | up: next item; down: previous item          | up: next; down: previous |

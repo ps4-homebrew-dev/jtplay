@@ -111,9 +111,28 @@ void App::SetWatched(const browse::Entry& entry, bool watched) {
   ShowToast(watched ? "Marked as watched" : "Marked as unwatched", icon::kCheck);
 }
 
+void App::RecordRecent() {
+  // Never got going: nothing to come back to.
+  if (!playing_identified_ || watch_last_pos_us_ < 0)
+    return;
+  // A live stream is what is wanted again (the channel); anything else is
+  // in Continue watching while unfinished, and the folder it came from is
+  // where the next one is.
+  // (Live: the player cannot seek in it, or it has no length.)
+  if (!watch_last_seekable_ || watch_last_dur_us_ <= 0)
+    library_.AddRecent(playing_ref_, true);
+  else if (playing_has_folder_)
+    library_.AddRecent(playing_folder_, false);
+  else
+    return;
+  library_.Save();
+}
+
 void App::RecordProgress(bool final, bool ended) {
   if (!playing_identified_)
     return;
+  if (final)
+    RecordRecent();
   const int64_t dur = watch_last_dur_us_ / 1000000;
   const int64_t pos = ended ? dur : watch_last_pos_us_ / 1000000;
   // Live streams and things that cannot seek have nothing to resume.

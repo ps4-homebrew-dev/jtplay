@@ -256,31 +256,36 @@ private:
   // watched once it is (nearly) over. 'final': playback is ending;
   // 'ended': it played to the end.
   void RecordProgress(bool final, bool ended = false);
+  // Puts what played into Recent as it ends: a live stream as itself,
+  // anything else as the folder it was played from.
+  void RecordRecent();
   // Library changed: refresh what shows it (rows, counts, library views).
   void OnLibraryChanged();
 
   // --- Home view -----------------------------------------------------------
-  // A rail of places on the left and, on the right, shelves of cards from
-  // the library (Continue watching, Favorites) for the place the rail is
-  // on. Kodi's home, more or less. The top level is Home, one row per
-  // group of sources (local, network, plugins) and Settings; selecting a
-  // group searches it and lists its sources in the rail (back leaves).
-  enum class RailKind { Home, Group, Source, Settings };
+  // One page of rows, the focus on its first card: what plays, Continue
+  // watching, Recent (live streams and the folders things were played
+  // from), Favorites and, last, every source there is, most used first.
+  // Above them two tabs, Home and Settings (a gear).
+  enum class RailKind { Home, Settings };
   struct RailItem {
     RailKind kind;
-    browse::SourcePtr source;                                   // Source
-    browse::Source::Group group = browse::Source::Group::Local; // Group
   };
   struct Shelf {
     std::string title;
     std::shared_ptr<library::LibrarySource> source; // what its cards open in
     browse::Listing entries;                        // ids encoded
-    // Not empty: a row of a group's sources (one per card, 'entries' only
-    // standing in for them), which open in the browse view.
+    // Not empty: the row of sources (one per card, 'entries' only standing
+    // in for them), as remembered, and found again if they have been
+    // (null until then).
+    std::vector<library::KnownSource> known;
     std::vector<browse::SourcePtr> sources;
     // The row of what is playing (Home's first, while something does):
     // one card, the way back to it.
     bool now_playing = false;
+    // Recent: which of its cards are live streams (the rest are folders).
+    bool recent = false;
+    std::vector<bool> live;
   };
   // Runs the providers of one rail group on the worker and replaces that
   // group's sources with what they find; 'done' runs on the main thread
@@ -295,15 +300,18 @@ private:
   void RebuildCards();         // card rows from shelves_ (artwork, progress)
   void MoveRail(int delta);
   void ActivateRail();
-  // The group the tabs are on, if they are on one.
-  bool PlaceGroup(browse::Source::Group& group) const;
-  // A group's sources are rows of tiles, a grid: going up and down between
-  // two such rows keeps the column.
+  // Every group of sources looked for again (square on Home).
+  void SearchAllSources();
+  // A source by its key: opened if it has been found, looked for (and then
+  // opened) if it has not been yet.
+  void OpenKnownSource(const std::string& key, const std::string& name);
+  // The focus onto the card whose entry has 'id', if Home has one.
+  void FocusHomeCard(const std::string& id);
   bool NowPlayingShelf(int shelf) const {
     return shelf >= 0 && shelf < (int)shelves_.size() && shelves_[shelf].now_playing;
   }
   bool SourceShelf(int shelf) const {
-    return shelf >= 0 && shelf < (int)shelves_.size() && !shelves_[shelf].sources.empty();
+    return shelf >= 0 && shelf < (int)shelves_.size() && !shelves_[shelf].known.empty();
   }
   static std::string RailKey(const RailItem& item); // what RebuildHome keeps
   void ActivateCard();
@@ -447,7 +455,9 @@ private:
   // has the screen to itself.
   //
   // Plays 'entry', first offering to resume where it was left off.
-  void PlayEntry(const browse::Entry& entry);
+  // 'resume': from where it was left, without asking (a Continue watching
+  // card); otherwise an item with a resume point asks.
+  void PlayEntry(const browse::Entry& entry, bool resume = false);
   // 'from_queue': the item comes from the play queue (next, previous,
   // auto-advance, repeat), and resolves through the queue's source rather
   // than whatever is being browsed now.
@@ -841,6 +851,10 @@ private:
   };
   PlayQueue queue_;
   PlayQueue launch_queue_;             // what a launch from the menus brings
+  // The folder an item was played from, for Recent (see RecordRecent):
+  // that of a launch, and of what plays once it does.
+  library::Ref launch_folder_, playing_folder_;
+  bool launch_has_folder_ = false, playing_has_folder_ = false;
   bool launch_from_queue_ = false;     // the launch in flight is queue_'s
   bool launch_behind_ = false;         // ... and stays behind the menus
 
@@ -923,4 +937,9 @@ private:
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
   bool scroll_sources_pending_ = false;
+  // Home's focus belongs on its rows (it starts there, and goes back there
+  // with Home), unless it was taken up to the tabs.
+  bool home_rows_wanted_ = true;
+  // The card to focus when Home is back (the source just left).
+  std::string home_return_id_;
 };

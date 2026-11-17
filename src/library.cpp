@@ -22,6 +22,8 @@ constexpr char kIdSep = '\x02';
 
 constexpr size_t kMaxProgress = 1000;   // remembered items, oldest dropped
 constexpr size_t kMaxInProgress = 50;   // shown under "Continue watching"
+constexpr size_t kMaxRecent = 30;       // remembered lately played
+constexpr size_t kMaxSources = 200;     // remembered sources
 
 std::string Attr(const XMLElement* e, const char* name) {
   const char* v = e->Attribute(name);
@@ -70,6 +72,8 @@ void Library::Load(const std::string& path) {
   path_ = path;
   favorites_.clear();
   progress_.clear();
+  recent_.clear();
+  sources_.clear();
 
   XMLDocument doc;
   if (doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS || !doc.RootElement())
@@ -77,11 +81,29 @@ void Library::Load(const std::string& path) {
 
   for (const XMLElement* e = doc.RootElement()->FirstChildElement(); e;
        e = e->NextSiblingElement()) {
+    if (std::string(e->Name()) == "source") {
+      KnownSource s;
+      s.key = Attr(e, "key");
+      s.name = Attr(e, "name");
+      s.detail = Attr(e, "detail");
+      s.icon = Attr(e, "icon");
+      s.uses = e->IntAttribute("uses", 0);
+      s.used = e->Int64Attribute("used", 0);
+      if (!s.key.empty() && !s.name.empty())
+        sources_.push_back(std::move(s));
+      continue;
+    }
     Ref ref;
     if (!ReadRef(e, ref))
       continue;
     if (std::string(e->Name()) == "favorite") {
       favorites_.push_back(std::move(ref));
+    } else if (std::string(e->Name()) == "recent") {
+      Recent r;
+      r.live = e->BoolAttribute("live", false);
+      r.updated = e->Int64Attribute("updated", 0);
+      r.ref = std::move(ref);
+      recent_.push_back(std::move(r));
     } else if (std::string(e->Name()) == "progress") {
       Item item;
       item.progress.position = e->Int64Attribute("position", 0);
@@ -110,6 +132,23 @@ void Library::Save() {
   for (const Ref& ref : favorites_) {
     XMLElement* e = doc.NewElement("favorite");
     WriteRef(e, ref);
+    root->InsertEndChild(e);
+  }
+  for (const Recent& r : recent_) {
+    XMLElement* e = doc.NewElement("recent");
+    WriteRef(e, r.ref);
+    e->SetAttribute("live", r.live);
+    e->SetAttribute("updated", r.updated);
+    root->InsertEndChild(e);
+  }
+  for (const KnownSource& s : sources_) {
+    XMLElement* e = doc.NewElement("source");
+    e->SetAttribute("key", s.key.c_str());
+    e->SetAttribute("name", s.name.c_str());
+    if (!s.detail.empty()) e->SetAttribute("detail", s.detail.c_str());
+    if (!s.icon.empty())   e->SetAttribute("icon", s.icon.c_str());
+    if (s.uses > 0)        e->SetAttribute("uses", s.uses);
+    if (s.used > 0)        e->SetAttribute("used", s.used);
     root->InsertEndChild(e);
   }
   for (const auto& kv : progress_) {
@@ -164,6 +203,9 @@ bool Library::ToggleFavorite(const Ref& ref) {
 
 std::string Library::SourceName(const std::string& source_key) const {
   std::lock_guard<std::mutex> lock(mutex_);
+  for (const KnownSource& s : sources_)
+    if (s.key == source_key)
+      return s.name;
   for (const Ref& ref : favorites_)
     if (ref.source_key == source_key && !ref.source_name.empty())
       return ref.source_name;
@@ -244,6 +286,104 @@ std::vector<std::pair<Ref, Progress>> Library::InProgress() const {
   });
   if (out.size() > kMaxInProgress)
     out.resize(kMaxInProgress);
+  return out;
+}
+
+void Library::AddRecent(const Ref& ref, bool live) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  recent_.erase(std::remove_if(recent_.begin(), recent_.end(), [&ref](const Recent& r) {
+    return r.ref.source_key == ref.source_key && r.ref.entry.id == ref.entry.id;
+  }), recent_.end());
+  Recent r;
+  r.ref = ref;
+  r.live = live;
+  r.updated = (int64_t)std::time(nullptr);
+  recent_.insert(recent_.begin(), std::move(r));
+  if (recent_.size() > kMaxRecent)
+    recent_.resize(kMaxRecent);
+  Changed();
+}
+
+void Library::RemoveRecent(const std::string& key, const std::string& id) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  const size_t before = recent_.size();
+  recent_.erase(std::remove_if(recent_.begin(), recent_.end(), [&](const Recent& r) {
+    return r.ref.source_key == key && r.ref.entry.id == id;
+  }), recent_.end());
+  if (recent_.size() != before)
+    Changed();
+}
+
+std::vector<Recent> Library::RecentItems() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return recent_;
+}
+
+void Library::RememberSource(const KnownSource& source) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (KnownSource& s : sources_) {
+    if (s.key != source.key)
+      continue;
+    // What it says about itself may have changed (a server renamed, a
+    // drive's free space); how often it was opened has not.
+    if (s.name != source.name || s.detail != source.detail || s.icon != source.icon) {
+      s.name = source.name;
+      s.detail = source.detail;
+      s.icon = source.icon;
+      Changed();
+    }
+    return;
+  }
+  KnownSource s = source;
+  s.uses = 0;
+  s.used = 0;
+  sources_.push_back(std::move(s));
+  if (sources_.size() > kMaxSources) {
+    // The one opened least (and longest ago) makes way.
+    auto least = std::min_element(sources_.begin(), sources_.end(),
+      [](const KnownSource& a, const KnownSource& b) {
+        return a.uses != b.uses ? a.uses < b.uses : a.used < b.used;
+      });
+    sources_.erase(least);
+  }
+  Changed();
+}
+
+void Library::SourceUsed(const std::string& key) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (KnownSource& s : sources_) {
+    if (s.key == key) {
+      s.uses++;
+      s.used = (int64_t)std::time(nullptr);
+      Changed();
+      return;
+    }
+  }
+}
+
+void Library::ForgetSource(const std::string& key) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  const size_t before = sources_.size();
+  sources_.erase(std::remove_if(sources_.begin(), sources_.end(),
+                                [&key](const KnownSource& s) { return s.key == key; }),
+                 sources_.end());
+  if (sources_.size() != before)
+    Changed();
+}
+
+std::vector<KnownSource> Library::KnownSources() const {
+  std::vector<KnownSource> out;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    out = sources_;
+  }
+  // Most opened first; among those opened as often, the one opened last.
+  // Never opened: the order they were found in.
+  std::stable_sort(out.begin(), out.end(), [](const KnownSource& a, const KnownSource& b) {
+    if (a.uses != b.uses)
+      return a.uses > b.uses;
+    return a.used > b.used;
+  });
   return out;
 }
 

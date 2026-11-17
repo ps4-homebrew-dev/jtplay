@@ -60,6 +60,11 @@
 }
 
 /* Focused: the solid accent, as everywhere. */
+/* Settings: a gear, without a word. */
+.tab.icon-only .tab-icon {
+	margin-right: 0px;
+}
+
 .tab.selected {
 	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
 }
@@ -245,8 +250,7 @@ body.compact .shelves-end {
 	padding-top: 8px;
 }
 
-/* A group's sources: rows of four tiles, lower than rows of cards, so that
- * several show at once under the shorter banner (body.compact). */
+/* The row of sources: tiles lower than cards. */
 .shelf-in.sources {
 	height: auto;
 	padding-bottom: 10px;
@@ -306,6 +310,15 @@ body.compact .shelves-end {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+/* Remembered, but not found this time (a server that is off). */
+.source-tile.missing .source-icon,
+.source-tile.missing .source-name {
+	color: #5a6478;
+}
+.source-tile.missing .source-icon {
+	background-color: #ffffff0a;
 }
 
 .card.selected .source-tile {
