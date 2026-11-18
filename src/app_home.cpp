@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// The home screen: tabs across the top -- Home, Sources and Settings --
-// and the page of the one in focus below them; at the start the focus is
-// on the Home tab. Home is rows of cards, the first a press of down away,
-// so that what was last watched or listened to is close at hand:
+// The home screen: tabs across the top -- Home, Favorites, Sources and
+// Settings -- and the page of the one in focus below them; at the start the
+// focus is on the Home tab. Home is rows of cards, the first a press of
+// down away, so that what was last watched or listened to is close at hand:
 //
 //   Now playing         while something does: the way back to it
 //   Continue watching   unfinished items; select resumes, at once
-//   Favorites           anything pinned, most recently first
+//
+// Favorites has for its page the favorites, in the folders made for them,
+// in the browse view with the tabs over it (see OpenFavoritesTab), as
+// Sources does with the list of sources.
 //
 // Sources has for its page the list of every source there is, local,
 // network or plugin, most used first: the browse view, with the tabs over
@@ -248,13 +251,21 @@ const App::ListedSource* App::ListedSourceOf(const browse::Entry& e) const {
 }
 
 bool App::ShowsLogo(const browse::Entry& e) const {
-  const ListedSource* listed = ListedSourceOf(e);
-  return listed && listed->logo;
+  if (const ListedSource* listed = ListedSourceOf(e))
+    return listed->logo;
+  // A source pinned to Favorites: its logo, whole, as on the list of them.
+  bool logo = false;
+  const std::string art = SourceFavoriteArt(e, &logo);
+  return logo && (e.image.empty() || e.image == art);
 }
 
 const char* App::EntryIcon(const browse::Entry& e) const {
   if (const ListedSource* listed = ListedSourceOf(e))
     return listed->icon.c_str();
+  // A folder made for favorites, not one of a source's.
+  std::string folder;
+  if (current_source_ == favorites_source_ && library::FavoriteFolderFromEntryId(e.id, folder))
+    return icon::kFavoriteFolder;
   return IconFor(e);
 }
 
@@ -327,11 +338,48 @@ void App::RefreshSourcesList() {
 }
 
 // ---------------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------------
+
+void App::OpenFavoritesTab() {
+  if (FullscreenPlayback() || bind_photo_)
+    return;
+  CancelForegroundLaunch();
+  AbandonBrowse();
+  RememberPlace(); // the source on screen, if any
+  library_.Save();
+  current_source_ = favorites_source_;
+  from_sources_list_ = false;
+  path_.clear();
+  view_root_ = default_view_;
+  SetBrowseTabs(false);
+  if (rail_.empty())
+    RebuildHome("favorites");
+  for (size_t i = 0; i < rail_.size(); i++) {
+    if (rail_[i].kind == RailKind::Favorites && sel_rail_ != (int)i) {
+      sel_rail_ = (int)i;
+      model_.DirtyVariable("sel_rail");
+    }
+  }
+  BrowseLevel top;
+  top.id = favorites_source_->RootId();
+  top.name = favorites_source_->Name();
+  path_.push_back(std::move(top));
+  view_ = View::Browse;
+  Set("view", bind_view_, Rml::String("browse"));
+  Set("source_name", bind_source_name_, favorites_source_->Name());
+  sel_entry_ = 0;
+  RefreshFavoritesLevel();
+  RebuildCrumb();
+}
+
+// ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
 std::string App::RailKey(const RailItem& item) {
   switch (item.kind) {
+  case RailKind::Favorites: return "favorites";
   case RailKind::Sources:  return "sources";
   case RailKind::Settings: return "settings";
   default:                 return "home";
@@ -347,6 +395,8 @@ void App::RebuildHome(const std::string& select) {
   rail_rows_.clear();
   rail_.push_back({RailKind::Home});
   rail_rows_.push_back({icon::kHome, "Home"});
+  rail_.push_back({RailKind::Favorites});
+  rail_rows_.push_back({icon::kStar, "Favorites"});
   rail_.push_back({RailKind::Sources});
   rail_rows_.push_back({icon::kDrive, "Sources"});
   rail_.push_back({RailKind::Settings});
@@ -376,6 +426,12 @@ void App::MoveRail(int delta) {
   sel_rail_ = to;
   model_.DirtyVariable("sel_rail");
   home_rows_wanted_ = false; // along the tabs: the focus stays on them
+  // Favorites: its page is in the browse view, at once.
+  if (rail_[to].kind == RailKind::Favorites) {
+    OpenFavoritesTab();
+    SetBrowseTabs(true);
+    return;
+  }
   // Sources: its page is the list of them, in the browse view, at once.
   if (rail_[to].kind == RailKind::Sources) {
     OpenSourcesList();
@@ -408,18 +464,42 @@ void App::LeaveSourcesTab(const std::string& tab, bool rows) {
   UpdateBackdrop();
 }
 
-// The tabs over the list of sources: along them to the other tabs, down
-// (or select) into the list; back, as from any tab, to Home's rows (or
-// to what plays behind the menus). Options: what is done to all of them.
+void App::GoToTab(int index) {
+  index = std::clamp(index, 0, std::max(0, (int)rail_.size() - 1));
+  if (rail_.empty() || index == sel_rail_)
+    return;
+  switch (rail_[index].kind) {
+  case RailKind::Favorites:
+    OpenFavoritesTab();
+    SetBrowseTabs(true);
+    break;
+  case RailKind::Sources:
+    OpenSourcesList();
+    SetBrowseTabs(true);
+    break;
+  default:
+    LeaveSourcesTab(RailKey(rail_[index]), false);
+    break;
+  }
+}
+
+// The tabs over a tab page (the list of sources, the favorites): along
+// them to the other tabs, down (or select) into the page; back, as from
+// any tab, to Home's rows (or to what plays behind the menus). Options:
+// what is done to all of the page.
 void App::HandleKeySourcesTabs(Rml::Event& event, int key) {
   switch (key) {
   case Rml::Input::KI_LEFT:
+    GoToTab(sel_rail_ - 1);
+    break;
   case Rml::Input::KI_HOME:
-    LeaveSourcesTab("home", false);
+    GoToTab(0);
     break;
   case Rml::Input::KI_RIGHT:
+    GoToTab(sel_rail_ + 1);
+    break;
   case Rml::Input::KI_END:
-    LeaveSourcesTab("settings", false);
+    GoToTab((int)rail_.size() - 1);
     break;
   case Rml::Input::KI_DOWN:
   case Rml::Input::KI_RETURN:
@@ -495,27 +575,17 @@ void App::RebuildShelves() {
     }
     if (!resume.entries.empty())
       shelves_.push_back(std::move(resume));
-
-    Shelf favs{"Favorites", favorites_source_, {}};
-    for (const library::Ref& ref : library_.Favorites()) {
-      browse::Entry e = ref.entry;
-      e.id = library::EncodeId(ref.source_key, ref.entry.id);
-      favs.entries.push_back(std::move(e));
-    }
-    // Most recently added first: what was just pinned is what is wanted.
-    std::reverse(favs.entries.begin(), favs.entries.end());
-    if (!favs.entries.empty())
-      shelves_.push_back(std::move(favs));
   }
 
-  // Nothing to show: Home before anything was played or pinned.
+  // Nothing to show: Home before anything was played (or with all of it
+  // finished).
   const bool empty = place == RailKind::Home && shelves_.empty();
   Set("hero_icon", bind_hero_icon_, Rml::String(empty ? icon::kHome : ""));
   Set("hero_title", bind_hero_title_, Rml::String(empty ? "Welcome" : ""));
   Set("hero_detail", bind_hero_detail_,
       Rml::String(empty ? "Your drives, servers and plugins are under Sources." : ""));
   Set("hero_note", bind_hero_note_, Rml::String(empty
-    ? "What you leave unfinished, and what you pin, will gather here." : ""));
+    ? "What you leave unfinished will gather here, and what you pin under Favorites." : ""));
 
   if (NowPlayingShelf(0) != had_now_playing && !shelf_card_sel_.empty()) {
     if (had_now_playing) {

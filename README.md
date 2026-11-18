@@ -37,8 +37,8 @@ plugins, in the spirit of Kodi.
 
 ## Home
 
-Across the top are three tabs: **Home**, **Sources** and **Settings**; at
-the start the focus is on Home. Up from a page reaches them; down, select
+Across the top are four tabs: **Home**, **Favorites**, **Sources** and
+**Settings**; at the start the focus is on Home. Up from a page reaches them; down, select
 or back returns.
 
 Home is rows of cards, the first of them a press of down away, so that
@@ -49,14 +49,18 @@ what you last watched or listened to is a press of select after that:
   the folder it was played from: the next item is the one that came next
   there, and back from the player and from the folder leads where it did
   then. The options menu has *Play from beginning*.
-- **Favorites**: anything you pinned, the latest first.
 
 The banner shows the card in focus, large, over its artwork across the
 top of the screen -- where it is from, what is left of it, its
 description -- and follows the focus along the rows; the focused row
 sits right under it. Whatever a card has no data for is left out. Back on
 the rows goes to the first card, or to what plays behind the menus.
-Triangle pins the card in focus to Favorites, or unpins it.
+Triangle saves the card in focus to Favorites (see the folder picker below).
+
+**Favorites** has for its page what you pinned, in the folders you sort it
+into (see Favorites and Continue watching), shown as soon as the tab has
+the focus, as the list of sources is under Sources; back from its top
+returns to the tabs.
 
 **Sources** has for its page the list of every source there is, local
 drives, network servers and plugins alike, the ones you open most first,
@@ -180,6 +184,26 @@ Any folder or item, from any source, can be added to **Favorites**, with
 triangle or the options menu. A
 favorite folder is a shortcut: it browses (and plays) through the source it
 came from, so a DLNA folder works as long as that server is on the network.
+
+The Favorites tab lists them, the latest first, under folders of your own
+to sort them into, folders inside folders as deep as you like.
+
+Triangle opens a folder picker, a file dialog in the middle of the screen:
+the path to a folder of favorites, the folders in it (*..* goes up;
+select goes into one, back comes out), and **New folder**, **Cancel** and
+**OK**. OK saves into the folder on screen. It opens in the folder the
+last favorite went to, on OK, so saving the next one there is triangle
+then select. On a favorite already, triangle removes it. **Move to...** in
+the options menu of the Favorites tab opens the same picker, where the
+favorite (or folder of yours) is, ticked; OK moves it. A source added from
+the list of sources keeps its logo.
+
+The options menu in the Favorites tab has **New folder** (in the folder on
+screen), and on a folder of yours **Rename**, **Move to...** (the same
+picker) and **Delete folder** (triangle on it, too), which removes
+everything in it from your favorites as well, the folders inside it
+included; it asks first, unless the folder is empty. Moving a favorite
+keeps its resume point and watched mark.
 
 Videos (and audio longer than 20 minutes) remember where they were
 stopped. Playing one again from a folder asks whether to resume (from

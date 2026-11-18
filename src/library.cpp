@@ -8,6 +8,7 @@
 #include <chrono>
 #include <thread>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <set>
 
@@ -86,6 +87,9 @@ void Library::Load(const std::string& path) {
   std::lock_guard<std::mutex> lock(mutex_);
   path_ = path;
   favorites_.clear();
+  folders_.clear();
+  recent_folders_.clear();
+  next_folder_ = 1;
   progress_.clear();
   recent_.clear();
   sources_.clear();
@@ -115,6 +119,19 @@ void Library::Load(const std::string& path) {
         views_[Id(Attr(e, "source"), Attr(e, "id"))] = v;
       continue;
     }
+    if (std::string(e->Name()) == "recentfolder") {
+      recent_folders_.push_back(Attr(e, "id"));
+      continue;
+    }
+    if (std::string(e->Name()) == "folder") {
+      FavoriteFolder f;
+      f.id = Attr(e, "id");
+      f.name = Attr(e, "name");
+      f.parent = Attr(e, "parent");
+      if (!f.id.empty() && !HasFolder(f.id))
+        folders_.push_back(std::move(f));
+      continue;
+    }
     if (std::string(e->Name()) == "source") {
       KnownSource s;
       s.key = Attr(e, "key");
@@ -133,7 +150,7 @@ void Library::Load(const std::string& path) {
     if (!ReadRef(e, ref))
       continue;
     if (std::string(e->Name()) == "favorite") {
-      favorites_.push_back(std::move(ref));
+      favorites_.push_back({std::move(ref), Attr(e, "folder")});
     } else if (std::string(e->Name()) == "recent") {
       Recent r;
       r.updated = e->Int64Attribute("updated", 0);
@@ -154,6 +171,21 @@ void Library::Load(const std::string& path) {
       progress_[id] = std::move(item);
     }
   }
+
+  // Whatever is in a folder that is not there (or in a circle of folders,
+  // which an edited file could make) goes to the top.
+  for (FavoriteFolder& f : folders_)
+    if (!HasFolder(f.parent) || Inside(f.parent, f.id))
+      f.parent.clear();
+  for (Favorite& f : favorites_)
+    if (!HasFolder(f.folder))
+      f.folder.clear();
+  recent_folders_.erase(std::remove_if(recent_folders_.begin(), recent_folders_.end(),
+                                       [this](const std::string& id) { return !HasFolder(id); }),
+                        recent_folders_.end());
+  for (const FavoriteFolder& f : folders_)
+    next_folder_ = std::max<uint64_t>(next_folder_,
+                                      std::strtoull(f.id.c_str(), nullptr, 10) + 1);
   generation_++;
 }
 
@@ -168,9 +200,24 @@ void Library::Save() {
   root->SetAttribute("version", 1);
   doc.InsertEndChild(root);
 
-  for (const Ref& ref : favorites_) {
+  for (const FavoriteFolder& f : folders_) {
+    XMLElement* e = doc.NewElement("folder");
+    e->SetAttribute("id", f.id.c_str());
+    e->SetAttribute("name", f.name.c_str());
+    if (!f.parent.empty())
+      e->SetAttribute("parent", f.parent.c_str());
+    root->InsertEndChild(e);
+  }
+  for (const std::string& id : recent_folders_) {
+    XMLElement* e = doc.NewElement("recentfolder");
+    e->SetAttribute("id", id.c_str());
+    root->InsertEndChild(e);
+  }
+  for (const Favorite& f : favorites_) {
     XMLElement* e = doc.NewElement("favorite");
-    WriteRef(e, ref);
+    WriteRef(e, f.ref);
+    if (!f.folder.empty())
+      e->SetAttribute("folder", f.folder.c_str());
     root->InsertEndChild(e);
   }
   for (const Recent& r : recent_) {
@@ -254,8 +301,8 @@ uint64_t Library::Generation() const {
 
 bool Library::IsFavorite(const std::string& key, const std::string& id) const {
   std::lock_guard<std::mutex> lock(mutex_);
-  for (const Ref& r : favorites_)
-    if (r.source_key == key && r.entry.id == id)
+  for (const Favorite& f : favorites_)
+    if (f.ref.source_key == key && f.ref.entry.id == id)
       return true;
   return false;
 }
@@ -263,15 +310,213 @@ bool Library::IsFavorite(const std::string& key, const std::string& id) const {
 bool Library::ToggleFavorite(const Ref& ref) {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto it = favorites_.begin(); it != favorites_.end(); ++it) {
-    if (it->source_key == ref.source_key && it->entry.id == ref.entry.id) {
+    if (it->ref.source_key == ref.source_key && it->ref.entry.id == ref.entry.id) {
       favorites_.erase(it);
       Changed();
       return false;
     }
   }
-  favorites_.push_back(ref);
+  favorites_.push_back({ref, std::string()});
   Changed();
   return true;
+}
+
+void Library::AddFavorite(const Ref& ref, const std::string& folder) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  const std::string into = HasFolder(folder) ? folder : std::string();
+  for (Favorite& f : favorites_) {
+    if (f.ref.source_key == ref.source_key && f.ref.entry.id == ref.entry.id) {
+      f.folder = into;
+      Changed();
+      return;
+    }
+  }
+  favorites_.push_back({ref, into});
+  Changed();
+}
+
+bool Library::HasFolder(const std::string& id) const {
+  if (id.empty())
+    return true;
+  for (const FavoriteFolder& f : folders_)
+    if (f.id == id)
+      return true;
+  return false;
+}
+
+// Whether folder 'id' is 'ancestor' or inside it, however deep. (A chain
+// longer than there are folders is a circle: inside, so it is not made
+// worse.)
+bool Library::Inside(std::string id, const std::string& ancestor) const {
+  for (size_t steps = 0; !id.empty(); steps++) {
+    if (id == ancestor || steps > folders_.size())
+      return true;
+    std::string parent;
+    for (const FavoriteFolder& f : folders_)
+      if (f.id == id)
+        parent = f.parent;
+    id = parent;
+  }
+  return false;
+}
+
+std::vector<Ref> Library::FavoritesIn(const std::string& folder) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::vector<Ref> out;
+  for (const Favorite& f : favorites_)
+    if (f.folder == folder)
+      out.push_back(f.ref);
+  return out;
+}
+
+std::vector<FavoriteFolder> Library::FavoriteFolders() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return folders_;
+}
+
+std::map<std::string, size_t> Library::FavoriteFolderCounts() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  std::map<std::string, size_t> out;
+  for (const FavoriteFolder& f : folders_)
+    out[f.parent]++;
+  for (const Favorite& f : favorites_)
+    out[f.folder]++;
+  return out;
+}
+
+bool Library::FindFavoriteFolder(const std::string& id, FavoriteFolder& out) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (const FavoriteFolder& f : folders_) {
+    if (f.id == id) {
+      out = f;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string Library::FavoriteFolderOf(const std::string& key, const std::string& id) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (const Favorite& f : favorites_)
+    if (f.ref.source_key == key && f.ref.entry.id == id)
+      return f.folder;
+  return {};
+}
+
+std::string Library::AddFavoriteFolder(const std::string& parent, const std::string& name) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!HasFolder(parent) || name.empty())
+    return {};
+  FavoriteFolder f;
+  f.id = std::to_string(next_folder_++);
+  f.name = name;
+  f.parent = parent;
+  folders_.push_back(f);
+  Changed();
+  return f.id;
+}
+
+bool Library::RenameFavoriteFolder(const std::string& id, const std::string& name) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (FavoriteFolder& f : folders_) {
+    if (f.id == id && !name.empty()) {
+      if (f.name != name) {
+        f.name = name;
+        Changed();
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Library::DeleteFavoriteFolder(const std::string& id) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = std::find_if(folders_.begin(), folders_.end(),
+                         [&id](const FavoriteFolder& f) { return f.id == id; });
+  if (it == folders_.end())
+    return false;
+  // It and everything inside it.
+  std::set<std::string> gone;
+  for (const FavoriteFolder& f : folders_)
+    if (Inside(f.id, id))
+      gone.insert(f.id);
+  folders_.erase(std::remove_if(folders_.begin(), folders_.end(),
+                                [&gone](const FavoriteFolder& f) { return gone.count(f.id); }),
+                 folders_.end());
+  favorites_.erase(std::remove_if(favorites_.begin(), favorites_.end(),
+                                  [&gone](const Favorite& f) { return gone.count(f.folder); }),
+                   favorites_.end());
+  recent_folders_.erase(std::remove_if(recent_folders_.begin(), recent_folders_.end(),
+                                       [&gone](const std::string& f) { return gone.count(f); }),
+                        recent_folders_.end());
+  Changed();
+  return true;
+}
+
+void Library::FavoriteFolderContents(const std::string& id, size_t& favorites,
+                                     size_t& folders) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  favorites = folders = 0;
+  if (id.empty())
+    return;
+  std::set<std::string> in;
+  for (const FavoriteFolder& f : folders_)
+    if (Inside(f.id, id))
+      in.insert(f.id);
+  folders = in.empty() ? 0 : in.size() - 1; // (not itself)
+  for (const Favorite& f : favorites_)
+    favorites += in.count(f.folder);
+}
+
+void Library::NoteFavoriteFolderUsed(const std::string& folder) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!HasFolder(folder))
+    return;
+  recent_folders_.erase(std::remove(recent_folders_.begin(), recent_folders_.end(), folder),
+                        recent_folders_.end());
+  recent_folders_.insert(recent_folders_.begin(), folder);
+  if (recent_folders_.size() > 8)
+    recent_folders_.resize(8);
+  dirty_ = true; // (nothing on screen shows it: no new generation)
+}
+
+std::vector<std::string> Library::RecentFavoriteFolders() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return recent_folders_;
+}
+
+bool Library::MoveFavorite(const std::string& key, const std::string& id,
+                           const std::string& folder) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!HasFolder(folder))
+    return false;
+  for (Favorite& f : favorites_) {
+    if (f.ref.source_key == key && f.ref.entry.id == id) {
+      if (f.folder != folder) {
+        f.folder = folder;
+        Changed();
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Library::MoveFavoriteFolder(const std::string& id, const std::string& parent) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!HasFolder(parent) || Inside(parent, id))
+    return false;
+  for (FavoriteFolder& f : folders_) {
+    if (f.id == id) {
+      if (f.parent != parent) {
+        f.parent = parent;
+        Changed();
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 std::string Library::SourceName(const std::string& source_key) const {
@@ -279,9 +524,9 @@ std::string Library::SourceName(const std::string& source_key) const {
   for (const KnownSource& s : sources_)
     if (s.key == source_key)
       return s.name;
-  for (const Ref& ref : favorites_)
-    if (ref.source_key == source_key && !ref.source_name.empty())
-      return ref.source_name;
+  for (const Favorite& f : favorites_)
+    if (f.ref.source_key == source_key && !f.ref.source_name.empty())
+      return f.ref.source_name;
   for (const auto& item : progress_)
     if (item.second.ref.source_key == source_key && !item.second.ref.source_name.empty())
       return item.second.ref.source_name;
@@ -290,7 +535,10 @@ std::string Library::SourceName(const std::string& source_key) const {
 
 std::vector<Ref> Library::Favorites() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  return favorites_;
+  std::vector<Ref> out;
+  for (const Favorite& f : favorites_)
+    out.push_back(f.ref);
+  return out;
 }
 
 bool Library::GetProgress(const std::string& key, const std::string& id,
@@ -475,6 +723,17 @@ void Library::ForgetSource(const std::string& key) {
     Changed();
 }
 
+bool Library::FindKnownSource(const std::string& key, KnownSource& out) const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (const KnownSource& s : sources_) {
+    if (s.key == key) {
+      out = s;
+      return true;
+    }
+  }
+  return false;
+}
+
 std::vector<KnownSource> Library::KnownSources() const {
   std::vector<KnownSource> out;
   {
@@ -622,8 +881,54 @@ std::string LibrarySource::Key() const {
                                   : "library:continue";
 }
 
+std::string FavoriteFolderEntryId(const std::string& folder) {
+  return "fav:" + folder;
+}
+
+bool FavoriteFolderFromEntryId(const std::string& entry_id, std::string& folder) {
+  if (entry_id.compare(0, 4, "fav:") != 0)
+    return false;
+  folder = entry_id.substr(4);
+  return true;
+}
+
 bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
                            std::string& error) {
+  // Favorites: the folders in the one asked for (the top, or one made to
+  // sort them into), in the order they were made, then its favorites, the
+  // last added first.
+  std::string folder;
+  if (kind_ == Kind::Favorites && (id.empty() || FavoriteFolderFromEntryId(id, folder))) {
+    if (!folder.empty()) {
+      FavoriteFolder f;
+      if (!library_.FindFavoriteFolder(folder, f)) {
+        error = "this folder is not there any more";
+        return false;
+      }
+    }
+    const std::map<std::string, size_t> counts = library_.FavoriteFolderCounts();
+    for (const FavoriteFolder& f : library_.FavoriteFolders()) {
+      if (f.parent != folder)
+        continue;
+      const auto it = counts.find(f.id);
+      const size_t count = it == counts.end() ? 0 : it->second;
+      browse::Entry e;
+      e.id = FavoriteFolderEntryId(f.id);
+      e.type = browse::Entry::Type::Folder;
+      e.name = f.name;
+      e.description = count == 0 ? "Empty"
+        : std::to_string(count) + (count == 1 ? " item" : " items");
+      out.push_back(std::move(e));
+    }
+    std::vector<Ref> refs = library_.FavoritesIn(folder);
+    for (auto it = refs.rbegin(); it != refs.rend(); ++it) {
+      browse::Entry e = it->entry;
+      e.id = EncodeId(it->source_key, it->entry.id);
+      out.push_back(std::move(e));
+    }
+    return true;
+  }
+
   if (id.empty()) {
     // The root: the stored refs, under ids that remember their source.
     // The progress and the source name are the app's to show (it looks
@@ -633,10 +938,7 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
       e.id = EncodeId(ref.source_key, ref.entry.id);
       out.push_back(std::move(e));
     };
-    if (kind_ == Kind::Favorites) {
-      for (const Ref& ref : library_.Favorites())
-        add(ref);
-    } else if (kind_ == Kind::Sources) {
+    if (kind_ == Kind::Sources) {
       // (Made by the app, which knows which are found: App::OpenSourcesList.)
     } else {
       for (const auto& item : library_.InProgress())

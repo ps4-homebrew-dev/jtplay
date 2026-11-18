@@ -227,7 +227,7 @@
 						</div>
 						<div class="entry-spacer" data-if="spacer_bottom != '0px'" data-style-height="spacer_bottom"/>
 						<div class="empty" data-if="entry_count == 0 && !browse_loading && filter_text == '' && browse_error == ''">
-							This folder is empty.
+							{{empty_text}}
 						</div>
 						<div class="empty" data-if="item_count == 0 && !browse_loading && filter_text != ''">
 							Nothing matches the filter.
@@ -470,7 +470,8 @@
 		<div id="menu" data-if="menu_open" data-class-dialog="menu_dialog">
 			<div class="menu-title">{{menu_title}}</div>
 			<div class="dialog-meta" data-if="menu_dialog && menu_meta != ''">{{menu_meta}}</div>
-			<div class="dialog-progress" data-if="menu_dialog && menu_meta != ''">
+			<!-- (How far along, for resuming; a question with no such thing has none.) -->
+			<div class="dialog-progress" data-if="menu_dialog && menu_meta != '' && menu_progress != '0%'">
 				<div class="dialog-played" data-style-width="menu_progress"/>
 			</div>
 			<!-- A heading over the first row of each group (App::MenuSection). -->
@@ -482,6 +483,30 @@
 						<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
 					</div>
 				</div>
+			</div>
+		</div>
+
+		<!-- The folder picker: where something goes in Favorites (src/app_sheet.cpp). -->
+		<div id="sheet-scrim" data-if="sheet_open"/>
+		<div id="sheet" data-if="sheet_open">
+			<div class="sheet-title">{{sheet_title}}</div>
+			<div class="sheet-path">{{sheet_path}}</div>
+			<div id="sheet-rows">
+				<div class="sheet-row" data-for="r, ri : sheet_rows"
+				     data-class-selected="!sheet_on_buttons && ri == sel_sheet_row">
+					<span class="sheet-icon">{{r.icon}}</span>
+					<span class="sheet-label">{{r.label}}</span>
+					<span class="sheet-here" data-if="r.current">&#xE070;</span>
+					<span class="sheet-count" data-if="r.detail != ''">{{r.detail}}</span>
+					<span class="sheet-go" data-if="r.kind == 'folder'">&#xE073;</span>
+				</div>
+				<div class="sheet-empty" data-if="sheet_rows.size == 0">No folders here</div>
+			</div>
+			<div class="sheet-buttons">
+				<span class="sheet-button new" data-class-selected="sheet_on_buttons && sel_sheet_button == 0">New folder</span>
+				<span class="spacer"/>
+				<span class="sheet-button" data-class-selected="sheet_on_buttons && sel_sheet_button == 1">Cancel</span>
+				<span class="sheet-button ok" data-class-selected="sheet_on_buttons && sel_sheet_button == 2">OK</span>
 			</div>
 		</div>
 

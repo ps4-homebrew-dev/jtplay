@@ -390,6 +390,15 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("more", &EntryRow::more);
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
+  if (auto row = ctor.RegisterStruct<SheetRow>()) {
+    row.RegisterMember("icon", &SheetRow::icon);
+    row.RegisterMember("label", &SheetRow::label);
+    row.RegisterMember("detail", &SheetRow::detail);
+    row.RegisterMember("kind", &SheetRow::kind);
+    row.RegisterMember("current", &SheetRow::current);
+  }
+  ctor.RegisterArray<std::vector<SheetRow>>();
+
 
   if (auto row = ctor.RegisterStruct<ChildRow>()) {
     row.RegisterMember("icon", &ChildRow::icon);
@@ -473,6 +482,14 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("entry_total", &entry_total_);
   ctor.Bind("item_count", &item_count_);
   ctor.Bind("has_more", &bind_has_more_);
+  ctor.Bind("empty_text", &bind_empty_text_);
+  ctor.Bind("sheet_open", &bind_sheet_open_);
+  ctor.Bind("sheet_title", &bind_sheet_title_);
+  ctor.Bind("sheet_path", &bind_sheet_path_);
+  ctor.Bind("sheet_rows", &sheet_rows_);
+  ctor.Bind("sel_sheet_row", &sel_sheet_row_);
+  ctor.Bind("sel_sheet_button", &sel_sheet_button_);
+  ctor.Bind("sheet_on_buttons", &bind_sheet_on_buttons_);
   ctor.Bind("sel_entry", &sel_entry_);
   ctor.Bind("sort_label", &bind_sort_label_);
   ctor.Bind("jump_letter", &bind_jump_letter_);
@@ -663,6 +680,10 @@ void App::Update() {
   }
   // The menu has headings between its groups: rows are not all one pitch
   // apart, so where the selected one is, is added up.
+  if (scroll_sheet_pending_) {
+    EnsureRowVisible("sheet-rows", sel_sheet_row_, kSheetRowPitch);
+    scroll_sheet_pending_ = false;
+  }
   if (scroll_menu_pending_) {
     float top = 0.0f;
     for (int i = 0; i < sel_menu_ && i < (int)menu_rows_.size(); i++)
@@ -845,6 +866,7 @@ void App::ProcessEvent(Rml::Event& event) {
   // keys (see gamepad.h): there L1 / R1 are previous / next, and channel up
   // / down (PageUp / PageDown) next / previous.
   const bool own_shoulders = !bind_filter_open_ && !bind_search_open_ && !bind_menu_open_ &&
+                             !bind_sheet_open_ &&
                              (bind_photo_ || FullscreenPlayback());
   if (!own_shoulders) {
     if (key == gamepad::kKeyShoulderLeft)
@@ -881,7 +903,7 @@ void App::ProcessEvent(Rml::Event& event) {
   if ((key == Rml::Input::KI_F || key == Rml::Input::KI_S) &&
       (event.GetParameter<int>("ctrl_key", 0) != 0) &&
       view_ == View::Browse && !bind_filter_open_ && !bind_search_open_ &&
-      !bind_menu_open_ && !bind_photo_ && !FullscreenPlayback()) {
+      !bind_menu_open_ && !bind_sheet_open_ && !bind_photo_ && !FullscreenPlayback()) {
     if (key == Rml::Input::KI_F)
       OpenFilter();
     else
@@ -897,6 +919,10 @@ void App::ProcessEvent(Rml::Event& event) {
   }
   if (bind_search_open_) {
     HandleKeySearch(event, key);
+    return;
+  }
+  if (bind_sheet_open_) {
+    HandleKeySheet(event, key);
     return;
   }
   if (bind_menu_open_) {

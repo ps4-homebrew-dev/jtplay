@@ -193,7 +193,7 @@
  * app focuses the field, which is what brings up the system keyboard on a
  * console; on a PC it is typed into. Return searches, Escape closes. */
 #search-scrim {
-	z-index: 9;
+	z-index: 11; /* over the save sheet, which it names a folder for */
 	position: absolute;
 	left: 0px;
 	top: 0px;
@@ -203,7 +203,7 @@
 }
 
 #search {
-	z-index: 10;
+	z-index: 12;
 	position: absolute;
 	left: 50%;
 	top: 50%;
@@ -244,4 +244,184 @@
 #search-input::selection {
 	color: #06231d;
 	background-color: #4dd6b8;
+}
+
+/* ------------------------------------------------------------------ */
+/* The folder picker (src/app_sheet.cpp)                              */
+/* ------------------------------------------------------------------ */
+
+/* A file dialog in the middle of the screen, always the same size, so
+ * that it stays put while folders are gone into and out of: the title, the
+ * path to the folder on screen, its folders (which scroll), the buttons.
+ * Row pitch: kSheetRowPitch in src/app_internal.h. */
+#sheet-scrim {
+	z-index: 9;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	background-color: #05080fb8;
+}
+
+#sheet {
+	z-index: 10;
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 900px;
+	height: 760px;
+	margin-left: -450px;
+	margin-top: -380px;
+	box-sizing: border-box;
+	padding: 36px 40px 32px 40px;
+	display: flex;
+	flex-direction: column;
+	border: 1px #ffffff1f;
+	border-radius: 24px;
+	background-color: #10172aee;
+	backdrop-filter: blur(28px);
+	box-shadow: #000000a0 0px 24px 70px 0px;
+	animation: 0.2s cubic-out dialog-in;
+}
+
+.sheet-title {
+	flex: none;
+	margin: 0px 0px 10px 0px;
+	font-size: 32px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sheet-path {
+	flex: none;
+	box-sizing: border-box;
+	height: 52px;
+	margin-bottom: 16px;
+	padding: 0px 20px;
+	line-height: 52px;
+	font-size: 24px;
+	color: #c5cee0;
+	background-color: #0b1020;
+	border: 1px #ffffff14;
+	border-radius: 10px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* The folders: a framed list, as a file dialog's. */
+#sheet-rows {
+	flex: 1;
+	min-height: 0px;
+	overflow-y: hidden;
+	padding: 8px;
+	border: 1px #ffffff14;
+	border-radius: 12px;
+}
+
+.sheet-row {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	height: 60px;
+	margin-bottom: 4px;
+	padding: 0px 20px;
+	border-radius: 10px;
+}
+
+.sheet-icon {
+	flex: none;
+	width: 44px;
+	font-size: 28px;
+	color: #9fb0cc;
+}
+
+.sheet-label {
+	flex: 1;
+	font-size: 28px;
+	color: #c5cee0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Where it is now (or the folder that leads there). */
+.sheet-here {
+	flex: none;
+	margin-left: 16px;
+	font-size: 28px;
+	color: #4dd6b8;
+}
+
+/* A folder: how much is in it, and that select goes into it. */
+.sheet-count {
+	flex: none;
+	margin-left: 16px;
+	font-size: 22px;
+	color: #6d7a92;
+}
+.sheet-go {
+	flex: none;
+	margin-left: 12px;
+	font-size: 24px;
+	color: #6d7a92;
+}
+
+.sheet-empty {
+	padding: 20px;
+	font-size: 24px;
+	color: #6d7a92;
+}
+
+.sheet-row.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+}
+.sheet-row.selected .sheet-label { color: #06231d; font-weight: bold; }
+.sheet-row.selected .sheet-icon,
+.sheet-row.selected .sheet-here,
+.sheet-row.selected .sheet-count,
+.sheet-row.selected .sheet-go { color: #06231d; }
+
+/* New folder on the left, Cancel and OK on the right. */
+.sheet-buttons {
+	flex: none;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-top: 24px;
+}
+.sheet-buttons .spacer {
+	flex: 1;
+}
+
+.sheet-button {
+	box-sizing: border-box;
+	min-width: 180px;
+	height: 64px;
+	margin-left: 16px;
+	padding: 0px 32px;
+	line-height: 64px;
+	text-align: center;
+	font-size: 26px;
+	color: #c5cee0;
+	border: 2px #34405a;
+	border-radius: 14px;
+}
+.sheet-button.new {
+	margin-left: 0px;
+}
+.sheet-button.ok {
+	color: #4dd6b8;
+	border-color: #4dd6b8;
+}
+.sheet-button.selected {
+	decorator: linear-gradient(90deg, #4dd6b8 0%, #38b89c 100%);
+	border-color: #4dd6b8;
+	color: #06231d;
+	font-weight: bold;
 }

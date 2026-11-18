@@ -53,24 +53,15 @@ bool App::IdentifyIn(const browse::Entry& entry, const browse::SourcePtr& source
 }
 
 std::string App::ArtUri(const browse::Entry& entry) const {
-  if (!entry.image.empty() || entry.IsFolder())
+  if (!entry.image.empty())
     return entry.image;
+  // A source pinned before its picture was kept with it: as it is now.
+  if (entry.IsFolder())
+    return SourceFavoriteArt(entry);
   library::Ref ref;
   if (!Identify(entry, ref))
     return {};
   return library_.ImageFor(ref.source_key, ref.entry.id);
-}
-
-void App::ToggleFavorite(const browse::Entry& entry) {
-  library::Ref ref;
-  if (!Identify(entry, ref))
-    return;
-  // Under a source that is offline, the name is whatever the library knew.
-  if (ref.source_name.empty())
-    ref.source_name = current_source_ ? current_source_->Name() : std::string();
-  const bool now = library_.ToggleFavorite(ref);
-  library_.Save();
-  ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
 }
 
 library::Ref App::SourceRef(const browse::SourcePtr& source) const {
@@ -81,13 +72,41 @@ library::Ref App::SourceRef(const browse::SourcePtr& source) const {
   ref.entry.type = browse::Entry::Type::Folder;
   ref.entry.name = source->Name();
   ref.entry.description = source->Detail();
+  // Its picture, as on the list of sources: its own logo, else artwork
+  // seen in it.
+  ref.entry.image = source->Image();
+  library::KnownSource known;
+  if (ref.entry.image.empty() && library_.FindKnownSource(ref.source_key, known))
+    ref.entry.image = known.image;
   return ref;
 }
 
-void App::ToggleSourceFavorite(const browse::SourcePtr& source) {
-  const bool now = library_.ToggleFavorite(SourceRef(source));
-  library_.Save();
-  ShowToast(now ? "Added to favorites" : "Removed from favorites", icon::kStar);
+std::string App::SourceFavoriteArt(const browse::Entry& entry, bool* logo) const {
+  if (logo)
+    *logo = false;
+  std::string key, id;
+  if (!entry.IsFolder() || !library::DecodeId(entry.id, key, id))
+    return {};
+  // Its top folder: by the source's root id once it is found; until then,
+  // by the name the library knows it by.
+  library::KnownSource known;
+  const bool remembered = library_.FindKnownSource(key, known);
+  std::string own;
+  if (const browse::SourcePtr source = registry_.Find(key)) {
+    if (id != source->RootId())
+      return {};
+    own = source->Image();
+  } else if (remembered && entry.name == known.name) {
+    own = known.logo;
+  } else {
+    return {};
+  }
+  if (!own.empty()) {
+    if (logo)
+      *logo = true;
+    return own;
+  }
+  return remembered ? known.image : std::string();
 }
 
 bool App::IsSnapshot(const std::string& image) const {
@@ -186,6 +205,12 @@ void App::OnLibraryChanged() {
   if (view_ != View::Browse)
     return;
 
+  // A folder of favorites: listed again, here and now (favorites moved,
+  // added or removed, folders made, renamed or deleted).
+  if (InFavoritesTree()) {
+    RefreshFavoritesLevel();
+    return;
+  }
   // A library view lists the library itself, so it is listed again; but
   // not under a playing item, whose neighbors would move around.
   const bool library_view = current_source_ &&

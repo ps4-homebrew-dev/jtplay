@@ -274,10 +274,17 @@ private:
   // The same, for an entry listed by 'source' rather than the current one.
   bool IdentifyIn(const browse::Entry& entry, const browse::SourcePtr& source,
                   library::Ref& out) const;
+  // Triangle: the save sheet for an entry (see OpenSaveSheet), to add it
+  // to Favorites, move it to another folder of them or remove it.
   void ToggleFavorite(const browse::Entry& entry);
-  // A source as a favorite: its top folder, kept against the source's key.
+  // A source as a favorite: its top folder, kept against the source's key,
+  // with its picture (its logo, or artwork seen in it).
   library::Ref SourceRef(const browse::SourcePtr& source) const;
   void ToggleSourceFavorite(const browse::SourcePtr& source);
+  // Of a favorite that is a source's top folder (see SourceRef): its
+  // picture as the source has it now, and whether that is its own logo
+  // (shown whole, as on the list of sources). "" for anything else.
+  std::string SourceFavoriteArt(const browse::Entry& entry, bool* logo = nullptr) const;
   // Snapshots of where a video was stopped (see RecordProgress) live in the
   // cache directory and go when their resume point does.
   bool IsSnapshot(const std::string& image) const;
@@ -297,11 +304,12 @@ private:
   void OnLibraryChanged();
 
   // --- Home view -----------------------------------------------------------
-  // Tabs across the top, Home, Sources and Settings (see app_home.cpp).
-  // Home's page is rows of cards: what plays, Continue watching and
-  // Favorites. Sources' page is the list of sources, in the browse view
-  // (see OpenSourcesList); Settings', a list of what can be set.
-  enum class RailKind { Home, Sources, Settings };
+  // Tabs across the top, Home, Favorites, Sources and Settings (see
+  // app_home.cpp). Home's page is rows of cards: what plays and Continue
+  // watching. Favorites' page is the favorites, in their folders, and
+  // Sources' the list of sources, both in the browse view (see
+  // OpenFavoritesTab, OpenSourcesList); Settings', a list of what can be set.
+  enum class RailKind { Home, Favorites, Sources, Settings };
   struct RailItem {
     RailKind kind;
   };
@@ -483,6 +491,80 @@ private:
     return view_ == View::Browse && current_source_ &&
            current_source_ == sources_source_ && path_.size() == 1;
   }
+
+  // The Favorites tab's page: the favorites outside any folder, and the
+  // folders made to sort the rest into (see library::FavoriteFolder), in
+  // the browse view. Select opens a folder as any other; back from the top
+  // returns to the tabs. The options menu makes, renames, moves and deletes
+  // folders, and moves favorites from one to another.
+  void OpenFavoritesTab();
+  bool OnFavoritesTab() const {
+    return view_ == View::Browse && current_source_ &&
+           current_source_ == favorites_source_ && path_.size() == 1 &&
+           path_[0].id.empty() && path_[0].query.empty();
+  }
+  // A page under a tab: the tabs are over it (see SetBrowseTabs).
+  bool OnTabPage() const { return OnSourcesList() || OnFavoritesTab(); }
+  // From one tab page along the tabs to the one at 'index' (another page,
+  // or Home's or Settings' tab), the focus staying on the tabs.
+  void GoToTab(int index);
+  // The folder of favorites on screen: the top or one of those made for
+  // them (not a favorite folder of a source's, nor search results).
+  bool InFavoritesTree() const;
+  std::string CurrentFavoritesFolder() const; // "" = the top
+  // Lists that folder again, on 'select' (an entry id) if given, else on
+  // the same entry; a folder that has gone is left for the one above it.
+  void RefreshFavoritesLevel(const std::string& select = std::string());
+  // The options menu's part for a folder of favorites, and for moving a
+  // favorite or a folder into another (a list of them, the top first).
+  void AddFavoriteFolderActions(const browse::Entry& entry);
+  // Asks before deleting a folder of favorites with anything in it, as
+  // that goes too; an empty one goes at once.
+  void ConfirmDeleteFavoriteFolder(const std::string& folder);
+  void NewFavoritesFolder();
+
+  // --- The folder picker ---------------------------------------------------
+  // Where something goes in Favorites: a dialog in the middle of the
+  // screen, as file dialogs are. The path to the folder on screen, the
+  // folders in it (".." up first, below the top), and New folder, Cancel
+  // and OK; OK saves (or moves) into the folder on screen. (Named "sheet"
+  // in the code, after what it first was.)
+  struct SheetRow {      // a row, for the data model
+    Rml::String icon;
+    Rml::String label;
+    Rml::String detail;  // a folder's count of what is in it
+    Rml::String kind;    // "up", "folder"
+    bool current = false; // where it is now, or leads there
+  };
+  struct SheetLine {     // what a row stands for
+    enum class Kind { Up, Folder } kind;
+    std::string folder;
+  };
+  enum SheetButton { kSheetNewFolder, kSheetCancel, kSheetOk, kSheetButtons };
+  // 'ref' as the library keeps it, 'name' as it is shown.
+  void OpenSaveSheet(const library::Ref& ref, const std::string& name);
+  void OpenFolderMoveSheet(const std::string& folder);
+  // Shows the folder 'at' ("" the top), on the row of folder 'select' if
+  // given.
+  void SheetShow(const std::string& at, const std::string& select = std::string());
+  void SheetChoose(const std::string& folder);
+  void SheetUp();
+  void CloseSheet();
+  void HandleKeySheet(Rml::Event& event, int key);
+  bool sheet_folder_mode_ = false;   // moving a folder (sheet_folder_), not a favorite
+  std::string sheet_folder_;
+  library::Ref sheet_ref_;
+  bool sheet_was_favorite_ = false;
+  std::string sheet_current_;        // the folder it is in now, if it is in one
+  std::string sheet_at_;             // the folder on screen, "" the top
+  std::vector<SheetLine> sheet_lines_;
+  std::vector<SheetRow> sheet_rows_;
+  int sel_sheet_row_ = 0;
+  int sel_sheet_button_ = kSheetOk;
+  bool bind_sheet_open_ = false;
+  bool bind_sheet_on_buttons_ = true; // the focus on the buttons, not the list
+  Rml::String bind_sheet_title_;
+  Rml::String bind_sheet_path_;      // the folder on screen, from the top
   // A source as listed there: its key, and the source if it is found.
   struct ListedSource {
     std::string key, name;
@@ -496,14 +578,16 @@ private:
   const char* EntryIcon(const browse::Entry& e) const;
   std::string sources_list_key_;      // last opened from the list
   bool from_sources_list_ = false;    // the source on screen was
-  // The list of sources is the Sources tab's page: on screen, it has the
-  // tabs above it, and the focus may be up on them (moving along them
-  // leaves it for the others).
+  // The list of sources is the Sources tab's page, and the favorites the
+  // Favorites tab's: on screen, either has the tabs above it, and the focus
+  // may be up on them (moving along them leaves it for the others). (The
+  // binding's name is from when Sources had the only such page.)
   bool bind_sources_tab_ = false;
   bool bind_browse_tabs_ = false;
   void SetBrowseTabs(bool on);
-  // From the list's tabs to another tab ("home", "settings"), the focus
-  // staying on the tabs; or down into Home's rows ('rows').
+  // From a tab page's tabs to Home's or Settings' tab ("home",
+  // "settings"), the focus staying on the tabs; or down into Home's rows
+  // ('rows').
   void LeaveSourcesTab(const std::string& tab, bool rows);
   void HandleKeySourcesTabs(Rml::Event& event, int key);
   // The search dialog asking for something else (OpenTextEntry): who gets
@@ -945,6 +1029,7 @@ private:
   int item_count_ = 0;                 // entries shown (without it)
   int entry_total_ = 0;                // entries of the folder, filtered or not
   bool bind_has_more_ = false;         // the list ends in "Load more"
+  Rml::String bind_empty_text_ = "This folder is empty."; // what an empty one says
 
   // Backing data (main thread).
   std::vector<std::unique_ptr<browse::Provider>> providers_;
@@ -1059,6 +1144,7 @@ private:
   // The same, a frame later: for rows a reply has just added, which the
   // list has no room for until the context has laid them out.
   bool scroll_entries_deferred_ = false;
+  bool scroll_sheet_pending_ = false; // the save sheet's selection into view
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
   bool scroll_rows_pending_ = false;    // Home's rows, onto the focus

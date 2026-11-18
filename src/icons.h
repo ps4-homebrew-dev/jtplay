@@ -52,6 +52,8 @@ inline constexpr const char* kHeadphones = "\uE0F4";    // headphones
 inline constexpr const char* kLibrary = "\uE553";       // library-big
 inline constexpr const char* kSubtitles = "\uE3A8";     // captions
 inline constexpr const char* kMore = "\uE075";          // chevrons-down
+inline constexpr const char* kFavoriteFolder = "\uE337"; // folder-heart
+inline constexpr const char* kChevronRight = "\uE073";  // chevron-right
 
 // A source's icon as a plugin gives it, an emoji, as the icon that stands
 // for the same thing; one with no counterpart is kept as it is (the emoji

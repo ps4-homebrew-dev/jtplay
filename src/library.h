@@ -50,6 +50,14 @@ struct KnownSource {
   int64_t used = 0;     // epoch seconds it was last opened, 0 = never
 };
 
+// A folder of favorites, made by the user to sort them into; folders go
+// inside folders. 'parent' is the folder it is in, "" for the top.
+struct FavoriteFolder {
+  std::string id;
+  std::string name;
+  std::string parent;
+};
+
 // Something played lately (see App::RecordRecent), which a search of
 // everything looks through by name before it asks the sources.
 struct Recent {
@@ -82,9 +90,45 @@ public:
   void Save();
 
   bool IsFavorite(const std::string& source_key, const std::string& id) const;
-  // Adds or removes; returns whether it is a favorite now.
+  // Adds (at the top, outside any folder) or removes; returns whether it
+  // is a favorite now.
   bool ToggleFavorite(const Ref& ref);
+  // Adds into 'folder' ("" the top, as is a folder that is not there); one
+  // that is a favorite already is moved there.
+  void AddFavorite(const Ref& ref, const std::string& folder);
+  // Every favorite, in whatever folder, in the order they were added.
   std::vector<Ref> Favorites() const;
+
+  // The folders favorites are sorted into. A favorite is in one folder or
+  // none (the top), as is a folder; folders are listed in the order they
+  // were made, favorites in the order they were added.
+  std::vector<Ref> FavoritesIn(const std::string& folder) const;
+  std::vector<FavoriteFolder> FavoriteFolders() const; // all of them
+  // How many folders and favorites each folder holds, by its id.
+  std::map<std::string, size_t> FavoriteFolderCounts() const;
+  bool FindFavoriteFolder(const std::string& id, FavoriteFolder& out) const;
+  // The folder a favorite is in, "" for the top (or for no favorite).
+  std::string FavoriteFolderOf(const std::string& source_key, const std::string& id) const;
+  // Makes a folder in 'parent' ("" the top); returns its id, "" when
+  // 'parent' is not there.
+  std::string AddFavoriteFolder(const std::string& parent, const std::string& name);
+  bool RenameFavoriteFolder(const std::string& id, const std::string& name);
+  // Deletes a folder with everything in it: the folders inside it, however
+  // deep, and the favorites in any of them.
+  bool DeleteFavoriteFolder(const std::string& id);
+  // What deleting it would take: the favorites and the folders in it,
+  // however deep.
+  void FavoriteFolderContents(const std::string& id, size_t& favorites,
+                              size_t& folders) const;
+  // Into 'folder' ("" the top). A folder cannot go into itself, or into a
+  // folder inside it.
+  bool MoveFavorite(const std::string& source_key, const std::string& id,
+                    const std::string& folder);
+  bool MoveFavoriteFolder(const std::string& id, const std::string& parent);
+  // The folders favorites were saved or moved to lately, the last first
+  // ("" the top), for saving the next one there with a press.
+  void NoteFavoriteFolderUsed(const std::string& folder);
+  std::vector<std::string> RecentFavoriteFolders() const;
   // The name the library remembers for a source, "" if it has none.
   std::string SourceName(const std::string& source_key) const;
 
@@ -120,6 +164,7 @@ public:
   bool SetSourceImage(const std::string& key, const std::string& image);
   void ForgetSource(const std::string& key);
   std::vector<KnownSource> KnownSources() const;
+  bool FindKnownSource(const std::string& key, KnownSource& out) const;
 
   // Where each source was left, to open it there again; an empty list
   // forgets it. Not a change of the library as views see it (no new
@@ -154,7 +199,16 @@ private:
   std::string path_;
   bool dirty_ = false;
   uint64_t generation_ = 0;
-  std::vector<Ref> favorites_;          // in the order they were added
+  struct Favorite {
+    Ref ref;
+    std::string folder;                 // FavoriteFolder::id, "" = the top
+  };
+  bool HasFolder(const std::string& id) const;    // "" (the top) too
+  bool Inside(std::string id, const std::string& ancestor) const;
+  std::vector<Favorite> favorites_;     // in the order they were added
+  std::vector<FavoriteFolder> folders_; // in the order they were made
+  uint64_t next_folder_ = 1;            // for the next folder's id
+  std::vector<std::string> recent_folders_; // see RecentFavoriteFolders
   std::map<std::string, Item> progress_;
   std::vector<Recent> recent_;          // most recent first
   std::vector<KnownSource> sources_;    // in the order they were found
@@ -184,6 +238,12 @@ private:
 // everything below a favorite folder still knows where it came from.
 std::string EncodeId(const std::string& source_key, const std::string& id);
 bool DecodeId(const std::string& encoded, std::string& source_key, std::string& id);
+
+// Under Favorites, a folder of them (FavoriteFolder) is listed under an id
+// of its own ("fav:<id>"), which no entry of a source has there (theirs are
+// encoded, above).
+std::string FavoriteFolderEntryId(const std::string& folder);
+bool FavoriteFolderFromEntryId(const std::string& entry_id, std::string& folder);
 
 class LibrarySource : public browse::Source {
 public:

@@ -359,14 +359,20 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       // A folder that holds one folder and nothing else (a server's
       // "Video" holding only "All video"): that one is opened in its place,
       // and back passes over it. Not while coming back up to it.
+      // (Not a folder made for favorites: holding one folder is what it
+      // was made for, and it is where favorites are moved about.)
+      std::string fav_folder;
+      const bool favorites_tree = current_source_ == favorites_source_ &&
+        (id.empty() || library::FavoriteFolderFromEntryId(id, fav_folder));
       const bool through = !replace && keep_id.empty() && level.raw.size() == 1 &&
                            level.raw[0].IsFolder() && level.filter.empty() &&
-                           level.next.empty();
+                           level.next.empty() && !favorites_tree;
       const browse::Entry only = through ? level.raw[0] : browse::Entry();
       level.passthrough = through;
       // Back reached a folder above a reopened one, and it holds nothing
       // but that one: passed over, as it was on the way down.
-      if (was_stale && level.raw.size() == 1 && level.raw[0].IsFolder() && level.next.empty()) {
+      if (was_stale && level.raw.size() == 1 && level.raw[0].IsFolder() && level.next.empty() &&
+          !favorites_tree) {
         level.passthrough = true;
         path_.push_back(std::move(level));
         LeaveContainer();
@@ -440,7 +446,7 @@ void App::LeaveContainer() {
     }
     // The list itself: up to its tab. Anything else: home, to the card
     // it was opened from.
-    if (current_source_ == sources_source_) {
+    if (current_source_ == sources_source_ || OnFavoritesTab()) {
       SetBrowseTabs(true);
       return;
     }
@@ -458,6 +464,13 @@ void App::LeaveContainer() {
     return;
   }
   sel_entry_ = level.selection;
+  // A folder of favorites says what is in it as it is now: what was moved
+  // or deleted below it is.
+  if (InFavoritesTree()) {
+    RefreshFavoritesLevel();
+    RebuildCrumb();
+    return;
+  }
   RebuildEntryRows();
   RebuildCrumb();
   RebuildDetail();
@@ -496,6 +509,12 @@ void App::RebuildEntryRows() {
   }
   item_count_ = (int)entry_rows_.size();
   Set("has_more", bind_has_more_, HasMore());
+  // Favorites, and their folders, say how they fill up.
+  Set("empty_text", bind_empty_text_, Rml::String(
+    OnFavoritesTab() ? "Nothing pinned yet. Triangle on any folder or item adds it here."
+    : InFavoritesTree() ? "Nothing in this folder yet. Move to... in the options menu "
+                          "of a favorite puts it here."
+    : "This folder is empty."));
   if (bind_has_more_) {
     EntryRow row;
     row.icon = icon::kMore;
@@ -532,8 +551,9 @@ void App::RebuildCrumb() {
     crumb += path_[i].name;
   }
   Set("crumb", bind_crumb_, crumb);
-  // The list of sources is the Sources tab's page: the tabs over it.
-  Set("sources_tab", bind_sources_tab_, OnSourcesList());
+  // The list of sources is the Sources tab's page, the favorites (their
+  // top) the Favorites tab's: the tabs over them.
+  Set("sources_tab", bind_sources_tab_, OnTabPage());
   if (!bind_sources_tab_ && bind_browse_tabs_)
     SetBrowseTabs(false);
 }
@@ -874,13 +894,13 @@ void App::ActivateSelection() {
 }
 
 void App::HandleKeyBrowse(Rml::Event& event, int key) {
-  if (bind_browse_tabs_ && OnSourcesList()) {
+  if (bind_browse_tabs_ && OnTabPage()) {
     HandleKeySourcesTabs(event, key);
     return;
   }
   const bool grid = view_mode_ == ViewMode::Grid;
-  // The list of sources: up from its first row reaches the tabs over it.
-  if (key == Rml::Input::KI_UP && OnSourcesList() &&
+  // A tab page: up from its first row reaches the tabs over it.
+  if (key == Rml::Input::KI_UP && OnTabPage() &&
       sel_entry_ < (grid ? kGridColumns : 1)) {
     SetBrowseTabs(true);
     event.StopPropagation();
@@ -1131,7 +1151,7 @@ void App::AddEntryActions(const browse::Entry& entry) {
     // (Anything else plays with select: no entry for that.)
   }
   const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-  AddMenuItem({fav ? "Remove from favorites" : "Add to favorites",
+  AddMenuItem({fav ? "Remove from favorites" : "Add to favorites\u2026",
     nullptr, [this, entry](int) { ToggleFavorite(entry); }});
   if (entry.IsVideo() || entry.IsAudio()) {
     library::Progress p;
@@ -1178,6 +1198,15 @@ void App::OpenMenu() {
       [this](int) {
         SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
       }});
+  } else if (view_ == View::Browse && bind_browse_tabs_ && OnFavoritesTab()) {
+    // Up on the Favorites tab: likewise.
+    Set("menu_title", bind_menu_title_, Rml::String("Favorites"));
+    AddMenuItem({"New folder", nullptr, [this](int) { NewFavoritesFolder(); }});
+    AddMenuItem({"View",
+      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
+      [this](int) {
+        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
+      }});
   } else if (view_ == View::Browse) {
     // The item in focus first: it is what the menu was most likely opened
     // for, and its name is the menu's title.
@@ -1190,7 +1219,7 @@ void App::OpenMenu() {
       Set("menu_title", bind_menu_title_, Rml::String(source.name));
       if (source.source) {
         const bool fav = library_.IsFavorite(source.key, source.source->RootId());
-        AddMenuItem({fav ? "Remove from favorites" : "Add to favorites", nullptr,
+        AddMenuItem({fav ? "Remove from favorites" : "Add to favorites\u2026", nullptr,
           [this, s = source.source](int) {
             ToggleSourceFavorite(s);
             RebuildEntryRows();
@@ -1202,9 +1231,21 @@ void App::OpenMenu() {
           RefreshSourcesList();
         }});
       }
+    } else if (std::string folder;
+               e && InFavoritesTree() && library::FavoriteFolderFromEntryId(e->id, folder)) {
+      Set("menu_title", bind_menu_title_, DisplayName(*e));
+      AddFavoriteFolderActions(*e);
     } else if (e) {
       Set("menu_title", bind_menu_title_, DisplayName(*e));
       AddEntryActions(*e);
+      // A favorite, where favorites are sorted: into another folder.
+      library::Ref ref;
+      if (InFavoritesTree() && Identify(*e, ref) &&
+          library_.IsFavorite(ref.source_key, ref.entry.id)) {
+        AddMenuItem({"Move to\u2026", nullptr, [this, ref, entry = *e](int) {
+          OpenSaveSheet(ref, DisplayName(entry));
+        }});
+      }
     }
 
     // (The list of sources: what is done to the lot of them.)
@@ -1227,6 +1268,8 @@ void App::OpenMenu() {
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
+    if (InFavoritesTree())
+      AddMenuItem({"New folder", nullptr, [this](int) { NewFavoritesFolder(); }});
     if (HasMore())
       AddMenuItem({"Load more", nullptr, [this](int) { LoadMore(); }});
     AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
@@ -1297,6 +1340,138 @@ void App::OpenMenu() {
   if (menu_items_.empty())
     return; // nothing to offer on the top level of the rail
   ShowMenu();
+}
+
+// ---------------------------------------------------------------------------
+// Folders of favorites (the Favorites tab)
+// ---------------------------------------------------------------------------
+
+bool App::InFavoritesTree() const {
+  if (view_ != View::Browse || current_source_ != favorites_source_ || path_.empty())
+    return false;
+  const BrowseLevel& level = path_.back();
+  std::string folder;
+  return level.query.empty() && level.error.empty() &&
+         (level.id.empty() || library::FavoriteFolderFromEntryId(level.id, folder));
+}
+
+std::string App::CurrentFavoritesFolder() const {
+  std::string folder;
+  if (InFavoritesTree())
+    library::FavoriteFolderFromEntryId(path_.back().id, folder);
+  return folder;
+}
+
+void App::RefreshFavoritesLevel(const std::string& select) {
+  if (!InFavoritesTree())
+    return;
+  // Listed here and now: it is the library, and quick.
+  browse::Listing listing;
+  std::string error;
+  while (!favorites_source_->Browse(path_.back().id, listing, error)) {
+    // Deleted (from inside it, or one above it): the one above it, then.
+    if (path_.size() <= 1)
+      return;
+    path_.pop_back();
+    listing.clear();
+  }
+  BrowseLevel& level = *CurrentLevel();
+  std::string keep = select;
+  if (keep.empty())
+    if (const browse::Entry* e = SelectedEntry())
+      keep = e->id;
+  // (A folder renamed is named anew in the path, too.)
+  std::string folder;
+  library::FavoriteFolder f;
+  if (library::FavoriteFolderFromEntryId(level.id, folder) &&
+      library_.FindFavoriteFolder(folder, f))
+    level.name = f.name;
+  const int was = sel_entry_;
+  level.raw = std::move(listing);
+  level.selection = -1;
+  SortLevel(level);
+  level.selection = std::clamp(was, 0, std::max(0, (int)level.entries.size() - 1));
+  for (size_t i = 0; i < level.entries.size() && !keep.empty(); i++) {
+    if (level.entries[i].id == keep) {
+      level.selection = (int)i;
+      break;
+    }
+  }
+  sel_entry_ = level.selection;
+  RebuildEntryRows();
+  RebuildCrumb();
+  RebuildDetail();
+  scroll_entries_pending_ = true;
+}
+
+void App::NewFavoritesFolder() {
+  const std::string parent = CurrentFavoritesFolder();
+  OpenTextEntry("New folder", std::string(), kFolderNameMaxLength, false,
+                [this, parent](const std::string& name) {
+    const std::string id = library_.AddFavoriteFolder(parent, name);
+    if (id.empty())
+      return;
+    library_.Save();
+    if (CurrentFavoritesFolder() == parent)
+      RefreshFavoritesLevel(library::FavoriteFolderEntryId(id));
+  });
+}
+
+void App::AddFavoriteFolderActions(const browse::Entry& entry) {
+  std::string folder;
+  library::FavoriteFolder f;
+  if (!library::FavoriteFolderFromEntryId(entry.id, folder) ||
+      !library_.FindFavoriteFolder(folder, f))
+    return;
+  AddMenuItem({"Rename", nullptr, [this, f](int) {
+    OpenTextEntry("Rename folder", f.name, kFolderNameMaxLength, false,
+                  [this, f](const std::string& name) {
+      if (library_.RenameFavoriteFolder(f.id, name))
+        library_.Save();
+    });
+  }});
+  AddMenuItem({"Move to\u2026", nullptr, [this, f](int) { OpenFolderMoveSheet(f.id); }});
+  AddMenuItem({"Delete folder", nullptr,
+               [this, id = f.id](int) { ConfirmDeleteFavoriteFolder(id); }});
+}
+
+void App::ConfirmDeleteFavoriteFolder(const std::string& folder) {
+  library::FavoriteFolder f;
+  if (!library_.FindFavoriteFolder(folder, f))
+    return;
+  size_t favorites = 0, folders = 0;
+  library_.FavoriteFolderContents(folder, favorites, folders);
+  auto remove = [this, f] {
+    library_.DeleteFavoriteFolder(f.id);
+    library_.Save();
+    ShowToast("Deleted \u201c" + f.name + "\u201d", icon::kFavoriteFolder);
+  };
+  if (favorites == 0 && folders == 0) {
+    remove();
+    return;
+  }
+  // What goes with it, in words: "3 favorites and 1 folder".
+  auto count = [](size_t n, const char* one, const char* many) {
+    return std::to_string(n) + " " + (n == 1 ? one : many);
+  };
+  std::string what;
+  if (favorites > 0)
+    what = count(favorites, "favorite", "favorites");
+  if (folders > 0)
+    what += (what.empty() ? "" : " and ") + count(folders, "folder", "folders");
+  menu_items_.clear();
+  menu_section_.clear();
+  menu_parent_ = nullptr;
+  menu_items_.push_back({"Delete", nullptr, [remove](int) { remove(); }});
+  menu_items_.push_back({"Cancel", nullptr, [](int) {}});
+  Set("menu_title", bind_menu_title_, Rml::String("Delete \u201c" + f.name + "\u201d?"));
+  Set("menu_meta", bind_menu_meta_,
+      Rml::String("The " + what + " in it will be removed from your favorites too."));
+  Set("menu_progress", bind_menu_progress_, Rml::String("0%"));
+  Set("menu_dialog", bind_menu_dialog_, true);
+  sel_menu_ = 1; // the safe one: a stray press of select changes nothing
+  RebuildMenuRows();
+  Set("menu_open", bind_menu_open_, true);
 }
 
 // ---------------------------------------------------------------------------

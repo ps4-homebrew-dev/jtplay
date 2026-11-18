@@ -279,7 +279,7 @@ void App::OpenPhotoMenu() {
     library::Ref ref;
     if (Identify(entry, ref)) {
       const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-      AddMenuItem({fav ? "Remove from favorites" : "Add to favorites",
+      AddMenuItem({fav ? "Remove from favorites" : "Add to favorites\u2026",
         nullptr, [this, entry](int) { ToggleFavorite(entry); }});
     }
   }
