@@ -37,6 +37,12 @@
 // shows), the home country's from anywhere else. Narrowing what is
 // listed, like the episodes of a show, is the app's own Filter.
 //
+// A show lists its newest MAX_EPISODES episodes, and the next as many when
+// more are asked for (browse(id, next)): the cursor is where in the feed, in
+// bytes, the next episode starts, and that part of the feed is asked for
+// with a Range header. Of a server that ignores the header, only the
+// episodes in the first FEED_BYTES of the feed are to be had.
+//
 // Episodes are long enough to count as audiobooks for the app, so they
 // remember where they were stopped, show up under Continue watching and
 // get a tick when finished, like videos do.
@@ -164,19 +170,52 @@ function getJson(url) {
     return JSON.parse(getText(url));
 }
 
-// The first FEED_BYTES of a feed. Servers that honour Range send just that;
-// for the rest, maxBytes makes the app cut the body short instead of
-// refusing it. Uncompressed, so a byte range is a range of the text.
-function getFeedText(url) {
-    return getText(url, {
+// FEED_BYTES of a feed from byte 'from' on. Servers that honour Range send
+// just that; for the rest, maxBytes makes the app cut the body short
+// instead of refusing it. Uncompressed, so a byte range is a range of the
+// text. { text, from: where the text starts (0 when the server sent the
+// feed from its start), more: whether the feed goes on past it }.
+function getFeedPart(url, from) {
+    const res = http.get(url, {
         timeout: 20,
         maxBytes: FEED_BYTES,
         headers: {
-            "Range": "bytes=0-" + (FEED_BYTES - 1),
+            "Range": "bytes=" + from + "-" + (from + FEED_BYTES - 1),
             "Accept-Encoding": "identity"
         }
     });
+    if (!res.ok)
+        throw new Error("HTTP " + res.status + " from " + url);
+    // "bytes 0-4194303/12345678"
+    const range = /bytes\s+(\d+)-(\d+)\/(\d+|\*)/i.exec(res.headers["content-range"] || "");
+    if (res.status === 206 && range) {
+        const end = Number(range[2]), total = range[3] === "*" ? Infinity : Number(range[3]);
+        return { text: res.body, from: Number(range[1]), more: res.truncated || end + 1 < total };
+    }
+    return { text: res.body, from: 0, more: !!res.truncated };
 }
+
+// Where in 's' its UTF-8 reaches 'bytes' bytes (s.length if it is
+// shorter), and that many bytes: where in the feed's bytes a place in its
+// text is, and the other way round.
+function utf8Walk(s, bytes) {
+    let n = 0, i = 0;
+    while (i < s.length && n < bytes) {
+        const c = s.charCodeAt(i);
+        if (c < 0x80)
+            n += 1;
+        else if (c < 0x800)
+            n += 2;
+        else if (c >= 0xd800 && c < 0xdc00 && i + 1 < s.length) {
+            n += 4;
+            i++;
+        } else
+            n += 3;
+        i++;
+    }
+    return { index: i, bytes: n };
+}
+const utf8Length = s => utf8Walk(s, Infinity).bytes;
 
 // --- A little RSS reading ------------------------------------------------
 
@@ -302,13 +341,19 @@ function parseEpisode(item, showImage) {
     };
 }
 
-function parseFeed(xml) {
+// A part of a feed: the start of it (with the show's title and picture), or
+// a part further on (starting with an episode), when 'showImage' is the
+// show's picture as the start had it. Besides the episodes, 'stop' is where
+// in the text the first episode not read starts (or the one cut off by the
+// end of the text begins), -1 when the text has no more.
+function parseFeed(xml, showImage) {
+    const further = showImage !== undefined;
     let pos = nextItem(xml, 0);
     const head = pos < 0 ? xml : xml.slice(0, pos);
     // iTunes artwork, else the plain RSS <image><url>.
     const rssImage = /<image>[\s\S]*?<\/image>/i.exec(head);
     // The channel's own <title>, not the one inside <image>.
-    const show = {
+    const show = further ? { title: "", image: showImage, episodes: [] } : {
         title: tagText(head.replace(/<image>[\s\S]*?<\/image>/gi, ""), "title"),
         image: tagAttr(head, "itunes:image", "href") ||
             (rssImage ? tagText(rssImage[0], "url") : ""),
@@ -325,15 +370,50 @@ function parseFeed(xml) {
             show.episodes.push(ep);
         pos = nextItem(xml, end + 7);
     }
-    if (!show.episodes.length && !/<rss[\s>]/i.test(head))
+    show.stop = pos;
+    if (!further && !show.episodes.length && !/<rss[\s>]/i.test(head))
         throw new Error("not a podcast feed");
     // Most feeds are newest first already; serial shows are not.
     show.episodes.sort((a, b) => b.date - a.date);
     return show;
 }
 
-function readFeed(url) {
-    return cached("feed:" + url, 15, () => parseFeed(getFeedText(url)));
+// The show of a feed, with MAX_EPISODES of its episodes from byte 'from'
+// on (0, the start: the newest), and 'next', the byte the next of them
+// starts at when there are more.
+function readFeed(url, from) {
+    from = from || 0;
+    return cached("feed:" + url + (from ? "#" + from : ""), 15, () => {
+        let image;
+        if (from) {
+            const start = cache["feed:" + url];
+            image = start ? start.value.image : "";
+        }
+        const part = getFeedPart(url, from);
+        if (part.from !== from) {
+            // The server sent the feed from its start: the episodes from
+            // 'from' on are those of it that came.
+            const at = utf8Walk(part.text, from);
+            if (at.bytes < from) {
+                console.warn("podcasts: " + url + " ignores Range; no more episodes from it");
+                return { title: "", image: image, episodes: [] };
+            }
+            part.text = part.text.slice(at.index);
+        }
+        const show = parseFeed(part.text, from ? image : undefined);
+        // An episode not read is more; so is one cut off where the text
+        // ends, if the feed goes on.
+        const cutOff = show.stop >= 0 && part.text.indexOf("</item>", show.stop) < 0;
+        if (show.stop >= 0 && (!cutOff || part.more))
+            show.next = from + utf8Length(part.text.slice(0, show.stop));
+        return show;
+    });
+}
+
+// A page of a show's episodes, as browse() hands it out.
+function feedPage(url, next) {
+    const show = readFeed(url, Math.max(0, Math.floor(Number(next)) || 0));
+    return { entries: show.episodes, next: show.next };
 }
 
 function showFolder(id, name, description, image) {
@@ -484,17 +564,19 @@ function countryOf(folderId) {
     return homeCountry();
 }
 
-function browseApple(cc, id) {
+function browseApple(cc, id, next) {
     let reason = "this show has no public feed";
     const url = feedOfApple(cc, id);
     if (url) {
         try {
-            return readFeed(url).episodes;
+            return feedPage(url, next);
         } catch (e) {
             reason = e.message;
             console.warn("podcasts: " + url + ": " + reason + "; trying Apple's episode list");
         }
     }
+    if (next)
+        throw new Error(reason); // (Apple's list has no more)
     const episodes = appleEpisodes(cc, id);
     if (!episodes.length)
         throw new Error(reason);
@@ -522,7 +604,7 @@ return {
             search(query, folderId) {
                 return searchShows(query, countryOf(folderId));
             },
-            browse(id) {
+            browse(id, next) {
                 if (id === "/")
                     return browseRoot();
                 if (id === "top")
@@ -536,10 +618,10 @@ return {
                 if (id.startsWith("genre:"))
                     return browseGenre(id.slice(6));
                 if (id.startsWith("feed:"))
-                    return readFeed(id.slice(5)).episodes;
+                    return feedPage(id.slice(5), next);
                 if (id.startsWith("apple:")) {
                     const show = parseApple(id.slice(6));
-                    return browseApple(show[0], show[1]);
+                    return browseApple(show[0], show[1], next);
                 }
                 throw new Error("unknown folder " + id);
             }

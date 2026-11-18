@@ -12,6 +12,10 @@
 //
 // Search (options menu) searches the talks of all conferences.
 //
+// Recent talks and search results come a page at a time (the API pages
+// them); the number of the page after is the cursor the app hands back for
+// more (browse(id, next)).
+//
 // A talk is played through resolve(), which asks for its recordings and
 // picks one: video rather than the audio-only file, the size the Video
 // quality setting asks for, and of those the file with the most languages
@@ -23,19 +27,41 @@
 //   /public/conferences               { conferences: [{ acronym, title,
 //                                       logo_url, event_last_released_at }] }
 //   /public/conferences/<acronym>     the same for one, plus { events: [...] }
-//   /public/events/recent             { events: [{ guid, title, subtitle,
-//   /public/events/search?q=            description, persons, duration,
+//   /public/events/recent?page=       { events: [{ guid, title, subtitle,
+//   /public/events/search?q=&page=      description, persons, duration,
 //                                       poster_url, thumb_url, release_date,
 //                                       view_count, conference_title }] }
 //   /public/events/<guid>             one event, plus { recordings: [{
 //                                       recording_url, mime_type, language,
 //                                       high_quality, width, height }] }
+// The two lists are paged: a response that has a page after it says so in
+// a Link header (rel="next").
 
 const API = "https://api.media.ccc.de/public";
 const CACHE_SEC = 10 * 60;
+// Talks a page of search results asks for (the API's default is 25).
+const PER_PAGE = 100;
 
 function get(path) {
     return http.json(API + path, { headers: { Accept: "application/json" }, timeout: 30 });
+}
+
+// The page a cursor names: 1 for none.
+const pageOf = next => Math.max(1, Math.floor(Number(next)) || 1);
+
+// One page of a paged list of talks ('path' takes a page= parameter), and
+// the number of the next when the API says there is one.
+function talksPage(path, page) {
+    const res = http.get(API + path + (path.indexOf("?") < 0 ? "?" : "&") + "page=" + page,
+                         { headers: { Accept: "application/json" }, timeout: 30 });
+    if (!res.ok)
+        throw new Error("HTTP " + res.status + " from media.ccc.de");
+    const events = res.json().events;
+    const more = /rel="?next"?/.test(res.headers.link || "");
+    return {
+        entries: talks(events),
+        next: more && Array.isArray(events) && events.length ? page + 1 : undefined
+    };
 }
 
 function talk(e) {
@@ -140,7 +166,7 @@ return {
             image: "https://media.ccc.de/favicon-96x96.png",
             root: "/",
 
-            browse(id) {
+            browse(id, next) {
                 if (id === "/")
                     return [
                         { id: "recent", type: "folder", name: "Recent talks",
@@ -148,8 +174,11 @@ return {
                         { id: "conferences", type: "folder", name: "Conferences",
                           description: "Every event, the latest first" }
                     ];
-                if (id === "recent")
-                    return util.memo(id, CACHE_SEC, () => talks(get("/events/recent").events));
+                if (id === "recent") {
+                    const page = pageOf(next);
+                    return util.memo(id + "#" + page, CACHE_SEC,
+                                     () => talksPage("/events/recent", page));
+                }
                 if (id === "conferences")
                     return conferences();
                 if (id.startsWith("c:"))
@@ -158,8 +187,9 @@ return {
                 throw new Error("unknown folder " + id);
             },
 
-            search(query) {
-                return talks(get("/events/search?q=" + encodeURIComponent(query)).events);
+            search(query, folderId, next) {
+                return talksPage("/events/search?q=" + encodeURIComponent(query) +
+                                 "&per_page=" + PER_PAGE, pageOf(next));
             },
 
             resolve(id) {

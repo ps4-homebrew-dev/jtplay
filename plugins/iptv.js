@@ -36,7 +36,7 @@ const CHANNELS_TTL_S = 30 * 60;   // a playlist of channels
 // channels, is a few megabytes; more than the host's most is not read.
 const INDEX_MAX_BYTES = 8 << 20;
 
-// How many hits a search shows at most.
+// How many hits a search lists at a time.
 const SEARCH_LIMIT = 300;
 
 function folder(id, name, description) {
@@ -232,19 +232,22 @@ function playlistOf(id) {
     return "";
 }
 
-function search(query, folderId) {
+// SEARCH_LIMIT hits at a time: the cursor for more is where in the
+// channels the search goes on from.
+function search(query, folderId, next) {
     const words = String(query).toLowerCase().split(/\s+/).filter(w => w);
     if (!words.length)
         return [];
     const path = playlistOf(folderId);
     const pool = path ? channels(path) : everything();
     const hits = [];
-    for (const e of pool) {
+    for (let i = Math.max(0, Math.floor(Number(next)) || 0); i < pool.length; i++) {
+        const e = pool[i];
         const name = e.name.toLowerCase();
         if (words.every(w => name.indexOf(w) >= 0)) {
-            hits.push(e);
             if (hits.length >= SEARCH_LIMIT)
-                break;
+                return { entries: hits, next: i };
+            hits.push(e);
         }
     }
     return hits;
@@ -277,8 +280,8 @@ return {
                 }
                 throw new Error("unknown folder " + id);
             },
-            search(query, folderId) {
-                return search(query, folderId);
+            search(query, folderId, next) {
+                return search(query, folderId, next);
             },
             // The stream, with the headers its server wants.
             resolve(id) {
