@@ -14,6 +14,10 @@
 // Search (options menu) searches all recordings: a subject, a member, a
 // minister.
 //
+// A listing comes two pages of fifty at a time, asked for together; the
+// number of the page after them is the cursor the app hands back for more
+// (browse(id, next)).
+//
 // The listings come from the open data API's podcast format, which has
 // what a listing needs per recording: title, speaker, poster frame,
 // duration, date, the debate's document id and its sound as MP3:
@@ -92,15 +96,21 @@ function recording(item) {
     };
 }
 
-// The recordings a query finds: its first pages, side by side.
-function recordings(extra) {
+// The page a cursor names: 1 for none.
+const pageOf = next => Math.max(1, Math.floor(Number(next)) || 1);
+
+// The recordings a query finds, PAGES pages of them from 'first' on, side
+// by side, and the page after them when the last of them was full (the feed
+// does not say how many there are).
+function recordings(extra, first) {
     const urls = [];
-    for (let page = 1; page <= PAGES; page++)
+    for (let page = first; page < first + PAGES; page++)
         urls.push({ url: listUrl(extra, page), timeout: 30 });
     const out = [];
     const seen = {};
     let failure = null;
-    http.all(urls).forEach(res => {
+    let full = false;
+    http.all(urls).forEach((res, i) => {
         if (!res.ok) {
             failure = failure || res.error || "HTTP " + res.status;
             return;
@@ -112,7 +122,10 @@ function recordings(extra) {
             failure = failure || e.message;
             return;
         }
-        xml.children(xml.child(feed, "channel"), "item").forEach(item => {
+        const items = xml.children(xml.child(feed, "channel"), "item");
+        if (i === urls.length - 1)
+            full = items.length >= PAGE_SIZE;
+        items.forEach(item => {
             const entry = recording(item);
             if (entry && !seen[entry.id]) {
                 seen[entry.id] = true;
@@ -122,7 +135,7 @@ function recordings(extra) {
     });
     if (!out.length && failure)
         throw new Error("The Riksdag's open data did not answer (" + failure + ")");
-    return out;
+    return { entries: out, next: full ? first + PAGES : undefined };
 }
 
 // The files of a recording, from the address of its sound; null when the
@@ -189,7 +202,7 @@ return {
             image: "https://www.riksdagen.se/icons/apple-touch-icon-180x180.png",
             root: "/",
 
-            browse(id) {
+            browse(id, next) {
                 if (id === "/")
                     return FOLDERS.map(f => ({
                         id: "list:" + util.query(f[2]), type: "folder", name: f[0],
@@ -209,13 +222,14 @@ return {
                         extra[decodeURIComponent(pair.slice(0, eq))] =
                             decodeURIComponent(pair.slice(eq + 1));
                     });
-                    return util.memo(id, CACHE_SEC, () => recordings(extra));
+                    const page = pageOf(next);
+                    return util.memo(id + "#" + page, CACHE_SEC, () => recordings(extra, page));
                 }
                 throw new Error("unknown folder " + id);
             },
 
-            search(query) {
-                return recordings({ sok: query });
+            search(query, folderId, next) {
+                return recordings({ sok: query }, pageOf(next));
             },
 
             resolve(id, entry) {

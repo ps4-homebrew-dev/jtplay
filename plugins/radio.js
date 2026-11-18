@@ -5,7 +5,7 @@
 //
 // The tree:
 //   /                      Most popular, Trending, By country, By genre
-//   top:votes / top:clicks the 100 best voted / most listened stations
+//   top:votes / top:clicks the best voted / most listened stations
 //   countries              countries with stations, most stations first
 //   country:SE             that country's stations, most popular first
 //   tags                   the 60 biggest genres
@@ -14,6 +14,9 @@
 // Search (options menu) looks stations up by name: among a country's
 // stations from inside that country, among a genre's from inside that
 // genre, and among all of them from anywhere else.
+//
+// A list of stations comes 200 at a time: the offset of the next 200 is
+// the cursor the app hands back for more (browse(id, next)).
 //
 // Playback goes through resolve(), which asks the directory for the stream
 // URL; that request is also how radio-browser counts listeners, which is
@@ -92,10 +95,23 @@ function station(s) {
     };
 }
 
-function stations(path) {
+// The offset a cursor names: 0 for none.
+const offsetOf = next => Math.max(0, Math.floor(Number(next)) || 0);
+
+// One page of the stations of a listing (a path of the API, which takes
+// an offset and a limit), and the offset of the next when this one is full.
+function page(list, offset) {
+    return {
+        entries: list.map(station),
+        next: list.length >= LIMIT ? offset + LIMIT : undefined
+    };
+}
+
+function stations(path, next) {
+    const offset = offsetOf(next);
     const sep = path.indexOf("?") < 0 ? "?" : "&";
-    return cached(path, () =>
-        api(path + sep + "hidebroken=true&limit=" + LIMIT).map(station));
+    const url = path + sep + "hidebroken=true&limit=" + LIMIT + "&offset=" + offset;
+    return cached(url, () => page(api(url), offset));
 }
 
 function browseRoot() {
@@ -127,15 +143,16 @@ function browseTags() {
 
 // Stations whose name has 'query' in it, the best voted first; within the
 // country or genre of the folder the search was started from, if any.
-function searchStations(query, folderId) {
+function searchStations(query, folderId, next) {
+    const offset = offsetOf(next);
     const params = { name: query, order: "votes", reverse: "true",
-                     hidebroken: "true", limit: LIMIT };
+                     hidebroken: "true", limit: LIMIT, offset: offset };
     const id = String(folderId || "");
     if (id.startsWith("country:"))
         params.countrycode = id.slice(8);
     else if (id.startsWith("tag:"))
         params.tag = id.slice(4);
-    return api("/json/stations/search?" + util.query(params)).map(station);
+    return page(api("/json/stations/search?" + util.query(params)), offset);
 }
 
 return {
@@ -146,27 +163,29 @@ return {
             detail: "50 000 stations from radio-browser.info",
             icon: "📻",
             root: "/",
-            browse(id) {
+            browse(id, next) {
                 if (id === "/")
                     return browseRoot();
                 if (id === "top:votes")
-                    return stations("/json/stations/topvote/" + LIMIT);
+                    return stations("/json/stations/topvote", next);
                 if (id === "top:clicks")
-                    return stations("/json/stations/topclick/" + LIMIT);
+                    return stations("/json/stations/topclick", next);
                 if (id === "countries")
                     return browseCountries();
                 if (id === "tags")
                     return browseTags();
                 if (id.startsWith("country:"))
                     return stations("/json/stations/bycountrycodeexact/" +
-                                    encodeURIComponent(id.slice(8)) + "?order=votes&reverse=true");
+                                    encodeURIComponent(id.slice(8)) + "?order=votes&reverse=true",
+                                    next);
                 if (id.startsWith("tag:"))
                     return stations("/json/stations/bytagexact/" +
-                                    encodeURIComponent(id.slice(4)) + "?order=votes&reverse=true");
+                                    encodeURIComponent(id.slice(4)) + "?order=votes&reverse=true",
+                                    next);
                 throw new Error("unknown folder " + id);
             },
-            search(query, folderId) {
-                return searchStations(query, folderId);
+            search(query, folderId, next) {
+                return searchStations(query, folderId, next);
             },
             // Counts the listen and hands back the current stream URL; the one
             // from the listing is the fallback if the directory is down.
