@@ -21,8 +21,8 @@
 //                                      playing on (not on a PS4: the
 //                                      system keeps SHARE)
 //
-// A remote's options and disc menu keys, and a keyboard's menu key and F10,
-// are options as well (see RmlSDL::ConvertKey). Holding OK / Return is
+// A remote's options, menu (F4) and disc menu keys, and a keyboard's menu key
+// and F10, are options as well (see RmlSDL::ConvertKey). Holding OK / Return is
 // options too, for the remotes that have no options key or whose TV does
 // not pass it on over HDMI-CEC: see HoldOk(). (Not F1: that is what a
 // remote's subtitle key arrives as.)
@@ -61,8 +61,8 @@ inline constexpr Rml::Input::KeyIdentifier kKeyShoulderLeft = Rml::Input::KI_F23
 inline constexpr Rml::Input::KeyIdentifier kKeyShoulderRight = Rml::Input::KI_F24;
 
 // The options button, whatever it comes from: a pad's options / start, a
-// held OK, a remote's options, menu or disc menu key, a keyboard's menu key
-// or F10. RmlUi's name for the menu key.
+// held OK, a remote's options, menu (F4) or disc menu key, a keyboard's menu
+// key, F4 or F10. RmlUi's name for the menu key.
 inline constexpr Rml::Input::KeyIdentifier kKeyOptions = Rml::Input::KI_APPS;
 
 // Opens the game controller subsystem and the pads already connected.

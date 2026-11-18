@@ -408,7 +408,12 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	case SDLK_F1:           return Rml::Input::KI_F1;
 	case SDLK_F2:           return Rml::Input::KI_F2;
 	case SDLK_F3:           return Rml::Input::KI_F3;
+#if SDL_MAJOR_VERSION == 2
+	// jtplay: a remote's HDMI-CEC menu key arrives as F4: options, as F10.
+	case SDLK_F4:           return gamepad::kKeyOptions;
+#else
 	case SDLK_F4:           return Rml::Input::KI_F4;
+#endif
 	case SDLK_F5:           return Rml::Input::KI_F5;
 	case SDLK_F6:           return Rml::Input::KI_F6;
 	case SDLK_F7:           return Rml::Input::KI_F7;
@@ -455,7 +460,7 @@ Rml::Input::KeyIdentifier RmlSDL::ConvertKey(int sdlkey)
 	case SDLK_APPLICATION:  return gamepad::kKeyOptions;
 	// jtplay: a remote's rewind and fast forward, which RmlUi has no keys
 	// for. (Its pause key is SDLK_PAUSE, above; its audio and display keys
-	// arrive as F2 and F4.)
+	// arrive as F2 and F4; F4 is options, above.)
 	case SDLK_AUDIOREWIND:      return gamepad::kKeyRewind;
 	case SDLK_AUDIOFASTFORWARD: return gamepad::kKeyFastForward;
 #endif
