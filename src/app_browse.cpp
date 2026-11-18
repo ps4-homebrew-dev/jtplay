@@ -564,8 +564,8 @@ void App::RebuildCrumb() {
   Set("crumb", bind_crumb_, crumb);
   // The list of sources is the Sources tab's page, the favorites (their
   // top) the Favorites tab's: the tabs over them.
-  Set("sources_tab", bind_sources_tab_, OnTabPage());
-  if (!bind_sources_tab_ && bind_browse_tabs_)
+  Set("tab_page", bind_tab_page_, OnTabPage());
+  if (!bind_tab_page_ && bind_browse_tabs_)
     SetBrowseTabs(false);
 }
 
@@ -1011,7 +1011,8 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
 // ---------------------------------------------------------------------------
 
 // Rebuilds level.entries from level.raw in the current order, keeping the
-// selection on the same entry. Folders stay on top; entries that do not
+// selection on the same entry. Folders stay on top (in Favorites, the
+// folders made for them above favorite folders); entries that do not
 // know the sort key (no size, no date) go last in either direction, and
 // ties fall back to the name.
 void App::SortLevel(BrowseLevel& level) const {
@@ -1048,12 +1049,18 @@ void App::SortLevel(BrowseLevel& level) const {
     return (mode == SortMode::Date && e.date <= 0) ||
            (mode == SortMode::Size && e.size < 0);
   };
+  // A folder of favorites (only Favorites lists them), any other folder,
+  // anything else.
+  // (Their ids: see library::FavoriteFolderEntryId.)
+  auto rank = [](const browse::Entry& e) {
+    return e.id.compare(0, 4, "fav:") == 0 ? 0 : e.IsFolder() ? 1 : 2;
+  };
 
   std::stable_sort(order.begin(), order.end(), [&](size_t ia, size_t ib) {
     const browse::Entry& a = raw[ia];
     const browse::Entry& b = raw[ib];
-    if (a.IsFolder() != b.IsFolder())
-      return a.IsFolder();
+    if (rank(a) != rank(b))
+      return rank(a) < rank(b);
     if (unknown(a) != unknown(b))
       return unknown(b);
     int c = key_less(ia, ib);

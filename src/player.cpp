@@ -675,7 +675,7 @@ bool Player::Open(const Media& media, std::string& error, int64_t start_seconds)
   // is switched on, unless the file had one of its own.
   std::string preferred;
   {
-    std::lock_guard<std::mutex> lock(tracks_mutex_);
+    std::lock_guard<std::mutex> tracks_lock(tracks_mutex_);
     preferred = sub_languages_;
   }
   bool selected = sub_id_ >= 0;

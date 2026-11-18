@@ -466,7 +466,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("feat_live", &bind_feat_live_);
   ctor.Bind("home_compact", &bind_home_compact_);
   ctor.Bind("settings_page", &bind_settings_page_);
-  ctor.Bind("sources_tab", &bind_sources_tab_);
+  ctor.Bind("tab_page", &bind_tab_page_);
   ctor.Bind("browse_tabs", &bind_browse_tabs_);
   ctor.Bind("home_settings", &bind_home_settings_);
   ctor.Bind("settings", &setting_rows_);

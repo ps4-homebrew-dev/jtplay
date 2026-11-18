@@ -155,12 +155,12 @@ void App::StartDiscovery(browse::Source::Group group,
         }
       }
 
-      GroupScan& scan = scans_[(int)group];
-      scan.errors = errors;
-      scan.scanned = true;
-      scan.running = false;
+      GroupScan& finished = scans_[(int)group];
+      finished.errors = errors;
+      finished.scanned = true;
+      finished.running = false;
       std::vector<std::function<void()>> waiting;
-      waiting.swap(scan.waiting);
+      waiting.swap(finished.waiting);
 
       // (The cards say where they are from once their source is found.)
       if (view_ == View::Home)

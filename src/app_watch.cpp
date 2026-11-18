@@ -238,13 +238,13 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
       } else if (!ok) {
         ShowToast(error.empty() ? "Playback failed" : error, icon::kWarning);
         const int direction = launch_direction_;
-        const bool from_queue = launch_from_queue_;
+        const bool queued = launch_from_queue_;
         const browse::Entry failed = launch_entry_;
         CancelLaunch();
         // Chosen from the menus over something playing, and it never got
         // as far as the player (which stops what it plays only to open the
         // next): what was playing plays on.
-        if (bind_watching_ && !from_queue && player_->IsPlaying())
+        if (bind_watching_ && !queued && player_->IsPlaying())
           return;
         // Moving through a folder from the player: whatever was playing has
         // been stopped for this one, so carry on past it (as a playlist

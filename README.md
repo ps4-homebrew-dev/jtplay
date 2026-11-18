@@ -201,7 +201,9 @@ favorite folder is a shortcut: it browses (and plays) through the source it
 came from, so a DLNA folder works as long as that server is on the network.
 
 The Favorites tab lists them, the latest first, under folders of your own
-to sort them into, folders inside folders as deep as you like.
+to sort them into, folders inside folders as deep as you like. Your
+folders stay on top whatever the list is sorted by, then favorite folders,
+then the rest.
 
 Triangle opens a folder picker, a file dialog in the middle of the screen:
 the path to a folder of favorites, the folders in it (*..* goes up;

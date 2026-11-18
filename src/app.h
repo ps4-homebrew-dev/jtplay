@@ -582,9 +582,8 @@ private:
   bool from_sources_list_ = false;    // the source on screen was
   // The list of sources is the Sources tab's page, and the favorites the
   // Favorites tab's: on screen, either has the tabs above it, and the focus
-  // may be up on them (moving along them leaves it for the others). (The
-  // binding's name is from when Sources had the only such page.)
-  bool bind_sources_tab_ = false;
+  // may be up on them (moving along them leaves it for the others).
+  bool bind_tab_page_ = false;
   bool bind_browse_tabs_ = false;
   void SetBrowseTabs(bool on);
   // From a tab page's tabs to Home's or Settings' tab ("home",

@@ -28,7 +28,7 @@
 				<!-- Home: the tabs (src/app_home.cpp), Home, Sources and Settings;
 				     up from the first row reaches them. Sources' page is the list
 				     of sources, in the browse view, under them as well. -->
-				<div id="tabs" data-if="view == 'home' || (view == 'browse' && sources_tab)"
+				<div id="tabs" data-if="view == 'home' || (view == 'browse' && tab_page)"
 				     data-class-away="view == 'home' ? (home_shelves || home_settings) : !browse_tabs">
 					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail">
 						<span class="tab-icon">{{r.icon}}</span>
@@ -36,8 +36,8 @@
 					</div>
 				</div>
 				<!-- (The tabs keep their width; what plays gives way to them.) -->
-				<div class="spacer" data-if="view == 'home' || (view == 'browse' && sources_tab)"/>
-				<div class="location" data-if="view != 'home' && !(view == 'browse' && sources_tab)">
+				<div class="spacer" data-if="view == 'home' || (view == 'browse' && tab_page)"/>
+				<div class="location" data-if="view != 'home' && !(view == 'browse' && tab_page)">
 					<span class="location-source" data-if="view == 'browse'">{{source_name}}</span>
 					<span class="location-path" data-if="view == 'browse' && crumb != ''">›  {{crumb}}</span>
 				</div>
