@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <unordered_set>
 
 #include <RmlUi/Core/Elements/ElementFormControl.h>
 
@@ -275,14 +276,14 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
 
   PostTask(Lane::Browse, [this, ticket, request, source, id, name, replace, keep_id] {
     browse::Listing result;
-    std::string error;
+    std::string next, error;
     {
       net::CancelScope scope(ticket.cancel);
       if (!net::Cancelled()) // given up on while it waited its turn
-        source->Browse(id, result, error);
+        source->BrowsePage(id, std::string(), result, next, error);
     }
 
-    Reply([this, request, id, name, replace, keep_id, result = std::move(result),
+    Reply([this, request, id, name, replace, keep_id, result = std::move(result), next,
            error]() mutable {
       if (request != browse_request_)
         return; // superseded while it was in flight
@@ -348,6 +349,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       level.filter = filter;
       level.raw = std::move(result);
       SortLevel(level);
+      level.next = next; // (after the sort: the cursor goes on an entry)
       for (size_t i = 0; i < level.entries.size() && !keep.empty(); i++) {
         if (level.entries[i].id == keep) {
           level.selection = (int)i;
@@ -358,12 +360,13 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       // "Video" holding only "All video"): that one is opened in its place,
       // and back passes over it. Not while coming back up to it.
       const bool through = !replace && keep_id.empty() && level.raw.size() == 1 &&
-                           level.raw[0].IsFolder() && level.filter.empty();
+                           level.raw[0].IsFolder() && level.filter.empty() &&
+                           level.next.empty();
       const browse::Entry only = through ? level.raw[0] : browse::Entry();
       level.passthrough = through;
       // Back reached a folder above a reopened one, and it holds nothing
       // but that one: passed over, as it was on the way down.
-      if (was_stale && level.raw.size() == 1 && level.raw[0].IsFolder()) {
+      if (was_stale && level.raw.size() == 1 && level.raw[0].IsFolder() && level.next.empty()) {
         level.passthrough = true;
         path_.push_back(std::move(level));
         LeaveContainer();
@@ -491,6 +494,16 @@ void App::RebuildEntryRows() {
       entry_rows_.push_back(std::move(row));
     }
   }
+  item_count_ = (int)entry_rows_.size();
+  Set("has_more", bind_has_more_, HasMore());
+  if (bind_has_more_) {
+    EntryRow row;
+    row.icon = icon::kMore;
+    row.kind = "more";
+    row.more = true;
+    entry_rows_.push_back(std::move(row));
+    UpdateMoreRow();
+  }
   entry_count_ = (int)entry_rows_.size();
   const BrowseLevel* shown = CurrentLevel();
   entry_total_ = shown ? (int)shown->raw.size() : 0;
@@ -501,6 +514,7 @@ void App::RebuildEntryRows() {
   SyncEntryWindow();
   model_.DirtyVariable("entry_count");
   model_.DirtyVariable("entry_total");
+  model_.DirtyVariable("item_count");
   model_.DirtyVariable("sel_entry");
   Set("sort_label", bind_sort_label_, SortLabel());
   art_scan_pending_ = true; // artwork for the new rows, this frame
@@ -662,12 +676,136 @@ void App::RequestPreview() {
 void App::MoveSelection(int delta) {
   if (entry_count_ == 0)
     return;
+  const bool was_on_more = OnMoreRow();
   sel_entry_ = StepIndex(sel_entry_, delta, entry_count_);
   if (BrowseLevel* level = CurrentLevel())
     level->selection = sel_entry_;
   model_.DirtyVariable("sel_entry");
   RebuildDetail();
   scroll_entries_pending_ = true;
+  // Down onto "Load more" loads more, so going down the list goes on into
+  // the next page by itself. (Not up onto it, round from the top.)
+  if (delta > 0 && !was_on_more && OnMoreRow())
+    LoadMore();
+}
+
+bool App::HasMore() const {
+  return !path_.empty() && !path_.back().next.empty() && path_.back().error.empty() &&
+         !OnSourcesList();
+}
+
+bool App::OnMoreRow() const {
+  return HasMore() && sel_entry_ >= (int)path_.back().entries.size();
+}
+
+void App::UpdateMoreRow() {
+  if (!bind_has_more_ || entry_rows_.empty() || !entry_rows_.back().more)
+    return;
+  const bool loading = more_request_ != 0 && more_request_ == browse_request_ && browse_pending_;
+  const Rml::String name = loading ? "Loading more\u2026" : "Load more";
+  if (entry_rows_.back().name != name) {
+    entry_rows_.back().name = name;
+    entry_rows_dirty_ = true;
+  }
+}
+
+void App::LoadMore() {
+  BrowseLevel* level = CurrentLevel();
+  if (!level || !HasMore() || !current_source_)
+    return;
+  if (more_request_ != 0 && more_request_ == browse_request_ && browse_pending_)
+    return; // already on its way
+  level->selection = sel_entry_;
+
+  const BrowseTicket ticket = NewBrowseRequest();
+  const uint32_t request = ticket.id;
+  more_request_ = request;
+  const browse::SourcePtr source = current_source_;
+  const size_t depth = path_.size();
+  const std::string id = level->id, cursor = level->next;
+  const std::string query = level->query, folder = level->folder;
+  UpdateMoreRow();
+
+  PostTask(Lane::Browse, [this, ticket, request, source, depth, id, cursor, query, folder] {
+    browse::Listing result;
+    std::string next, error;
+    {
+      net::CancelScope scope(ticket.cancel);
+      if (!net::Cancelled()) { // given up on while it waited its turn
+        if (query.empty())
+          source->BrowsePage(id, cursor, result, next, error);
+        else if (!source->SearchPage(folder, query, cursor, result, next, error) &&
+                 error.empty())
+          error = "the search failed";
+      }
+    }
+
+    Reply([this, request, depth, id, cursor, result = std::move(result), next,
+           error]() mutable {
+      if (request != browse_request_)
+        return; // superseded while it was in flight
+      BrowseArrived();
+      more_request_ = 0;
+      // Still the folder it was asked for, as it was then.
+      if (path_.size() != depth || path_.back().id != id || path_.back().next != cursor) {
+        UpdateMoreRow();
+        return;
+      }
+      BrowseLevel& level = path_.back();
+      if (!error.empty()) {
+        // What there is stays, and "Load more" tries again.
+        ShowToast(error, icon::kWarning);
+        UpdateMoreRow();
+        return;
+      }
+
+      // Where the cursor goes: on the first of the new entries if it was on
+      // "Load more" (in the folder's own order, that is where the row was),
+      // and otherwise where it is.
+      const bool was_on_more = sel_entry_ >= (int)level.entries.size();
+      std::string keep;
+      if (!was_on_more && sel_entry_ >= 0)
+        keep = level.entries[sel_entry_].id;
+
+      // A page that overlaps the one before (a listing that shifted while
+      // it was paged through) adds only what is new.
+      std::unordered_set<std::string> seen;
+      for (const browse::Entry& e : level.raw)
+        seen.insert(e.id);
+      size_t added = 0;
+      for (browse::Entry& e : result) {
+        if (!seen.insert(e.id).second)
+          continue;
+        if (keep.empty() && was_on_more)
+          keep = e.id;
+        level.raw.push_back(std::move(e));
+        added++;
+      }
+      // A source that keeps handing back the same page has no more.
+      level.next = added == 0 && next == cursor ? std::string() : next;
+      NoteSourceArt(current_source_, level.raw);
+
+      level.selection = -1;
+      SortLevel(level);
+      // Nothing new to go to (or all of it filtered out): "Load more"
+      // again, or the last entry when that has gone.
+      level.selection = was_on_more ? (int)level.entries.size() : 0;
+      for (size_t i = 0; i < level.entries.size() && !keep.empty(); i++) {
+        if (level.entries[i].id == keep) {
+          level.selection = (int)i;
+          break;
+        }
+      }
+      if (level.next.empty())
+        level.selection = std::min(level.selection, std::max(0, (int)level.entries.size() - 1));
+      sel_entry_ = level.selection;
+      RebuildEntryRows();
+      RebuildDetail();
+      scroll_entries_deferred_ = true;
+      if (added == 0 && level.next.empty())
+        ShowToast("That was all", icon::kMore);
+    });
+  });
 }
 
 // Folders come first, so the letters run twice (folders A-Z, then items
@@ -679,6 +817,8 @@ void App::JumpLetter(int direction) {
   if (n == 0)
     return;
   const browse::Listing& entries = level->entries;
+  if (sel_entry_ >= n) // on "Load more": from the last entry
+    sel_entry_ = n - 1;
   auto group_start = [&](int i) {
     const std::string letter = Initial(entries[i].name);
     while (i > 0 && Initial(entries[i - 1].name) == letter &&
@@ -709,6 +849,10 @@ void App::JumpLetter(int direction) {
 
 void App::ActivateSelection() {
   const browse::Entry* e = SelectedEntry();
+  if (!e && OnMoreRow()) {
+    LoadMore();
+    return;
+  }
   if (!e) {
     // Nothing listed because listing failed: select tries again.
     if (const BrowseLevel* level = CurrentLevel(); level && !level->error.empty())
@@ -816,6 +960,7 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
       // Likewise a folder that is still being opened (or listed again):
       // back gives up on that, and stays where it was asked from.
       AbandonBrowse();
+      UpdateMoreRow();
     } else if (const BrowseLevel* level = CurrentLevel();
                level && !level->filter.empty()) {
       ClearFilter(); // back out of the filter before the folder
@@ -841,6 +986,8 @@ void App::SortLevel(BrowseLevel& level) const {
   std::string selected;
   if (level.selection >= 0 && level.selection < (int)level.entries.size())
     selected = level.entries[level.selection].id;
+  // On "Load more", which stays at the end.
+  const bool on_more = !level.next.empty() && level.selection >= (int)level.entries.size();
 
   // Sort indices into raw (so Default can use the source order as its key),
   // of the entries that pass the filter.
@@ -890,7 +1037,7 @@ void App::SortLevel(BrowseLevel& level) const {
   for (size_t i : order)
     level.entries.push_back(raw[i]);
 
-  level.selection = 0;
+  level.selection = on_more ? (int)level.entries.size() : 0;
   for (size_t i = 0; i < level.entries.size() && !selected.empty(); i++) {
     if (level.entries[i].id == selected) {
       level.selection = (int)i;
@@ -1080,6 +1227,8 @@ void App::OpenMenu() {
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
+    if (HasMore())
+      AddMenuItem({"Load more", nullptr, [this](int) { LoadMore(); }});
     AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
 
     // Search asks the source for more, and is only there for sources that
@@ -1418,7 +1567,8 @@ void App::SyncEntryWindow() {
 void App::UpdateVisibleArt() {
   if (view_ == View::Browse) {
     const BrowseLevel* level = CurrentLevel();
-    if (!level || entry_rows_.size() != level->entries.size())
+    if (!level || item_count_ != (int)level->entries.size() ||
+        entry_rows_.size() < level->entries.size())
       return;
     // What is on screen and a screenful either side, so scrolling finds
     // the next rows ready. The art thread takes the newest request first,
@@ -1746,15 +1896,17 @@ void App::RequestSearch(const std::string& query) {
 
   PostTask(Lane::Browse, [this, ticket, request, source, folder, query, scope, replace] {
     browse::Listing result;
-    std::string error;
+    std::string next, error;
     {
       net::CancelScope cancel(ticket.cancel);
-      if (!net::Cancelled() && !source->Search(folder, query, result, error) && error.empty())
+      if (!net::Cancelled() &&
+          !source->SearchPage(folder, query, std::string(), result, next, error) &&
+          error.empty())
         error = "the search failed";
     }
 
     Reply([this, request, folder, query, scope, replace,
-           result = std::move(result), error]() mutable {
+           result = std::move(result), next, error]() mutable {
       if (request != browse_request_ || scope >= path_.size())
         return; // superseded while it was in flight
       BrowseArrived();
@@ -1774,8 +1926,10 @@ void App::RequestSearch(const std::string& query) {
       level.id = "search:" + folder + "\n" + query;
       level.name = "Search: " + query;
       level.query = query;
+      level.folder = folder;
       level.raw = std::move(result);
       SortLevel(level);
+      level.next = next;
       sel_entry_ = level.selection;
       path_.push_back(std::move(level));
 

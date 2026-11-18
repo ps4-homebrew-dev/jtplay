@@ -6,6 +6,7 @@
 //   jtplay --plugin FILE                       its sources
 //   jtplay --plugin FILE --browse ID           a folder ("" or no ID: root)
 //   jtplay --plugin FILE --search QUERY        what search() finds
+//   ... --browse ID --next CURSOR              the page after (see --next)
 //   jtplay --plugin FILE --resolve ID          what would be played
 //
 // Answers are JSON on standard output, console.log() and errors go to
@@ -36,6 +37,9 @@ void Usage(const char* argv0) {
     "options\n"
     "  --source N|NAME    which of the plugin's sources (default: the first)\n"
     "  --folder ID        --search: the folder searched from\n"
+    "  --next CURSOR      --browse, --search: the page after the one that\n"
+    "                     ended with this cursor (printed to standard error\n"
+    "                     as 'next: CURSOR' when there is one)\n"
     "  --uri URI          --resolve: the item's uri, as browse() listed it\n"
     "  --set KEY=VALUE    one of the plugin's settings, for this run\n"
     "  --data DIR         where the plugin's storage is kept (default: none,\n"
@@ -120,6 +124,13 @@ void PrintListing(const browse::Listing& listing) {
   std::printf("%s\n", Array(items, "").c_str());
 }
 
+// The cursor of the page after, beside the listing rather than in it, so
+// that standard output stays the array it always was.
+void PrintNext(const std::string& next) {
+  if (!next.empty())
+    std::fprintf(stderr, "next: %s\n", next.c_str());
+}
+
 int Fail(const std::string& what) {
   std::fprintf(stderr, "error: %s\n", what.c_str());
   return 1;
@@ -128,7 +139,7 @@ int Fail(const std::string& what) {
 } // namespace
 
 int PluginCli(int argc, char* argv[]) {
-  std::string file, source_pick, id, query, folder, uri, data_dir;
+  std::string file, source_pick, id, query, folder, uri, data_dir, cursor;
   std::vector<std::pair<std::string, std::string>> set, rewrites;
   enum class Action { Sources, Browse, Search, Resolve } action = Action::Sources;
 
@@ -160,6 +171,8 @@ int PluginCli(int argc, char* argv[]) {
       id = value();
     } else if (arg == "--folder") {
       folder = value();
+    } else if (arg == "--next") {
+      cursor = value();
     } else if (arg == "--uri") {
       uri = value();
     } else if (arg == "--data") {
@@ -275,18 +288,23 @@ int PluginCli(int argc, char* argv[]) {
   switch (action) {
   case Action::Browse: {
     browse::Listing listing;
-    if (!source->Browse(id == "\x01" ? source->RootId() : id, listing, error))
+    std::string next;
+    if (!source->BrowsePage(id == "\x01" ? source->RootId() : id, cursor, listing, next, error))
       return Fail(error);
     PrintListing(listing);
+    PrintNext(next);
     return 0;
   }
   case Action::Search: {
     if (!source->CanSearch(folder))
       return Fail("this source has no search()");
     browse::Listing listing;
-    if (!source->Search(folder.empty() ? source->RootId() : folder, query, listing, error))
+    std::string next;
+    if (!source->SearchPage(folder.empty() ? source->RootId() : folder, query, cursor, listing,
+                            next, error))
       return Fail(error);
     PrintListing(listing);
+    PrintNext(next);
     return 0;
   }
   case Action::Resolve: {

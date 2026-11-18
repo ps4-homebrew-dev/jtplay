@@ -139,6 +139,22 @@ public:
   virtual bool Browse(const std::string& id, Listing& out,
                       std::string& error) = 0;
 
+  // Browse(), a page at a time, for backends that hand out long listings
+  // in pieces. 'cursor' is "" for the first page and otherwise what the
+  // page before left in 'next'; 'next' is left "" when there is no more.
+  // What a cursor holds (an offset, a page number, a URL) is the source's
+  // business: the app only hands it back. The default lists everything at
+  // once. Blocking; worker thread only.
+  virtual bool BrowsePage(const std::string& id, const std::string& cursor, Listing& out,
+                          std::string& next, std::string& error) {
+    next.clear();
+    if (!cursor.empty()) {
+      error = "this source has no more to list";
+      return false;
+    }
+    return Browse(id, out, error);
+  }
+
   // Whether Search() can be asked from the folder 'folder_id' that is on
   // screen; the app offers Search only then. Cheap, and must not call into
   // anything slow: it runs on the main thread.
@@ -157,6 +173,18 @@ public:
                       std::string& error) {
     error = "this source cannot search";
     return false;
+  }
+
+  // Search(), a page at a time; 'cursor' and 'next' as for BrowsePage().
+  virtual bool SearchPage(const std::string& folder_id, const std::string& query,
+                          const std::string& cursor, Listing& out, std::string& next,
+                          std::string& error) {
+    next.clear();
+    if (!cursor.empty()) {
+      error = "this source has no more to list";
+      return false;
+    }
+    return Search(folder_id, query, out, error);
   }
 
   // Turns 'entry' into something the player can open, immediately before

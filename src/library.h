@@ -201,11 +201,18 @@ public:
   std::string RootId() const override { return std::string(); }
 
   bool Browse(const std::string& id, browse::Listing& out, std::string& error) override;
+  // Below a favorite folder, the original source's pages (the roots are
+  // listed whole).
+  bool BrowsePage(const std::string& id, const std::string& cursor, browse::Listing& out,
+                  std::string& next, std::string& error) override;
   // Below a favorite folder the original source searches, if it can; of
   // the roots, only that of Sources can (everything, see above).
   bool CanSearch(const std::string& folder_id) const override;
   bool Search(const std::string& folder_id, const std::string& query,
               browse::Listing& out, std::string& error) override;
+  bool SearchPage(const std::string& folder_id, const std::string& query,
+                  const std::string& cursor, browse::Listing& out, std::string& next,
+                  std::string& error) override;
   bool Resolve(const browse::Entry& entry, browse::Playable& out, std::string& error) override;
 
 private:

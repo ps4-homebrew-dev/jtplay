@@ -110,6 +110,13 @@ private:
     // How it is shown (a ViewMode), once worked out: see LevelView. -1
     // until then.
     int view = -1;
+    // Not empty: the source has more than it listed, and this is what it
+    // wants handed back for the next page (Source::BrowsePage). The list
+    // then ends in a row that lists it (see LoadMore), below whatever the
+    // order. 'folder' is the folder a list of search results was searched
+    // from, which its next page is searched from too.
+    std::string next;
+    std::string folder;
   };
 
   // Rows exposed to the RmlUi data model.
@@ -153,6 +160,9 @@ private:
     // evaluated even where its data-if hides it.
     bool logo = false;
     Rml::String bg = "transparent";
+    // The row after the last entry that lists more of the folder (see
+    // BrowseLevel::next); no entry stands behind it.
+    bool more = false;
   };
   struct ChildRow {     // the info panel: one entry of the focused folder
     Rml::String icon;
@@ -399,6 +409,15 @@ private:
   // next (+1) or previous (-1) letter, flashed large on screen.
   void JumpLetter(int direction);
   void ActivateSelection();
+  // The folder on screen has more than it listed: the next page of it,
+  // added to what is listed (the "Load more" row at the end of the list,
+  // which reaching starts this too). Kept in the folder's order, so with
+  // the list sorted otherwise, the new entries take their places in it.
+  bool HasMore() const;
+  bool OnMoreRow() const;
+  void LoadMore();
+  void UpdateMoreRow(); // its label, as loading starts and stops
+  uint32_t more_request_ = 0; // the browse request that is loading more
   void HandleKeyBrowse(Rml::Event& event, int key);
   // List or grid is a choice per folder: the one set for it (options menu
   // > View, remembered in the library), or else the one of the folder it
@@ -922,8 +941,10 @@ private:
   Rml::String bind_spacer_bottom_ = "0px";
   void SyncEntryWindow();
   int sel_entry_ = 0;
-  int entry_count_ = 0;                // rows shown
+  int entry_count_ = 0;                // rows shown (with the "Load more" row)
+  int item_count_ = 0;                 // entries shown (without it)
   int entry_total_ = 0;                // entries of the folder, filtered or not
+  bool bind_has_more_ = false;         // the list ends in "Load more"
 
   // Backing data (main thread).
   std::vector<std::unique_ptr<browse::Provider>> providers_;
@@ -1035,6 +1056,9 @@ private:
   bool bind_seekbar_visible_ = false; // the top bar
   double seekbar_deadline_ = 0.0;
   bool scroll_entries_pending_ = false;
+  // The same, a frame later: for rows a reply has just added, which the
+  // list has no room for until the context has laid them out.
+  bool scroll_entries_deferred_ = false;
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
   bool scroll_rows_pending_ = false;    // Home's rows, onto the focus

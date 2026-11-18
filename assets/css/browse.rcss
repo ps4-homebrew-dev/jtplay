@@ -154,6 +154,19 @@
 .entry-row.selected .emeta { color: #0d3d33; }
 .entry-row.selected .emark { color: #06231d; }
 
+/* "Load more", after the last entry (App::LoadMore): an outlined tile and
+   the title in the accent, a row that does something rather than one that
+   is something. */
+.entry-row .art-tile.more {
+	background-color: transparent;
+	border: 2px #34405a;
+}
+.art-tile.more .art-glyph { color: #4dd6b8; opacity: 0.9; }
+.etitle.more { color: #4dd6b8; }
+.entry-row.selected .art-tile.more { border-color: #0d3d33; }
+.entry-row.selected .art-tile.more .art-glyph,
+.entry-row.selected .etitle.more { color: #06231d; }
+
 /* ------------------------------------------------------------------ */
 /* Grid                                                               */
 /* ------------------------------------------------------------------ */
@@ -244,6 +257,18 @@
 #browse.grid .entry-row.selected .etitle {
 	color: #ffffff;
 	font-weight: bold;
+}
+#browse.grid .etitle.more {
+	color: #4dd6b8;
+}
+#browse.grid .entry-row .art-tile.more {
+	border: 3px #34405a;
+}
+#browse.grid .entry-row.selected .art-tile.more {
+	border-color: #4dd6b8;
+}
+#browse.grid .entry-row.selected .art-tile.more .art-glyph {
+	color: #4dd6b8;
 }
 
 /* The focused tile's facts, along the bottom of the wall. */

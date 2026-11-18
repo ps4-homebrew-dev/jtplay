@@ -38,7 +38,8 @@ namespace browse {
 //   1  http, console; discover / browse / search / resolve
 //   2  http.all and http.json, storage, settings, util, xml, atob / btoa;
 //      resolve() may return headers and subtitles; functions may be async
-inline constexpr int kJsApiVersion = 2;
+//   3  browse() and search() may list in pages: { entries, next }
+inline constexpr int kJsApiVersion = 3;
 
 enum class JsLogLevel { Info, Warning, Error };
 

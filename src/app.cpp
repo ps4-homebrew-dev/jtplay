@@ -387,6 +387,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     row.RegisterMember("playing", &EntryRow::playing);
     row.RegisterMember("logo", &EntryRow::logo);
     row.RegisterMember("bg", &EntryRow::bg);
+    row.RegisterMember("more", &EntryRow::more);
   }
   ctor.RegisterArray<std::vector<EntryRow>>();
 
@@ -470,6 +471,8 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("spacer_bottom", &bind_spacer_bottom_);
   ctor.Bind("entry_count", &entry_count_);
   ctor.Bind("entry_total", &entry_total_);
+  ctor.Bind("item_count", &item_count_);
+  ctor.Bind("has_more", &bind_has_more_);
   ctor.Bind("sel_entry", &sel_entry_);
   ctor.Bind("sort_label", &bind_sort_label_);
   ctor.Bind("jump_letter", &bind_jump_letter_);
@@ -581,6 +584,10 @@ void App::Update() {
   Set("browse_loading", bind_browse_loading_, view_ == View::Browse && browse_pending_);
   Set("busy", bind_busy_, busy_ops_.load() > 0 || bind_photo_loading_);
 
+  if (scroll_entries_deferred_) {
+    scroll_entries_deferred_ = false;
+    scroll_entries_pending_ = true;
+  }
   RunReplies();
 
   // Favorites or progress changed (here or in a worker reply): bring the

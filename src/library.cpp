@@ -664,6 +664,23 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
   return true;
 }
 
+bool LibrarySource::BrowsePage(const std::string& id, const std::string& cursor,
+                               browse::Listing& out, std::string& next, std::string& error) {
+  std::string key, inner;
+  if (id.empty() || !DecodeId(id, key, inner))
+    return browse::Source::BrowsePage(id, cursor, out, next, error);
+  const browse::SourcePtr source = registry_.Find(key);
+  if (!source) {
+    error = "that source is not available right now";
+    return false;
+  }
+  if (!source->BrowsePage(inner, cursor, out, next, error))
+    return false;
+  for (browse::Entry& e : out)
+    e.id = EncodeId(key, e.id);
+  return true;
+}
+
 bool LibrarySource::CanSearch(const std::string& folder_id) const {
   std::string key, inner;
   if (!DecodeId(folder_id, key, inner))
@@ -687,6 +704,24 @@ bool LibrarySource::Search(const std::string& folder_id, const std::string& quer
     return false;
   }
   if (!source->Search(inner, query, out, error))
+    return false;
+  for (browse::Entry& e : out)
+    e.id = EncodeId(key, e.id);
+  return true;
+}
+
+bool LibrarySource::SearchPage(const std::string& folder_id, const std::string& query,
+                               const std::string& cursor, browse::Listing& out,
+                               std::string& next, std::string& error) {
+  std::string key, inner;
+  if (!DecodeId(folder_id, key, inner))
+    return browse::Source::SearchPage(folder_id, query, cursor, out, next, error);
+  const browse::SourcePtr source = registry_.Find(key);
+  if (!source) {
+    error = "that source is not available right now";
+    return false;
+  }
+  if (!source->SearchPage(inner, query, cursor, out, next, error))
     return false;
   for (browse::Entry& e : out)
     e.id = EncodeId(key, e.id);

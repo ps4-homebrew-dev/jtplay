@@ -136,6 +136,32 @@ bool ToListing(const JsPlugin& plugin, JSValue v, Listing& out, std::string& err
   return true;
 }
 
+// What browse() or search() returned: the array of entries (everything
+// there is), or one page of them as { entries: [...], next: cursor }, the
+// cursor being a string or a number that is handed back for the page
+// after. No 'next' (or an empty one) is the last page.
+bool ToPage(const JsPlugin& plugin, JSValue v, Listing& out, std::string& next,
+            std::string& error, const char* function) {
+  JSContext* ctx = plugin.ctx;
+  next.clear();
+  int64_t n = 0;
+  if (ArrayLength(ctx, v, n) || !JS_IsObject(v))
+    return ToListing(plugin, v, out, error, function);
+  Ref entries(ctx, JS_GetPropertyStr(ctx, v, "entries"));
+  if (JS_IsException(entries.get())) {
+    error = TakeException(ctx);
+    return false;
+  }
+  if (!ArrayLength(ctx, entries.get(), n)) {
+    error = std::string(function) + "() returned neither an array nor { entries, next }";
+    return false;
+  }
+  if (!ToListing(plugin, entries.get(), out, error, function))
+    return false;
+  next = FieldString(ctx, v, "next");
+  return true;
+}
+
 // What resolve() returned, as something to play: the uri itself, or an
 // object { uri, headers: { name: value }, subtitles: [{ uri, lang, name }] }
 // (an entry object, as browse() returns them, is such an object too).
@@ -244,32 +270,49 @@ std::string JsSource::Key() const {
   return "js:" + plugin_->ProviderName() + "/" + name_;
 }
 
+// The first page only, to callers that want no more (a folder's preview,
+// a favorite folder's listing on Home).
 bool JsSource::Browse(const std::string& id, Listing& out, std::string& error) {
+  std::string next;
+  return BrowsePage(id, std::string(), out, next, error);
+}
+
+bool JsSource::BrowsePage(const std::string& id, const std::string& cursor, Listing& out,
+                          std::string& next, std::string& error) {
   std::lock_guard<std::mutex> lock(plugin_->mutex);
   JSContext* ctx = plugin_->ctx;
 
   Ref arg(ctx, NewString(ctx, id));
-  JSValue argv[] = {arg.get()};
+  Ref more(ctx, NewString(ctx, cursor));
+  JSValue argv[] = {arg.get(), more.get()};
   JSValue result;
-  if (!plugin_->Call(source_, "browse", 1, argv, result, error))
+  if (!plugin_->Call(source_, "browse", cursor.empty() ? 1 : 2, argv, result, error))
     return false;
   Ref owned(ctx, result);
-  return ToListing(*plugin_, result, out, error, "browse");
+  return ToPage(*plugin_, result, out, next, error, "browse");
 }
 
 bool JsSource::Search(const std::string& folder_id, const std::string& query, Listing& out,
                       std::string& error) {
+  std::string next;
+  return SearchPage(folder_id, query, std::string(), out, next, error);
+}
+
+bool JsSource::SearchPage(const std::string& folder_id, const std::string& query,
+                          const std::string& cursor, Listing& out, std::string& next,
+                          std::string& error) {
   std::lock_guard<std::mutex> lock(plugin_->mutex);
   JSContext* ctx = plugin_->ctx;
 
   Ref q(ctx, NewString(ctx, query));
   Ref id(ctx, NewString(ctx, folder_id));
-  JSValue argv[] = {q.get(), id.get()};
+  Ref more(ctx, NewString(ctx, cursor));
+  JSValue argv[] = {q.get(), id.get(), more.get()};
   JSValue result;
-  if (!plugin_->Call(source_, "search", 2, argv, result, error))
+  if (!plugin_->Call(source_, "search", cursor.empty() ? 2 : 3, argv, result, error))
     return false;
   Ref owned(ctx, result);
-  return ToListing(*plugin_, result, out, error, "search");
+  return ToPage(*plugin_, result, out, next, error, "search");
 }
 
 bool JsSource::Resolve(const Entry& entry, Playable& out, std::string& error) {

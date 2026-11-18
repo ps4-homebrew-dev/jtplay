@@ -9,6 +9,7 @@ file system, no modules, no timers.
 - [The shape of a plugin](#the-shape-of-a-plugin)
 - [Entries](#entries)
 - [Search](#search)
+- [Long listings: pages](#long-listings-pages)
 - [Playing: resolve()](#playing-resolve)
 - [Settings](#settings)
 - [The host library](#the-host-library): `http`, `storage`, `settings`,
@@ -146,6 +147,45 @@ genre. Most searches ignore it.
 
 Narrowing down what is already listed is the app's own **Filter** and needs
 nothing from the plugin.
+
+## Long listings: pages
+
+A backend that hands out a long listing in pieces (a hundred results, then
+the next hundred) need not fetch all of it before anything shows. `browse()`
+and `search()` may return one page and say how to get the next:
+
+```js
+browse(id, next) {
+  const page = Number(next) || 1;            // no 'next': the first page
+  const res = http.json(API + "/items?folder=" + id + "&page=" + page);
+  return {
+    entries: res.items.map(toEntry),
+    next: page < res.pages ? page + 1 : undefined,
+  };
+}
+```
+
+`next` is a string or a number (a page, an offset, a token, the URL of the
+next page) and means nothing to the app, which hands it back as is, as a
+string, in a second argument: `browse(id, next)`, `search(query, folderId,
+next)`. The first call has no such argument. Leave `next` out (or empty) on
+the last page; a plain array is everything there is, as before.
+
+The list then ends in a **Load more** row, below the entries whatever they
+are sorted by. Reaching it (down from the last entry) or selecting it lists
+the next page, which joins the entries already there and takes its place in
+the order the list is sorted in; **Load more** is in the options menu as
+well. An entry whose `id` was on an earlier page is left out, so a page
+that overlaps the one before does no harm.
+
+A page is what one call can fetch in good time. Several requests for it can
+go out together with `http.all()`: `plugins/artgallery.js` asks for two
+pages of the museum's at once, and hands out the number of the third as
+`next`. Cache a page under a key of its own (`util.memo(id + "#" + page,
+...)`), not the folder's.
+
+Only the folder on screen is paged: a folder's preview, and listings made
+on the plugin's behalf elsewhere, take the first page.
 
 ## Playing: resolve()
 
@@ -356,10 +396,12 @@ app's log (standard error on a PC), tagged with the plugin's name. Objects are p
 
 ### jtplay
 
-`jtplay.api` is the version of this interface (2), `jtplay.version` the
+`jtplay.api` is the version of this interface (3), `jtplay.version` the
 app's, `jtplay.platform` `"ps4"` or `"linux"`. Version 1 had `http.get`,
-`post` and `request`, `console`, and the four functions; a plugin that
-wants to run there too can check before using the rest:
+`post` and `request`, `console`, and the four functions; version 2 had
+all but [pages](#long-listings-pages), and shows an error for a folder
+that answers with one. A plugin that wants to run there too can check
+before using the rest:
 
 ```js
 const country = typeof settings === "object" ? settings.get("country") : "us";
@@ -398,10 +440,12 @@ jtplay --plugin plugins/radio.js                       # sources and settings
 jtplay --plugin plugins/radio.js --browse              # the root folder
 jtplay --plugin plugins/radio.js --browse country:SE
 jtplay --plugin plugins/radio.js --search "jazz" --folder country:SE
+jtplay --plugin plugins/archive.js --browse c:etree --next 2   # the page after
 jtplay --plugin plugins/radio.js --resolve <station uuid>
 jtplay --plugin plugins/somafm.js --set quality=low --resolve dronezone
 ```
 
 `console.log()` and errors go to standard error, and the exit status says
-whether it worked. `--data DIR` gives `storage` a place to keep its file
+whether it worked. A listing that has a page after it says so on standard
+error, as `next: CURSOR`, for `--next`. `--data DIR` gives `storage` a place to keep its file
 between runs; without it nothing is kept.

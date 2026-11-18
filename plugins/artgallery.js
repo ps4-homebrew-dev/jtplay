@@ -20,7 +20,9 @@
 //        artist_display, date_display, medium_display }],
 //        config: { iiif_url } }
 // and a picture is <iiif_url>/<image_id>/full/<width>,/0/default.jpg. A
-// room is two pages of a hundred, asked for together (http.all).
+// room is listed two pages of a hundred at a time, asked for together
+// (http.all); the number of the page after them is the cursor the app hands
+// back for more (browse(id, next)).
 //
 // The image server answers 403 to a request without the museum's site as
 // Referer, so the source says so in imageHeaders, for the app to send
@@ -55,10 +57,11 @@ function url(params, page) {
     return API + "?" + params + "&fields=" + FIELDS + "&limit=" + PAGE_SIZE + "&page=" + page;
 }
 
-// The works a query finds, 'pages' pages of them fetched side by side.
-function works(params, pages) {
+// The works a query finds, 'pages' pages of them from 'first' on, fetched
+// side by side, and the page after them when there is one.
+function works(params, first, pages) {
     const requests = [];
-    for (let page = 1; page <= pages; page++)
+    for (let page = first; page < first + pages; page++)
         requests.push({ url: url(params, page), headers: HEADERS, timeout: 30 });
     const responses = http.all(requests);
 
@@ -66,6 +69,7 @@ function works(params, pages) {
     const out = [];
     const seen = {};
     let failure = null;
+    let total = 0;
     responses.forEach(res => {
         if (!res.ok) {
             // A second page past the end of the results is not a failure.
@@ -75,6 +79,8 @@ function works(params, pages) {
         const json = res.json();
         if (json.config && json.config.iiif_url)
             base = json.config.iiif_url;
+        if (json.pagination)
+            total = Math.max(total, Number(json.pagination.total_pages) || 0);
         (json.data || []).forEach(w => {
             if (!w || !w.image_id || seen[w.id])
                 return;
@@ -84,8 +90,16 @@ function works(params, pages) {
     });
     if (!out.length && failure)
         throw new Error("The museum did not answer (" + failure + ")");
-    return out.map(w => entry(w, base));
+    const after = first + pages;
+    return {
+        entries: out.map(w => entry(w, base)),
+        // (The API serves at most 10 000 results, a hundred pages of them.)
+        next: out.length && after <= Math.min(total, 100) ? after : undefined
+    };
 }
+
+// The page a cursor names: 1 for none.
+const pageOf = next => Math.max(1, Math.floor(Number(next)) || 1);
 
 function entry(w, base) {
     const artist = util.text(w.artist_display).split("\n")[0];
@@ -120,24 +134,25 @@ return {
                                                         HEADERS)
             },
 
-            browse(id) {
+            browse(id, next) {
                 if (id === "/")
                     return [{ id: "essentials", type: "folder", name: "Essentials",
                               description: "The works the museum puts first" }]
                         .concat(ROOMS.map(r => ({
                             id: "room:" + r[0], type: "folder", name: r[1], description: r[2]
                         })));
+                const page = pageOf(next);
                 if (id === "essentials")
-                    return util.memo(id, CACHE_SEC, () =>
-                        works("query%5Bterm%5D%5Bis_boosted%5D=true", PAGES));
+                    return util.memo(id + "#" + page, CACHE_SEC, () =>
+                        works("query%5Bterm%5D%5Bis_boosted%5D=true", page, PAGES));
                 if (id.startsWith("room:"))
-                    return util.memo(id, CACHE_SEC, () =>
-                        works("q=" + encodeURIComponent(id.slice(5)) + "&" + PUBLIC, PAGES));
+                    return util.memo(id + "#" + page, CACHE_SEC, () =>
+                        works("q=" + encodeURIComponent(id.slice(5)) + "&" + PUBLIC, page, PAGES));
                 throw new Error("unknown folder " + id);
             },
 
-            search(query) {
-                return works("q=" + encodeURIComponent(query) + "&" + PUBLIC, 1);
+            search(query, folderId, next) {
+                return works("q=" + encodeURIComponent(query) + "&" + PUBLIC, pageOf(next), 1);
             }
         }];
     }

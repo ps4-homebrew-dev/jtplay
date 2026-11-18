@@ -19,6 +19,9 @@
 // inside a collection, that collection; from the top, all of the films and
 // audio there is.
 //
+// A collection, and a search, are listed a hundred items at a time: the
+// page number is the cursor the app hands back for more (browse(id, next)).
+//
 // Two APIs, both plain JSON:
 //   advancedsearch.php?q=...&fl[]=...&sort[]=...&rows=...&output=json
 //       -> { response: { numFound, docs: [{ identifier, title, ... }] } }
@@ -51,14 +54,25 @@ const COLLECTIONS = [
 const FIELDS = ["identifier", "title", "description", "creator", "year", "date",
                 "runtime", "downloads", "mediatype", "publicdate"];
 
-function search(query, sort) {
+// One page (from 1) of the items matching 'query', as the entries
+// itemEntry() makes of them with 'kind' (a function of the doc), and the
+// page after when there is one.
+function search(query, page, kind) {
     const params = ["q=" + encodeURIComponent(query)]
         .concat(FIELDS.map(f => "fl%5B%5D=" + f))
-        .concat(["sort%5B%5D=" + encodeURIComponent(sort || "downloads desc"),
-                 "rows=" + ROWS, "page=1", "output=json"]);
+        .concat(["sort%5B%5D=" + encodeURIComponent("downloads desc"),
+                 "rows=" + ROWS, "page=" + page, "output=json"]);
     const json = http.json(SITE + "/advancedsearch.php?" + params.join("&"), { timeout: 30 });
-    return (json.response && json.response.docs) || [];
+    const response = json.response || {};
+    const docs = response.docs || [];
+    return {
+        entries: docs.map(doc => itemEntry(doc, kind(doc))),
+        next: docs.length && page * ROWS < (Number(response.numFound) || 0) ? page + 1 : undefined
+    };
 }
+
+// The page a cursor names: 1 for none.
+const pageOf = next => Math.max(1, Math.floor(Number(next)) || 1);
 
 // A field the Archive gives as a string, a number, or a list of either.
 function first(v) {
@@ -195,16 +209,17 @@ return {
             image: "https://archive.org/offshoot_assets/apple-touch-icon.png",
             root: "/",
 
-            browse(id) {
+            browse(id, next) {
                 if (id === "/")
                     return COLLECTIONS.map(c => ({
                         id: "c:" + c[0], type: "folder", name: c[1], description: c[2]
                     }));
                 if (id.startsWith("c:")) {
                     const collection = id.slice(2);
-                    return util.memo(id, CACHE_SEC, () =>
-                        search("collection:" + collection + " AND mediatype:(movies OR audio OR etree)")
-                            .map(doc => itemEntry(doc, kindOf(collection))));
+                    const page = pageOf(next);
+                    return util.memo(id + "#" + page, CACHE_SEC, () =>
+                        search("collection:" + collection + " AND mediatype:(movies OR audio OR etree)",
+                               page, () => kindOf(collection)));
                 }
                 if (id.startsWith("i:"))
                     return browseItem(id.slice(2));
@@ -213,7 +228,7 @@ return {
 
             // In a collection: that collection. Anywhere else: everything
             // there is to watch or listen to.
-            search(query, folderId) {
+            search(query, folderId, next) {
                 const words = query.replace(/[^\p{L}\p{N}\s'-]/gu, " ").trim();
                 if (!words)
                     return [];
@@ -221,9 +236,8 @@ return {
                     ? "collection:" + folderId.slice(2)
                     : "mediatype:(movies OR audio OR etree)";
                 const kind = folderId && folderId.startsWith("c:") ? kindOf(folderId.slice(2)) : "";
-                return search("(" + words + ") AND " + scope)
-                    .map(doc => itemEntry(doc, kind || (first(doc.mediatype) === "movies"
-                                                        ? "video" : "audio")));
+                return search("(" + words + ") AND " + scope, pageOf(next),
+                              doc => kind || (first(doc.mediatype) === "movies" ? "video" : "audio"));
             },
 
             resolve(id, entry) {

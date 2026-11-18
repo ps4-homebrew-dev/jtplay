@@ -176,11 +176,12 @@
 				<div id="entries" class="pane">
 					<div class="pane-head">
 						<!-- (No count of a folder that is not there: on its way, or failed.) -->
-						<span class="eyebrow" data-if="filter_text == '' && browse_error == '' && !(entry_count == 0 && browse_loading)">{{entry_count}} {{entry_count == 1 ? 'item' : 'items'}}</span>
-						<span class="eyebrow" data-if="filter_text != ''">&#xE155; {{filter_text}}  ·  {{entry_count}} of {{entry_total}}</span>
+						<!-- (With "Load more" at the end: what is listed so far.) -->
+						<span class="eyebrow" data-if="filter_text == '' && browse_error == '' && !(entry_count == 0 && browse_loading)">{{item_count}} {{item_count == 1 ? 'item' : 'items'}}{{has_more ? ' so far' : ''}}</span>
+						<span class="eyebrow" data-if="filter_text != ''">&#xE155; {{filter_text}}  ·  {{item_count}} of {{entry_total}}{{has_more ? ' so far' : ''}}</span>
 						<span class="spacer"/>
-						<span class="sort" data-if="entry_count > 0">{{sort_label}}</span>
-						<span class="position" data-if="entry_count > 0">{{sel_entry + 1}} / {{entry_count}}</span>
+						<span class="sort" data-if="item_count > 0">{{sort_label}}</span>
+						<span class="position" data-if="item_count > 0 && sel_entry < item_count">{{sel_entry + 1}} / {{item_count}}</span>
 					</div>
 					<!-- The filter (src/app_browse.cpp): the list below follows what is
 					     typed. Focusing the field brings up the system keyboard on a console. -->
@@ -195,6 +196,9 @@
 						     in for the rest (see App::SyncEntryWindow). -->
 						<div class="entry-spacer" data-if="spacer_top != '0px'" data-style-height="spacer_top"/>
 						<!-- (Up on the tabs over the list of sources: none is.) -->
+						<!-- (The last can be "Load more", see App::LoadMore; marked on the
+						     tile and the title, as a binding of the row's own to an entry
+						     is evaluated while the rows are cut back.) -->
 						<div class="entry-row" data-for="e : entries"
 						     data-class-selected="it_index == sel_window && !browse_tabs">
 							<!-- (A source's logo: whole, on the colour of its edge where it
@@ -203,7 +207,7 @@
 							     data-class-k-folder="e.kind == 'folder'"
 							     data-class-k-audio="e.kind == 'audio'"
 							     data-class-k-video="e.kind == 'video'"
-							     data-class-k-image="e.kind == 'image'"
+							     data-class-k-image="e.kind == 'image'" data-class-more="e.more"
 							     data-class-logo="e.logo && e.art != 'none'" data-class-edge="e.bg != 'transparent'">
 								<div class="art-bg" data-if="e.bg != 'transparent'" data-style-background-color="e.bg"/>
 								<div class="art-img" data-if="e.art != 'none'" data-style-decorator="e.art"/>
@@ -215,7 +219,7 @@
 									<div class="art-prog-bar" data-style-width="e.progress"/>
 								</div>
 							</div>
-							<div class="etitle" data-class-folder="e.folder">{{e.name}}</div>
+							<div class="etitle" data-class-folder="e.folder" data-class-more="e.more">{{e.name}}</div>
 							<span class="emark playing" data-if="e.playing">&#xE1AB;</span>
 							<span class="emark" data-if="e.favorite">&#xE17A;</span>
 							<span class="emark watched" data-if="e.watched">&#xE070;</span>
@@ -225,7 +229,7 @@
 						<div class="empty" data-if="entry_count == 0 && !browse_loading && filter_text == '' && browse_error == ''">
 							This folder is empty.
 						</div>
-						<div class="empty" data-if="entry_count == 0 && !browse_loading && filter_text != ''">
+						<div class="empty" data-if="item_count == 0 && !browse_loading && filter_text != ''">
 							Nothing matches the filter.
 						</div>
 						<!-- The folder could not be listed: why, and what to do about it. -->

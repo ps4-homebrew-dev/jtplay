@@ -35,6 +35,12 @@ public:
   std::string Key() const override;
 
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
+  // browse(id, next): a script that lists a folder in pages returns
+  // { entries: [...], next: cursor } rather than the array, and is called
+  // again with the cursor for the page after. (The first call has no
+  // second argument.)
+  bool BrowsePage(const std::string& id, const std::string& cursor, Listing& out,
+                  std::string& next, std::string& error) override;
 
   // A source can search when its script has a search(query, folderId)
   // function, which returns entries like browse() does. Whether there is
@@ -43,6 +49,10 @@ public:
   bool CanSearch(const std::string&) const override { return can_search_; }
   bool Search(const std::string& folder_id, const std::string& query, Listing& out,
               std::string& error) override;
+  // search(query, folderId, next), in pages as browse() is.
+  bool SearchPage(const std::string& folder_id, const std::string& query,
+                  const std::string& cursor, Listing& out, std::string& next,
+                  std::string& error) override;
 
   // Calls the script's resolve(id, entry) when it has one, so a plugin
   // serving signed URIs can hand out a fresh one per playback, with the
