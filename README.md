@@ -202,7 +202,7 @@ under the name of what is in focus ("..." means a dialog asks first):
 | In focus | Favorites section |
 |---|---|
 | anything not in Favorites | *Add...* (the folder picker) |
-| a favorite | *Move...* (the folder picker, on where it is), *Remove* |
+| a favorite | *Rename...* (its name in Favorites), *Move...* (the folder picker, on where it is), *Remove* |
 | a folder of yours | *Rename...*, *Move...*, *Delete* |
 
 In the Favorites tab the section also has *New folder...* (made in the

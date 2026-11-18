@@ -124,6 +124,10 @@ public:
   // folder inside it.
   bool MoveFavorite(const std::string& source_key, const std::string& id,
                     const std::string& folder);
+  // The name a favorite is listed by (its source's, as it was added, until
+  // renamed).
+  bool RenameFavorite(const std::string& source_key, const std::string& id,
+                      const std::string& name);
   bool MoveFavoriteFolder(const std::string& id, const std::string& parent);
   // The folders favorites were saved or moved to lately, the last first
   // ("" the top), for saving the next one there with a press.

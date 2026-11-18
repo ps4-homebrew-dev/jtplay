@@ -503,6 +503,23 @@ bool Library::MoveFavorite(const std::string& key, const std::string& id,
   return false;
 }
 
+bool Library::RenameFavorite(const std::string& key, const std::string& id,
+                             const std::string& name) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (name.empty())
+    return false;
+  for (Favorite& f : favorites_) {
+    if (f.ref.source_key == key && f.ref.entry.id == id) {
+      if (f.ref.entry.name != name) {
+        f.ref.entry.name = name;
+        Changed();
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
 bool Library::MoveFavoriteFolder(const std::string& id, const std::string& parent) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!HasFolder(parent) || Inside(parent, id))

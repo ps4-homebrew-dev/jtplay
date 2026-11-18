@@ -1164,7 +1164,7 @@ void App::AddEntryActions(const browse::Entry& entry) {
 // where a dialog asks something first:
 //
 //   not a favorite        Add...
-//   a favorite            Move...  Remove
+//   a favorite            Rename...  Move...  Remove
 //   a folder of yours     Rename...  Move...  Delete
 //
 // In the Favorites tab, where favorites are organized, New folder... (in
@@ -1185,6 +1185,14 @@ void App::AddFavoriteActions(const browse::Entry* entry) {
   } else if (entry && Identify(*entry, ref)) {
     const browse::Entry e = *entry;
     if (library_.IsFavorite(ref.source_key, ref.entry.id)) {
+      // (Its name in Favorites; where it is from keeps its own.)
+      AddMenuItem({"Rename\u2026", nullptr, [this, ref, e](int) {
+        OpenTextEntry("Rename favorite", DisplayName(e), kFolderNameMaxLength, false,
+                      [this, ref](const std::string& name) {
+          if (library_.RenameFavorite(ref.source_key, ref.entry.id, name))
+            library_.Save();
+        });
+      }});
       AddMenuItem({"Move\u2026", nullptr, [this, ref, e](int) {
         OpenSaveSheet(ref, DisplayName(e));
       }});
