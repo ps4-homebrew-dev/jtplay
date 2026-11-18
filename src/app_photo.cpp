@@ -243,6 +243,14 @@ void App::OpenPhotoMenu() {
                                              : Rml::String("Photos"));
   Set("menu_dialog", bind_menu_dialog_, false);
 
+  // In the order of every menu (see App::OpenMenu): the picture on
+  // screen, it in Favorites, the slideshow it is part of; closing last.
+  MenuSection("Picture");
+  AddMenuItem({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
+  if (photo_index_ < (int)photo_list_.size()) {
+    const browse::Entry entry = photo_list_[photo_index_];
+    AddFavoriteActions(&entry);
+  }
   if (photo_list_.size() > 1) {
     MenuSection("Slideshow");
     AddMenuItem({"Slideshow",
@@ -272,12 +280,7 @@ void App::OpenPhotoMenu() {
       [this] { return std::string(photo_shuffle_ ? "On" : "Off"); },
       [this](int) { photo_shuffle_ = !photo_shuffle_; SaveSettings(); }});
   }
-  if (photo_index_ < (int)photo_list_.size()) {
-    const browse::Entry entry = photo_list_[photo_index_];
-    AddFavoriteActions(&entry);
-  }
-  MenuSection("Picture");
-  AddMenuItem({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
+  MenuSection("Photos");
   AddMenuItem({"Close", nullptr, [this](int) { ClosePhotos(); }});
   ShowMenu();
 }

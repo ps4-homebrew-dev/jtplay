@@ -1166,7 +1166,8 @@ void App::AddEntryActions(const browse::Entry& entry) {
 //   not a favorite        Add...
 //   a favorite            Move...  Remove
 //   a folder of yours     Rename...  Move...  Delete
-//   in the Favorites tab  New folder...         (in the folder on screen)
+//
+// (New folder..., in the folder on screen, is the Folder section's.)
 void App::AddFavoriteActions(const browse::Entry* entry) {
   MenuSection("Favorites");
   std::string folder;
@@ -1185,8 +1186,6 @@ void App::AddFavoriteActions(const browse::Entry* entry) {
       AddMenuItem({"Add\u2026", nullptr, [this, e](int) { ToggleFavorite(e); }});
     }
   }
-  if (InFavoritesTree() && !bind_photo_)
-    AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
 }
 
 void App::MenuSection(const std::string& title) {
@@ -1206,6 +1205,20 @@ void App::ShowMenu(int selection) {
   Set("menu_open", bind_menu_open_, true);
 }
 
+// Every menu runs in the same order, from what is in focus out to what is
+// around it:
+//
+//   (no heading)   the item in focus: play, resume, mark as watched
+//   Favorites      the item in Favorites (AddFavoriteActions)
+//   Folder         the folder on screen: play all, shuffle, slideshow,
+//                  new folder, load more, refresh
+//   Find           search, filter
+//   View           list or grid, sort, order
+//   Plugin         the settings of the plugin it is from
+//   Now playing    what plays behind the menus, if anything does
+//
+// Within a section, what is used most comes first and what removes or
+// undoes something last.
 void App::OpenMenu() {
   menu_items_.clear();
   menu_parent_ = nullptr;
@@ -1230,7 +1243,8 @@ void App::OpenMenu() {
   } else if (view_ == View::Browse && bind_browse_tabs_ && OnFavoritesTab()) {
     // Up on the Favorites tab: likewise.
     Set("menu_title", bind_menu_title_, Rml::String("Favorites"));
-    AddFavoriteActions(nullptr);
+    MenuSection("Folder");
+    AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
     MenuSection("View");
     AddMenuItem({"View",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
@@ -1290,6 +1304,8 @@ void App::OpenMenu() {
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
+    if (InFavoritesTree())
+      AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
     if (HasMore())
       AddMenuItem({"Load more", nullptr, [this](int) { LoadMore(); }});
     // (Favorites are the library's own: nothing to fetch again.)
@@ -1335,10 +1351,12 @@ void App::OpenMenu() {
     const browse::Entry card = *SelectedCard();
     Set("menu_title", bind_menu_title_, DisplayName(card));
     AddEntryActions(card);
-    if (shelves_[sel_shelf_].source == continue_source_)
-      AddMenuItem({"Remove from Continue watching", nullptr,
-        [this, card](int) { SetWatched(card, false); }});
     AddFavoriteActions(&card);
+    // (Taking it off the row: last, as what undoes something is.)
+    if (shelves_[sel_shelf_].source == continue_source_) {
+      MenuSection("Continue watching");
+      AddMenuItem({"Remove", nullptr, [this, card](int) { SetWatched(card, false); }});
+    }
     library::Ref ref;
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);

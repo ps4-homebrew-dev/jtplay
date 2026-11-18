@@ -204,7 +204,16 @@ under the name of what is in focus ("..." means a dialog asks first):
 | anything not in Favorites | *Add...* (the folder picker) |
 | a favorite | *Move...* (the folder picker, on where it is), *Remove* |
 | a folder of yours | *Rename...*, *Move...*, *Delete* |
-| in the Favorites tab, also | *New folder...* (in the folder on screen) |
+
+In the Favorites tab, *New folder...* (in the folder on screen) is in the
+**Folder** section, with what else is done to the folder on screen.
+
+Every menu runs in the same order, from what is in focus out to what is
+around it: the item itself (play, resume, mark as watched), **Favorites**,
+**Folder** (play all, shuffle, slideshow, new folder, load more, refresh),
+**Find**, **View**, the **Plugin**'s settings, and **Now playing** last.
+Within each, what is used most comes first, and what removes something
+last.
 
 *Delete* (and triangle on a folder of yours) removes everything in the
 folder from your favorites as well, the folders inside it included; it
