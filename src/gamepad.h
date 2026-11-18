@@ -11,7 +11,8 @@
 //                                      playing on (held: stop)
 //   square / X            Space        Home: look for sources again; lists:
 //                                      next sort key; full screen: play / pause
-//   triangle / Y          T, Tab       Home, lists: pin / unpin (Favorites);
+//   triangle / Y          T, Tab       Home, lists: add to Favorites (picking
+//                                      the folder) or remove from them;
 //                                      full screen: the menus (Kodi's FullScreen)
 //   L1 / R1               PageUp/Down  page; in full screen: previous / next
 //                                      chapter or item (repeats)

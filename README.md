@@ -38,8 +38,8 @@ plugins, in the spirit of Kodi.
 ## Home
 
 Across the top are four tabs: **Home**, **Favorites**, **Sources** and
-**Settings**; at the start the focus is on Home. Up from a page reaches them; down, select
-or back returns.
+**Settings**; at the start the focus is on Home. Up from a page reaches
+them; down, select or back returns.
 
 Home is rows of cards, the first of them a press of down away, so that
 what you last watched or listened to is a press of select after that:
@@ -55,7 +55,8 @@ top of the screen -- where it is from, what is left of it, its
 description -- and follows the focus along the rows; the focused row
 sits right under it. Whatever a card has no data for is left out. Back on
 the rows goes to the first card, or to what plays behind the menus.
-Triangle saves the card in focus to Favorites (see the folder picker below).
+Triangle adds the card in focus to Favorites (see the folder picker
+below), or removes it from them.
 
 **Favorites** has for its page what you pinned, in the folders you sort it
 into (see Favorites and Continue watching), shown as soon as the tab has
@@ -75,13 +76,14 @@ it is there at once, as it was. Meanwhile all of the sources are looked
 for again in the background (local drives and plugins first, network
 servers last), and one that has not been found yet is looked for when
 selected, then opened; one that is not found at all says so, and its
-options menu can forget it. Triangle pins a source to Favorites. Back from
+options menu can forget it. Triangle adds a source to Favorites (or
+removes it), where it keeps its logo. Back from
 the top of a source returns to it in the list; back from the list, to the
 tabs.
 
-The options menu on the Sources tab has **Search** and **Refresh** (also
-in the list's options menu, as *Search all sources* and *Refresh*; square
-on the tab refreshes too). Refresh looks for every source again; Search
+The options menu on the Sources tab has **Search...** and **Refresh** (also
+in the list's options menu, as *Search all sources...* and *Refresh*;
+square on the tab refreshes too). Refresh looks for every source again; Search
 (or Ctrl+S on the list) searches everything at once: your library by name
 (Continue watching, what you played lately and Favorites), then every
 source that can search, most used first, all of them side by side so the
@@ -118,7 +120,16 @@ A source opens where it was left: in the folder it was left in, on the
 entry it was left on, with the folders above it in the path (listed as
 back reaches them). A folder that holds nothing but one folder (a media
 server's "Video" holding only "All video") is passed over to that one,
-both on the way down and on the way back up.
+both on the way down and on the way back up; not a folder of your
+favorites, nor one with more to load.
+
+A source that hands out a long listing in pages (a plugin's search
+results, a collection of thousands) lists the first, and the list ends in
+**Load more**, below the entries whatever they are sorted by: reaching it
+(down from the last entry, or End) or selecting it lists the next page,
+which joins the rest in the order the list is sorted in. The head of the
+list says "so far" meanwhile, and the options menu has *Load more* too.
+Refresh lists the first page again.
 
 With the focus on a folder from a drive or a media server, the info panel
 lists what is in it (the first eight entries, folders first, and how many
@@ -131,15 +142,18 @@ time when a bar is up). Back gives up on a folder on its way and stays
 put. A folder that cannot be listed says why in place of the list;
 select tries again. The item that is playing is marked in the list.
 
-The options button opens a side menu, in groups under headings that come
-in the same order in every menu: first what can be done with the selected
-item (play, resume, play from the beginning, add to favorites, mark as
-watched); then **Folder** (play it all in order or shuffled, a slideshow
-of its pictures, refresh), **Find** (search, where the source has it, and
-filter), **View** (list or grid, sort key and order), **Plugin** (the
-settings of the plugin the folder is from, see Settings) and, while
-something plays behind the menus, **Now playing** (back to full screen,
-stop).
+The options button opens a side menu, titled with the name of the
+selected item, in groups under headings that come in the same order in
+every menu, from the item out to what is around it: first what can be
+done with the item itself (resume, play from the beginning, mark as
+watched); then **Favorites** (see Favorites), **Folder** (play it all in
+order or shuffled, a slideshow of its pictures, load more, refresh),
+**Find** (search, where the source has it, and filter), **View** (list or
+grid, sort key and order), **Plugin** (the settings of the plugin the
+folder is from, see Settings) and, while something plays behind the
+menus, **Now playing** (back to full screen, stop). Within each, what is
+used most comes first, and what removes something last; "..." after a
+name means a dialog asks something first.
 
 ## Filter and search
 
@@ -171,8 +185,9 @@ Pictures open full screen. Left / right step through the folder's
 pictures; select starts and pauses a slideshow that cross-fades from one
 picture to the next while slowly panning and zooming across each (Ken
 Burns); up / down show the caption (name, position, date, size); triangle
-turns a picture a quarter. The options menu has the seconds per picture,
-the transition (pan & zoom, cross-fade, none), shuffle and rotation.
+turns a picture a quarter. The options menu has rotation, the picture's
+Favorites section, the slideshow (on / off, seconds per picture, the
+transition -- pan & zoom, cross-fade, none -- and shuffle) and Close.
 
 Pictures are shown from screen-sized copies the artwork cache makes in
 the background, so a camera original is never uploaded as a 100 MiB
@@ -206,14 +221,9 @@ under the name of what is in focus ("..." means a dialog asks first):
 | a folder of yours | *Rename...*, *Move...*, *Delete* |
 
 In the Favorites tab the section also has *New folder...* (made in the
-folder on screen), just before *Remove* or *Delete*.
-
-Every menu runs in the same order, from what is in focus out to what is
-around it: the item itself (play, resume, mark as watched), **Favorites**,
-**Folder** (play all, shuffle, slideshow, load more, refresh),
-**Find**, **View**, the **Plugin**'s settings, and **Now playing** last.
-Within each, what is used most comes first, and what removes something
-last.
+folder on screen), just before *Remove* or *Delete*. Favorites are the
+library's own, so there is no Refresh there, nor Search; Filter works as
+anywhere.
 
 *Delete* (and triangle on a folder of yours) removes everything in the
 folder from your favorites as well, the folders inside it included; it
@@ -355,6 +365,8 @@ return {
 ```
 
 and may add `search(query, folderId)` to get Search in the options menu,
+hand out a long listing a page at a time (`{ entries, next }`, see Load
+more),
 `resolve(id, entry)` to mint the address (and the request headers and
 subtitles that go with it) at the moment playback starts, and `settings`
 for choices that appear on the Settings page. The host gives it blocking
@@ -369,9 +381,9 @@ names it at start. A file with the name of a bundled plugin replaces it.
 They are picked up, and changed ones loaded afresh, whenever the sources
 are looked for again (square on Home): no restart, no new package.
 
-`jtplay --plugin FILE [--browse ID | --search QUERY | --resolve ID]` runs a
-plugin without the app and prints what it answers, which is the quick way
-to write one.
+`jtplay --plugin FILE [--browse ID | --search QUERY | --resolve ID]
+[--next CURSOR]` runs a plugin without the app and prints what it answers,
+which is the quick way to write one.
 
 A plugin runs in a runtime of its own, 32 MiB at most, and a call that
 spends more than ten seconds *executing* (waiting on the network does not
@@ -416,7 +428,7 @@ that is not on the d-pad.
 | directions  | d-pad, left stick     | arrows            | arrows                  |
 | select      | cross (A)             | Return            | OK                      |
 | back        | circle (B)            | Backspace         | back                    |
-| options     | options (start)       | Menu, F10         | options, menu, disc menu; OK held |
+| options     | options (start)       | Menu, F4, F10     | options, menu (F4), disc menu (F10); OK held |
 | square      | square (X)            | Space             |                         |
 | triangle    | triangle (Y)          | T, Tab            |                         |
 | previous / next | L1 / R1           |                   |                         |
@@ -427,13 +439,13 @@ that is not on the d-pad.
 
 | Button          | Home                        | Lists, menus, Settings            | Playing (full screen)                       | Photos             |
 |-----------------|-----------------------------|-----------------------------------|---------------------------------------------|--------------------|
-| up / down       | between rows; tabs above    | move (lists and menus wrap; up from the top of the list of sources: the tabs) | seek +5 / -5 min                            | caption            |
+| up / down       | between rows; tabs above    | move (lists and menus wrap; up from the top of the favorites or the list of sources: the tabs) | seek +5 / -5 min                            | caption            |
 | left / right    | along a row (or the tabs)   | list: page or letter; grid: move; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
 | select          | open / play                 | open / play / choose              | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
-| back            | first card; full screen*    | back (a source's top: its place in the list of sources; that list: the tabs); closes a menu | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
+| back            | first card; full screen*    | back (a source's top: its place in the list of sources; that list, and the top of the favorites: the tabs); closes a menu; folder picker: up a folder, at the top Cancel | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
 | options         | options for the card        | options menu; closes a menu       | info bar / away                             | photo menu         |
 | square          | look for sources again      | next sort key                     | play / pause                                | slideshow on / off |
-| triangle        | pin / unpin                 | pin / unpin (Favorites)           | the menus, playing on                       | rotate             |
+| triangle        | add to / remove from Favorites | add to Favorites (folder picker) / remove; a folder of yours: delete | the menus, playing on          | rotate             |
 | previous / next | a page of rows              | page up / down                    | previous / next chapter or item             | previous / next    |
 | page / channel  | a page of rows              | page up / down                    | up: next item; down: previous item          | up: next; down: previous |
 | first / last    | first / last in the row     | first / last                      | on the controls: first / last button        | first / last       |
@@ -453,8 +465,9 @@ field; with nothing playing, in the photo viewer they are the slideshow's
 (play / pause, previous / next picture, close). Its rewind / fast forward
 (as left / right in full screen, 10 s steps behind the menus), audio (the
 next audio track) and subtitle (the next subtitle track, F1 on a keyboard)
-keys work on playback too; its display key shows or hides the bar in full
-screen. Since not every remote has an options key, nor every TV passes it
+keys work on playback too. Its menu (or display) key arrives as F4 and is
+options, as the disc menu key (F10) is: in full screen, that shows or hides
+the bar. Since not every remote has an options key, nor every TV passes it
 on, holding OK (Return) for a moment is options too. What a TV remote
 connected over HDMI-CEC sends depends on the console and the TV; Settings
 > Show input shows it.

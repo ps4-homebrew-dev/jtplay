@@ -193,7 +193,7 @@
  * app focuses the field, which is what brings up the system keyboard on a
  * console; on a PC it is typed into. Return searches, Escape closes. */
 #search-scrim {
-	z-index: 11; /* over the save sheet, which it names a folder for */
+	z-index: 11; /* over the folder picker, which it names a folder for */
 	position: absolute;
 	left: 0px;
 	top: 0px;

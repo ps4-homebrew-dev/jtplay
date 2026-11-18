@@ -1100,7 +1100,8 @@ void App::HandleKeyWatch(Rml::Event& event, int key) {
     break;
 
   case gamepad::kKeyOptions: // the bar; again: away with it
-  case Rml::Input::KI_F4:    // (a remote's display / info key likewise)
+  case Rml::Input::KI_F4:    // (F4 likewise where it is not options: SDL 3, see
+                             // RmlSDL::ConvertKey)
     if (bind_watch_audio_)
       break;                 // the card is always there
     if (bind_info_visible_)

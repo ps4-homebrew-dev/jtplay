@@ -168,7 +168,7 @@ bool App::ResumeInPlace(const browse::Entry& card) {
   if (!library_.ResumePlace(ref.source_key, ref.entry.id, key, place) || place.empty())
     return false;
   // Played from a folder of a source (opened from the list of sources),
-  // or from a favorite folder (opened from its card at home).
+  // or from one under the Favorites tab.
   browse::SourcePtr source = key == favorites_source_->Key() ? favorites_source_
                                                              : registry_.Find(key);
   if (!source)
@@ -190,6 +190,17 @@ bool App::ResumeInPlace(const browse::Entry& card) {
   home_return_id_ = library ? place.front().id : std::string();
   view_root_ = library ? default_view_ : SourcesListView();
   current_source_ = source;
+  // Under the Favorites tab: that tab is the one its top is the page of.
+  if (source == favorites_source_ && place.front().id.empty()) {
+    if (rail_.empty())
+      RebuildHome("favorites");
+    for (size_t i = 0; i < rail_.size(); i++) {
+      if (rail_[i].kind == RailKind::Favorites && sel_rail_ != (int)i) {
+        sel_rail_ = (int)i;
+        model_.DirtyVariable("sel_rail");
+      }
+    }
+  }
   path_.clear();
   for (size_t i = 0; i + 1 < place.size(); i++) {
     BrowseLevel level;
@@ -511,9 +522,9 @@ void App::RebuildEntryRows() {
   Set("has_more", bind_has_more_, HasMore());
   // Favorites, and their folders, say how they fill up.
   Set("empty_text", bind_empty_text_, Rml::String(
-    OnFavoritesTab() ? "Nothing pinned yet. Triangle on any folder or item adds it here."
-    : InFavoritesTree() ? "Nothing in this folder yet. Move to... in the options menu "
-                          "of a favorite puts it here."
+    OnFavoritesTab() ? "No favorites yet. Triangle on any folder or item adds it."
+    : InFavoritesTree() ? "Nothing in this folder yet. Triangle on anything can save it "
+                          "here, and Move... in a favorite's options menu move it here."
     : "This folder is empty."));
   if (bind_has_more_) {
     EntryRow row;
@@ -771,7 +782,7 @@ void App::LoadMore() {
         UpdateMoreRow();
         return;
       }
-      BrowseLevel& level = path_.back();
+      BrowseLevel& here = path_.back();
       if (!error.empty()) {
         // What there is stays, and "Load more" tries again.
         ShowToast(error, icon::kWarning);
@@ -782,15 +793,15 @@ void App::LoadMore() {
       // Where the cursor goes: on the first of the new entries if it was on
       // "Load more" (in the folder's own order, that is where the row was),
       // and otherwise where it is.
-      const bool was_on_more = sel_entry_ >= (int)level.entries.size();
+      const bool was_on_more = sel_entry_ >= (int)here.entries.size();
       std::string keep;
       if (!was_on_more && sel_entry_ >= 0)
-        keep = level.entries[sel_entry_].id;
+        keep = here.entries[sel_entry_].id;
 
       // A page that overlaps the one before (a listing that shifted while
       // it was paged through) adds only what is new.
       std::unordered_set<std::string> seen;
-      for (const browse::Entry& e : level.raw)
+      for (const browse::Entry& e : here.raw)
         seen.insert(e.id);
       size_t added = 0;
       for (browse::Entry& e : result) {
@@ -798,31 +809,31 @@ void App::LoadMore() {
           continue;
         if (keep.empty() && was_on_more)
           keep = e.id;
-        level.raw.push_back(std::move(e));
+        here.raw.push_back(std::move(e));
         added++;
       }
       // A source that keeps handing back the same page has no more.
-      level.next = added == 0 && next == cursor ? std::string() : next;
-      NoteSourceArt(current_source_, level.raw);
+      here.next = added == 0 && next == cursor ? std::string() : next;
+      NoteSourceArt(current_source_, here.raw);
 
-      level.selection = -1;
-      SortLevel(level);
+      here.selection = -1;
+      SortLevel(here);
       // Nothing new to go to (or all of it filtered out): "Load more"
       // again, or the last entry when that has gone.
-      level.selection = was_on_more ? (int)level.entries.size() : 0;
-      for (size_t i = 0; i < level.entries.size() && !keep.empty(); i++) {
-        if (level.entries[i].id == keep) {
-          level.selection = (int)i;
+      here.selection = was_on_more ? (int)here.entries.size() : 0;
+      for (size_t i = 0; i < here.entries.size() && !keep.empty(); i++) {
+        if (here.entries[i].id == keep) {
+          here.selection = (int)i;
           break;
         }
       }
-      if (level.next.empty())
-        level.selection = std::min(level.selection, std::max(0, (int)level.entries.size() - 1));
-      sel_entry_ = level.selection;
+      if (here.next.empty())
+        here.selection = std::min(here.selection, std::max(0, (int)here.entries.size() - 1));
+      sel_entry_ = here.selection;
       RebuildEntryRows();
       RebuildDetail();
       scroll_entries_deferred_ = true;
-      if (added == 0 && level.next.empty())
+      if (added == 0 && here.next.empty())
         ShowToast("That was all", icon::kMore);
     });
   });
@@ -950,8 +961,9 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
   case Rml::Input::KI_HOME:  MoveSelection(-entry_count_); break;
   case Rml::Input::KI_END:   MoveSelection(+entry_count_); break;
   case Rml::Input::KI_SPACE: CycleSortMode(+1); break;
-  // Triangle: pins the item (or folder) in focus to Home's Favorites, or
-  // unpins it. (Reversing the order is in the options menu.)
+  // Triangle: adds the item (or folder) in focus to Favorites, into the
+  // folder picked, or removes it from them. (Reversing the order is in the
+  // options menu.)
   case Rml::Input::KI_T:
   case Rml::Input::KI_TAB:
     if (const browse::Entry* e = SelectedEntry()) {
@@ -1434,16 +1446,35 @@ void App::RefreshFavoritesLevel(const std::string& select) {
     listing.clear();
   }
   BrowseLevel& level = *CurrentLevel();
-  std::string keep = select;
-  if (keep.empty())
-    if (const browse::Entry* e = SelectedEntry())
-      keep = e->id;
+  // The same as listed (the library changed elsewhere: progress, every few
+  // seconds while something plays): the rows say so, and nothing moves.
+  auto same = [&listing](const browse::Listing& was) {
+    if (was.size() != listing.size())
+      return false;
+    for (size_t i = 0; i < was.size(); i++)
+      if (was[i].id != listing[i].id || was[i].name != listing[i].name ||
+          was[i].description != listing[i].description || was[i].image != listing[i].image)
+        return false;
+    return true;
+  };
   // (A folder renamed is named anew in the path, too.)
   std::string folder;
   library::FavoriteFolder f;
   if (library::FavoriteFolderFromEntryId(level.id, folder) &&
-      library_.FindFavoriteFolder(folder, f))
+      library_.FindFavoriteFolder(folder, f) && level.name != f.name) {
     level.name = f.name;
+    RebuildCrumb();
+  }
+  if (select.empty() && same(level.raw)) {
+    RebuildEntryRows();
+    RebuildDetail();
+    scroll_entries_pending_ = true;
+    return;
+  }
+  std::string keep = select;
+  if (keep.empty())
+    if (const browse::Entry* e = SelectedEntry())
+      keep = e->id;
   const int was = sel_entry_;
   level.raw = std::move(listing);
   level.selection = -1;

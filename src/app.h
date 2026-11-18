@@ -274,8 +274,8 @@ private:
   // The same, for an entry listed by 'source' rather than the current one.
   bool IdentifyIn(const browse::Entry& entry, const browse::SourcePtr& source,
                   library::Ref& out) const;
-  // Triangle: the save sheet for an entry (see OpenSaveSheet), to add it
-  // to Favorites, move it to another folder of them or remove it.
+  // Triangle: removes a favorite; adds anything else, into the folder of
+  // favorites chosen in the folder picker (see OpenSaveSheet).
   void ToggleFavorite(const browse::Entry& entry);
   // A source as a favorite: its top folder, kept against the source's key,
   // with its picture (its logo, or artwork seen in it).
@@ -1148,7 +1148,7 @@ private:
   // The same, a frame later: for rows a reply has just added, which the
   // list has no room for until the context has laid them out.
   bool scroll_entries_deferred_ = false;
-  bool scroll_sheet_pending_ = false; // the save sheet's selection into view
+  bool scroll_sheet_pending_ = false; // the folder picker's selection into view
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
   bool scroll_rows_pending_ = false;    // Home's rows, onto the focus

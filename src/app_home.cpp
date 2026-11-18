@@ -585,7 +585,8 @@ void App::RebuildShelves() {
   Set("hero_detail", bind_hero_detail_,
       Rml::String(empty ? "Your drives, servers and plugins are under Sources." : ""));
   Set("hero_note", bind_hero_note_, Rml::String(empty
-    ? "What you leave unfinished will gather here, and what you pin under Favorites." : ""));
+    ? "What you leave unfinished will gather here; what you add to Favorites, under its tab."
+    : ""));
 
   if (NowPlayingShelf(0) != had_now_playing && !shelf_card_sel_.empty()) {
     if (had_now_playing) {
@@ -888,7 +889,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
   case Rml::Input::KI_SPACE:
     SearchAllSources();
     break;
-  // Triangle: pins the card in focus to Favorites, or unpins it.
+  // Triangle: adds the card in focus to Favorites, or removes it.
   case Rml::Input::KI_T:
   case Rml::Input::KI_TAB:
     if (!NowPlayingShelf(sel_shelf_)) {
