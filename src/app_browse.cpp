@@ -1150,9 +1150,6 @@ void App::AddEntryActions(const browse::Entry& entry) {
     }
     // (Anything else plays with select: no entry for that.)
   }
-  const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-  AddMenuItem({fav ? "Remove from favorites" : "Add to favorites\u2026",
-    nullptr, [this, entry](int) { ToggleFavorite(entry); }});
   if (entry.IsVideo() || entry.IsAudio()) {
     library::Progress p;
     const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
@@ -1160,6 +1157,36 @@ void App::AddEntryActions(const browse::Entry& entry) {
     AddMenuItem({watched ? "Mark as unwatched" : "Mark as watched",
       nullptr, [this, entry, watched](int) { SetWatched(entry, !watched); }});
   }
+}
+
+// The Favorites section of a menu, the same everywhere. Its rows are verbs
+// on the thing the menu is for (its name is the menu's title), with "..."
+// where a dialog asks something first:
+//
+//   not a favorite        Add...
+//   a favorite            Move...  Remove
+//   a folder of yours     Rename...  Move...  Delete
+//   in the Favorites tab  New folder...         (in the folder on screen)
+void App::AddFavoriteActions(const browse::Entry* entry) {
+  MenuSection("Favorites");
+  std::string folder;
+  library::Ref ref;
+  if (entry && current_source_ == favorites_source_ &&
+      library::FavoriteFolderFromEntryId(entry->id, folder)) {
+    AddFavoriteFolderActions(*entry);
+  } else if (entry && Identify(*entry, ref)) {
+    const browse::Entry e = *entry;
+    if (library_.IsFavorite(ref.source_key, ref.entry.id)) {
+      AddMenuItem({"Move\u2026", nullptr, [this, ref, e](int) {
+        OpenSaveSheet(ref, DisplayName(e));
+      }});
+      AddMenuItem({"Remove", nullptr, [this, e](int) { ToggleFavorite(e); }});
+    } else {
+      AddMenuItem({"Add\u2026", nullptr, [this, e](int) { ToggleFavorite(e); }});
+    }
+  }
+  if (InFavoritesTree() && !bind_photo_)
+    AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
 }
 
 void App::MenuSection(const std::string& title) {
@@ -1191,8 +1218,10 @@ void App::OpenMenu() {
     // Up on the Sources tab: what is done to all of them, and how they
     // are shown.
     Set("menu_title", bind_menu_title_, Rml::String("Sources"));
-    AddMenuItem({"Search", nullptr, [this](int) { OpenSearch(); }});
+    MenuSection("Sources");
+    AddMenuItem({"Search\u2026", nullptr, [this](int) { OpenSearch(); }});
     AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
+    MenuSection("View");
     AddMenuItem({"View",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
@@ -1201,7 +1230,8 @@ void App::OpenMenu() {
   } else if (view_ == View::Browse && bind_browse_tabs_ && OnFavoritesTab()) {
     // Up on the Favorites tab: likewise.
     Set("menu_title", bind_menu_title_, Rml::String("Favorites"));
-    AddMenuItem({"New folder", nullptr, [this](int) { NewFavoritesFolder(); }});
+    AddFavoriteActions(nullptr);
+    MenuSection("View");
     AddMenuItem({"View",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
@@ -1219,7 +1249,8 @@ void App::OpenMenu() {
       Set("menu_title", bind_menu_title_, Rml::String(source.name));
       if (source.source) {
         const bool fav = library_.IsFavorite(source.key, source.source->RootId());
-        AddMenuItem({fav ? "Remove from favorites" : "Add to favorites\u2026", nullptr,
+        MenuSection("Favorites");
+        AddMenuItem({fav ? "Remove" : "Add\u2026", nullptr,
           [this, s = source.source](int) {
             ToggleSourceFavorite(s);
             RebuildEntryRows();
@@ -1231,21 +1262,12 @@ void App::OpenMenu() {
           RefreshSourcesList();
         }});
       }
-    } else if (std::string folder;
-               e && InFavoritesTree() && library::FavoriteFolderFromEntryId(e->id, folder)) {
-      Set("menu_title", bind_menu_title_, DisplayName(*e));
-      AddFavoriteFolderActions(*e);
-    } else if (e) {
-      Set("menu_title", bind_menu_title_, DisplayName(*e));
-      AddEntryActions(*e);
-      // A favorite, where favorites are sorted: into another folder.
-      library::Ref ref;
-      if (InFavoritesTree() && Identify(*e, ref) &&
-          library_.IsFavorite(ref.source_key, ref.entry.id)) {
-        AddMenuItem({"Move to\u2026", nullptr, [this, ref, entry = *e](int) {
-          OpenSaveSheet(ref, DisplayName(entry));
-        }});
+    } else {
+      if (e) {
+        Set("menu_title", bind_menu_title_, DisplayName(*e));
+        AddEntryActions(*e);
       }
+      AddFavoriteActions(e);
     }
 
     // (The list of sources: what is done to the lot of them.)
@@ -1268,20 +1290,20 @@ void App::OpenMenu() {
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
-    if (InFavoritesTree())
-      AddMenuItem({"New folder", nullptr, [this](int) { NewFavoritesFolder(); }});
     if (HasMore())
       AddMenuItem({"Load more", nullptr, [this](int) { LoadMore(); }});
-    AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
+    // (Favorites are the library's own: nothing to fetch again.)
+    if (!InFavoritesTree())
+      AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
 
     // Search asks the source for more, and is only there for sources that
     // can; Filter narrows what is listed.
     MenuSection("Find");
     if (current_source_ && !path_.empty() &&
         current_source_->CanSearch(path_[SearchScope()].id))
-      AddMenuItem({everything ? "Search all sources" : "Search", nullptr,
+      AddMenuItem({everything ? "Search all sources\u2026" : "Search\u2026", nullptr,
                    [this](int) { OpenSearch(); }});
-    AddMenuItem({"Filter", nullptr, [this](int) { OpenFilter(); }});
+    AddMenuItem({"Filter\u2026", nullptr, [this](int) { OpenFilter(); }});
     if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
       AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
 
@@ -1316,6 +1338,7 @@ void App::OpenMenu() {
     if (shelves_[sel_shelf_].source == continue_source_)
       AddMenuItem({"Remove from Continue watching", nullptr,
         [this, card](int) { SetWatched(card, false); }});
+    AddFavoriteActions(&card);
     library::Ref ref;
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);
@@ -1423,15 +1446,15 @@ void App::AddFavoriteFolderActions(const browse::Entry& entry) {
   if (!library::FavoriteFolderFromEntryId(entry.id, folder) ||
       !library_.FindFavoriteFolder(folder, f))
     return;
-  AddMenuItem({"Rename", nullptr, [this, f](int) {
+  AddMenuItem({"Rename\u2026", nullptr, [this, f](int) {
     OpenTextEntry("Rename folder", f.name, kFolderNameMaxLength, false,
                   [this, f](const std::string& name) {
       if (library_.RenameFavoriteFolder(f.id, name))
         library_.Save();
     });
   }});
-  AddMenuItem({"Move to\u2026", nullptr, [this, f](int) { OpenFolderMoveSheet(f.id); }});
-  AddMenuItem({"Delete folder", nullptr,
+  AddMenuItem({"Move\u2026", nullptr, [this, f](int) { OpenFolderMoveSheet(f.id); }});
+  AddMenuItem({"Delete", nullptr,
                [this, id = f.id](int) { ConfirmDeleteFavoriteFolder(id); }});
 }
 

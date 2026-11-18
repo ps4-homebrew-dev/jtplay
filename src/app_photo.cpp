@@ -272,17 +272,12 @@ void App::OpenPhotoMenu() {
       [this] { return std::string(photo_shuffle_ ? "On" : "Off"); },
       [this](int) { photo_shuffle_ = !photo_shuffle_; SaveSettings(); }});
   }
-  MenuSection("Picture");
-  AddMenuItem({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
   if (photo_index_ < (int)photo_list_.size()) {
     const browse::Entry entry = photo_list_[photo_index_];
-    library::Ref ref;
-    if (Identify(entry, ref)) {
-      const bool fav = library_.IsFavorite(ref.source_key, ref.entry.id);
-      AddMenuItem({fav ? "Remove from favorites" : "Add to favorites\u2026",
-        nullptr, [this, entry](int) { ToggleFavorite(entry); }});
-    }
+    AddFavoriteActions(&entry);
   }
+  MenuSection("Picture");
+  AddMenuItem({"Rotate", nullptr, [this](int) { RotatePhoto(); }});
   AddMenuItem({"Close", nullptr, [this](int) { ClosePhotos(); }});
   ShowMenu();
 }

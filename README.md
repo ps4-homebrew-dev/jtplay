@@ -193,17 +193,23 @@ the path to a folder of favorites, the folders in it (*..* goes up;
 select goes into one, back comes out), and **New folder**, **Cancel** and
 **OK**. OK saves into the folder on screen. It opens in the folder the
 last favorite went to, on OK, so saving the next one there is triangle
-then select. On a favorite already, triangle removes it. **Move to...** in
-the options menu of the Favorites tab opens the same picker, where the
-favorite (or folder of yours) is, ticked; OK moves it. A source added from
-the list of sources keeps its logo.
+then select. On a favorite already, triangle removes it. A source added
+from the list of sources keeps its logo.
 
-The options menu in the Favorites tab has **New folder** (in the folder on
-screen), and on a folder of yours **Rename**, **Move to...** (the same
-picker) and **Delete folder** (triangle on it, too), which removes
-everything in it from your favorites as well, the folders inside it
-included; it asks first, unless the folder is empty. Moving a favorite
-keeps its resume point and watched mark.
+Every options menu has a **Favorites** section, the same wherever it is,
+under the name of what is in focus ("..." means a dialog asks first):
+
+| In focus | Favorites section |
+|---|---|
+| anything not in Favorites | *Add...* (the folder picker) |
+| a favorite | *Move...* (the folder picker, on where it is), *Remove* |
+| a folder of yours | *Rename...*, *Move...*, *Delete* |
+| in the Favorites tab, also | *New folder...* (in the folder on screen) |
+
+*Delete* (and triangle on a folder of yours) removes everything in the
+folder from your favorites as well, the folders inside it included; it
+asks first, unless the folder is empty. Moving a favorite keeps its resume
+point and watched mark.
 
 Videos (and audio longer than 20 minutes) remember where they were
 stopped. Playing one again from a folder asks whether to resume (from

@@ -616,6 +616,8 @@ private:
   // behind the menus.
   void OpenMenu();
   void AddEntryActions(const browse::Entry& entry);
+  // The Favorites section of a menu, for 'entry' (null: none in focus).
+  void AddFavoriteActions(const browse::Entry* entry);
   // Entries added to menu_items_ from here on belong under 'title': the
   // next one added gets the heading (none, if no entry follows).
   void MenuSection(const std::string& title);
