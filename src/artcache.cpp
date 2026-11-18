@@ -14,12 +14,18 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <strings.h>
+
 #include <SDL.h>
 #include <SDL_image.h>
 
 #include "artcache.h"
 #include "net/http_client.h"
 
+
+#ifndef JTPLAY_VERSION
+#define JTPLAY_VERSION "dev"
+#endif
 namespace artcache {
 namespace {
 
@@ -27,6 +33,9 @@ namespace {
 // thread or a large allocation on a console with no swap.
 constexpr size_t kMaxImageBytes = 12u << 20;
 constexpr long kStallTimeoutMs = 15000; // no data for this long: give up
+// Artwork downloads say who is asking (see Fetch).
+constexpr const char* kUserAgent =
+  "jtplay/" JTPLAY_VERSION " (+https://github.com/ps4-homebrew-dev/jtplay)";
 
 // Files kept across runs. A few hundred covers is a couple of tens of MiB,
 // and the oldest ones are dropped on the next start.
@@ -457,6 +466,15 @@ std::string Fetch(const std::string& uri) {
   net::HttpClient::Request req;
   req.url = uri;
   req.headers = net::PrefixHeaders(uri); // what the plugin said the server wants
+  // Who is asking, unless that says: some image hosts (Wikimedia's) turn
+  // away a request that names only a program. Only here: what plugins
+  // fetch keeps the plain name, as the services they talk to may serve
+  // another stream to another client (Pluto TV's ads went out of step).
+  bool named = false;
+  for (const auto& header : req.headers)
+    named = named || !::strcasecmp(header.first.c_str(), "User-Agent");
+  if (!named)
+    req.headers.emplace_back("User-Agent", kUserAgent);
   req.stall_timeout_ms = kStallTimeoutMs;
   req.max_bytes = kMaxImageBytes;
 
