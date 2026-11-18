@@ -517,7 +517,9 @@ private:
   void RefreshFavoritesLevel(const std::string& select = std::string());
   // The options menu's part for a folder of favorites, and for moving a
   // favorite or a folder into another (a list of them, the top first).
-  void AddFavoriteFolderActions(const browse::Entry& entry);
+  // (Rename..., Move..., then 'before_delete' adds its rows, then Delete.)
+  void AddFavoriteFolderActions(const browse::Entry& entry,
+                                const std::function<void()>& before_delete = nullptr);
   // Asks before deleting a folder of favorites with anything in it, as
   // that goes too; an empty one goes at once.
   void ConfirmDeleteFavoriteFolder(const std::string& folder);

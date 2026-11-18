@@ -1167,24 +1167,35 @@ void App::AddEntryActions(const browse::Entry& entry) {
 //   a favorite            Move...  Remove
 //   a folder of yours     Rename...  Move...  Delete
 //
-// (New folder..., in the folder on screen, is the Folder section's.)
+// In the Favorites tab, where favorites are organized, New folder... (in
+// the folder on screen) is one of them too: before what removes, which
+// comes last.
 void App::AddFavoriteActions(const browse::Entry* entry) {
   MenuSection("Favorites");
+  const bool organizing = InFavoritesTree() && !bind_photo_;
+  auto new_folder = [this, organizing] {
+    if (organizing)
+      AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
+  };
   std::string folder;
   library::Ref ref;
   if (entry && current_source_ == favorites_source_ &&
       library::FavoriteFolderFromEntryId(entry->id, folder)) {
-    AddFavoriteFolderActions(*entry);
+    AddFavoriteFolderActions(*entry, new_folder);
   } else if (entry && Identify(*entry, ref)) {
     const browse::Entry e = *entry;
     if (library_.IsFavorite(ref.source_key, ref.entry.id)) {
       AddMenuItem({"Move\u2026", nullptr, [this, ref, e](int) {
         OpenSaveSheet(ref, DisplayName(e));
       }});
+      new_folder();
       AddMenuItem({"Remove", nullptr, [this, e](int) { ToggleFavorite(e); }});
     } else {
       AddMenuItem({"Add\u2026", nullptr, [this, e](int) { ToggleFavorite(e); }});
+      new_folder();
     }
+  } else {
+    new_folder(); // (an empty folder: nothing in focus)
   }
 }
 
@@ -1211,7 +1222,7 @@ void App::ShowMenu(int selection) {
 //   (no heading)   the item in focus: play, resume, mark as watched
 //   Favorites      the item in Favorites (AddFavoriteActions)
 //   Folder         the folder on screen: play all, shuffle, slideshow,
-//                  new folder, load more, refresh
+//                  load more, refresh
 //   Find           search, filter
 //   View           list or grid, sort, order
 //   Plugin         the settings of the plugin it is from
@@ -1243,7 +1254,7 @@ void App::OpenMenu() {
   } else if (view_ == View::Browse && bind_browse_tabs_ && OnFavoritesTab()) {
     // Up on the Favorites tab: likewise.
     Set("menu_title", bind_menu_title_, Rml::String("Favorites"));
-    MenuSection("Folder");
+    MenuSection("Favorites");
     AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
     MenuSection("View");
     AddMenuItem({"View",
@@ -1304,8 +1315,6 @@ void App::OpenMenu() {
           nullptr, [this, photos](int) { OpenPhotos(photos, 0, true); }});
       }
     }
-    if (InFavoritesTree())
-      AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
     if (HasMore())
       AddMenuItem({"Load more", nullptr, [this](int) { LoadMore(); }});
     // (Favorites are the library's own: nothing to fetch again.)
@@ -1458,7 +1467,8 @@ void App::NewFavoritesFolder() {
   });
 }
 
-void App::AddFavoriteFolderActions(const browse::Entry& entry) {
+void App::AddFavoriteFolderActions(const browse::Entry& entry,
+                                   const std::function<void()>& before_delete) {
   std::string folder;
   library::FavoriteFolder f;
   if (!library::FavoriteFolderFromEntryId(entry.id, folder) ||
@@ -1472,6 +1482,8 @@ void App::AddFavoriteFolderActions(const browse::Entry& entry) {
     });
   }});
   AddMenuItem({"Move\u2026", nullptr, [this, f](int) { OpenFolderMoveSheet(f.id); }});
+  if (before_delete)
+    before_delete();
   AddMenuItem({"Delete", nullptr,
                [this, id = f.id](int) { ConfirmDeleteFavoriteFolder(id); }});
 }
