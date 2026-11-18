@@ -426,6 +426,11 @@ private:
   void LoadMore();
   void UpdateMoreRow(); // its label, as loading starts and stops
   uint32_t more_request_ = 0; // the browse request that is loading more
+  // An entry the cursor is to go back to (where a source was left, the one
+  // a refresh was on) that a later page has: pages are loaded until it
+  // turns up, kSeekPages at most, unless the cursor is moved meanwhile.
+  std::string more_seek_id_;
+  int more_seek_left_ = 0;
   void HandleKeyBrowse(Rml::Event& event, int key);
   // List or grid is a choice per folder: the one set for it (options menu
   // > View, remembered in the library), or else the one of the folder it

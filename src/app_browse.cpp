@@ -280,6 +280,7 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
                         bool replace, const std::string& keep_id) {
   if (!current_source_)
     return;
+  more_seek_id_.clear();
 
   const BrowseTicket ticket = NewBrowseRequest();
   const uint32_t request = ticket.id;
@@ -361,12 +362,17 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       level.raw = std::move(result);
       SortLevel(level);
       level.next = next; // (after the sort: the cursor goes on an entry)
+      bool kept = false;
       for (size_t i = 0; i < level.entries.size() && !keep.empty(); i++) {
         if (level.entries[i].id == keep) {
           level.selection = (int)i;
+          kept = true;
           break;
         }
       }
+      // Left (or refreshed) on an entry further down than the first page:
+      // the pages after it are loaded until it is there (see LoadMore).
+      const bool seek = !kept && !keep.empty() && !level.next.empty() && resume_id.empty();
       // A folder that holds one folder and nothing else (a server's
       // "Video" holding only "All video"): that one is opened in its place,
       // and back passes over it. Not while coming back up to it.
@@ -408,6 +414,11 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       }
       if (through)
         RequestBrowse(only.id, only.name, false);
+      if (seek) {
+        more_seek_id_ = keep;
+        more_seek_left_ = kSeekPages;
+        LoadMore();
+      }
     });
   });
 }
@@ -708,6 +719,7 @@ void App::MoveSelection(int delta) {
   if (entry_count_ == 0)
     return;
   const bool was_on_more = OnMoreRow();
+  more_seek_id_.clear(); // (moved: the cursor is where it is wanted now)
   sel_entry_ = StepIndex(sel_entry_, delta, entry_count_);
   if (BrowseLevel* level = CurrentLevel())
     level->selection = sel_entry_;
@@ -785,6 +797,7 @@ void App::LoadMore() {
       BrowseLevel& here = path_.back();
       if (!error.empty()) {
         // What there is stays, and "Load more" tries again.
+        more_seek_id_.clear();
         ShowToast(error, icon::kWarning);
         UpdateMoreRow();
         return;
@@ -829,11 +842,28 @@ void App::LoadMore() {
       }
       if (here.next.empty())
         here.selection = std::min(here.selection, std::max(0, (int)here.entries.size() - 1));
+      // Looking for where the folder was left: on it once it is here; the
+      // next page if not, while there is one and pages to go.
+      bool seek_on = false;
+      if (!more_seek_id_.empty()) {
+        for (size_t i = 0; i < here.entries.size(); i++) {
+          if (here.entries[i].id == more_seek_id_) {
+            here.selection = (int)i;
+            more_seek_id_.clear();
+            break;
+          }
+        }
+        seek_on = !more_seek_id_.empty() && !here.next.empty() && --more_seek_left_ > 0;
+        if (!seek_on)
+          more_seek_id_.clear();
+      }
       sel_entry_ = here.selection;
       RebuildEntryRows();
       RebuildDetail();
       scroll_entries_deferred_ = true;
-      if (added == 0 && here.next.empty())
+      if (seek_on)
+        LoadMore();
+      else if (added == 0 && here.next.empty())
         ShowToast("That was all", icon::kMore);
     });
   });
@@ -2156,6 +2186,7 @@ void App::HandleKeySearch(Rml::Event& event, int key) {
 void App::RequestSearch(const std::string& query) {
   if (!current_source_ || path_.empty())
     return;
+  more_seek_id_.clear();
   CancelForegroundLaunch();
 
   const size_t scope = SearchScope();

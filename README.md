@@ -129,7 +129,9 @@ results, a collection of thousands) lists the first, and the list ends in
 (down from the last entry, or End) or selecting it lists the next page,
 which joins the rest in the order the list is sorted in. The head of the
 list says "so far" meanwhile, and the options menu has *Load more* too.
-Refresh lists the first page again.
+Refresh, and opening a source again where it was left, list the first
+page, then load the pages after it until the entry the cursor was on is
+there again (five pages at most; moving the cursor meanwhile stops it).
 
 With the focus on a folder from a drive or a media server, the info panel
 lists what is in it (the first eight entries, folders first, and how many

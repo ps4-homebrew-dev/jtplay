@@ -38,6 +38,9 @@ inline constexpr float kMenuSectionPitch = 56.0f;         // .menu-section
 inline constexpr float kSheetRowPitch = 60.0f + 4.0f;     // .sheet-row
 // What a search may be; the search field says so too (maxlength).
 inline constexpr size_t kSearchMaxLength = 100;
+// Pages loaded, at most, to find the entry a folder was left on (see
+// App::more_seek_id_).
+inline constexpr int kSeekPages = 5;
 // A folder of favorites' name, as typed.
 inline constexpr size_t kFolderNameMaxLength = 60;
 // What a plugin's text setting may be: a sign-in token runs to a couple of
