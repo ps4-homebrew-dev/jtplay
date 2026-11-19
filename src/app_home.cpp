@@ -262,10 +262,13 @@ bool App::ShowsLogo(const browse::Entry& e) const {
 const char* App::EntryIcon(const browse::Entry& e) const {
   if (const ListedSource* listed = ListedSourceOf(e))
     return listed->icon.c_str();
-  // A folder made for favorites, not one of a source's.
+  // A folder made for favorites, not one of a source's; a saved search.
   std::string folder;
   if (current_source_ == favorites_source_ && library::FavoriteFolderFromEntryId(e.id, folder))
     return icon::kFavoriteFolder;
+  std::string key, inner, query;
+  if (library::DecodeId(e.id, key, inner) && library::ParseSavedSearchId(inner, folder, query))
+    return icon::kSearch;
   return IconFor(e);
 }
 

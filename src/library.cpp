@@ -898,6 +898,36 @@ std::string LibrarySource::Key() const {
                                   : "library:continue";
 }
 
+// "jtplay-search:<length of the folder id>:<folder id><query>": printable,
+// as the library file is XML, and whatever either holds.
+namespace {
+constexpr char kSavedSearch[] = "jtplay-search:";
+}
+
+std::string SavedSearchId(const std::string& folder, const std::string& query) {
+  return kSavedSearch + std::to_string(folder.size()) + ":" + folder + query;
+}
+
+bool ParseSavedSearchId(const std::string& id, std::string& folder, std::string& query) {
+  const size_t prefix = sizeof(kSavedSearch) - 1;
+  if (id.compare(0, prefix, kSavedSearch) != 0)
+    return false;
+  const size_t colon = id.find(':', prefix);
+  if (colon == std::string::npos || colon == prefix)
+    return false;
+  size_t length = 0;
+  for (size_t i = prefix; i < colon; i++) {
+    if (id[i] < '0' || id[i] > '9' || length > id.size())
+      return false;
+    length = length * 10 + (id[i] - '0');
+  }
+  if (length > id.size() - colon - 1)
+    return false;
+  folder = id.substr(colon + 1, length);
+  query = id.substr(colon + 1 + length);
+  return true;
+}
+
 std::string FavoriteFolderEntryId(const std::string& folder) {
   return "fav:" + folder;
 }
@@ -976,7 +1006,10 @@ bool LibrarySource::Browse(const std::string& id, browse::Listing& out,
     error = "that source is not available right now";
     return false;
   }
-  if (!source->Browse(inner, out, error))
+  // (A saved search: searched again.)
+  std::string searched, query;
+  if (!(ParseSavedSearchId(inner, searched, query) ? source->Search(searched, query, out, error)
+                                                  : source->Browse(inner, out, error)))
     return false;
   for (browse::Entry& e : out)
     e.id = EncodeId(key, e.id);
@@ -993,7 +1026,10 @@ bool LibrarySource::BrowsePage(const std::string& id, const std::string& cursor,
     error = "that source is not available right now";
     return false;
   }
-  if (!source->BrowsePage(inner, cursor, out, next, error))
+  std::string folder, query;
+  if (!(ParseSavedSearchId(inner, folder, query)
+          ? source->SearchPage(folder, query, cursor, out, next, error)
+          : source->BrowsePage(inner, cursor, out, next, error)))
     return false;
   for (browse::Entry& e : out)
     e.id = EncodeId(key, e.id);
@@ -1005,6 +1041,10 @@ bool LibrarySource::CanSearch(const std::string& folder_id) const {
   if (!DecodeId(folder_id, key, inner))
     return kind_ == Kind::Sources; // the root: of everything, or of the library
   const browse::SourcePtr source = registry_.Find(key);
+  // (From a saved search: from the folder it searched.)
+  std::string folder, query;
+  if (ParseSavedSearchId(inner, folder, query))
+    inner = folder;
   return source && source->CanSearch(inner);
 }
 
@@ -1022,6 +1062,9 @@ bool LibrarySource::Search(const std::string& folder_id, const std::string& quer
     error = "that source is not available right now";
     return false;
   }
+  std::string folder, saved;
+  if (ParseSavedSearchId(inner, folder, saved))
+    inner = folder;
   if (!source->Search(inner, query, out, error))
     return false;
   for (browse::Entry& e : out)
@@ -1040,6 +1083,9 @@ bool LibrarySource::SearchPage(const std::string& folder_id, const std::string& 
     error = "that source is not available right now";
     return false;
   }
+  std::string folder, saved;
+  if (ParseSavedSearchId(inner, folder, saved))
+    inner = folder;
   if (!source->SearchPage(inner, query, cursor, out, next, error))
     return false;
   for (browse::Entry& e : out)

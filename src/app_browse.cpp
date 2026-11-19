@@ -378,9 +378,12 @@ void App::RequestBrowse(const std::string& id, const std::string& name,
       // and back passes over it. Not while coming back up to it.
       // (Not a folder made for favorites: holding one folder is what it
       // was made for, and it is where favorites are moved about.)
-      std::string fav_folder;
+      std::string fav_folder, key, inner, query;
       const bool favorites_tree = current_source_ == favorites_source_ &&
-        (id.empty() || library::FavoriteFolderFromEntryId(id, fav_folder));
+        (id.empty() || library::FavoriteFolderFromEntryId(id, fav_folder) ||
+         // (nor a saved search: its results are the point)
+         (library::DecodeId(id, key, inner) &&
+          library::ParseSavedSearchId(inner, fav_folder, query)));
       const bool through = !replace && keep_id.empty() && level.raw.size() == 1 &&
                            level.raw[0].IsFolder() && level.filter.empty() &&
                            level.next.empty() && !favorites_tree;
@@ -1385,6 +1388,12 @@ void App::OpenMenu() {
         current_source_->CanSearch(path_[SearchScope()].id))
       AddMenuItem({everything ? "Search all sources\u2026" : "Search\u2026", nullptr,
                    [this](int) { OpenSearch(); }});
+    // Results: the search itself, to Favorites, to run again from there.
+    if (library::Ref search; SavedSearchRef(search) &&
+                             !library_.IsFavorite(search.source_key, search.entry.id))
+      AddMenuItem({"Save search\u2026", nullptr, [this, search](int) {
+        OpenSaveSheet(search, search.entry.name);
+      }});
     AddMenuItem({"Filter\u2026", nullptr, [this](int) { OpenFilter(); }});
     if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
       AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
@@ -1452,6 +1461,38 @@ void App::OpenMenu() {
 // ---------------------------------------------------------------------------
 // Folders of favorites (the Favorites tab)
 // ---------------------------------------------------------------------------
+
+bool App::SavedSearchRef(library::Ref& ref) const {
+  const BrowseLevel* level = path_.empty() ? nullptr : &path_.back();
+  if (!level || level->query.empty() || !current_source_)
+    return false;
+  std::string key = current_source_->Key(), folder = level->folder;
+  if (current_source_ == favorites_source_) {
+    // Searched from below a favorite: against the source it is from.
+    std::string inner, query;
+    if (!library::DecodeId(level->folder, key, inner))
+      return false;
+    folder = library::ParseSavedSearchId(inner, folder, query) ? folder : inner;
+  } else if (current_source_ == sources_source_ || current_source_ == continue_source_) {
+    return false;
+  }
+  const browse::SourcePtr source = registry_.Find(key);
+  if (!source)
+    return false;
+  // Where it was searched from, by the name it has on screen.
+  std::string scope = source->Name();
+  for (const BrowseLevel& l : path_)
+    if (l.id == level->folder && &l != level && !l.id.empty() && l.id != source->RootId())
+      scope = l.name;
+  ref = library::Ref();
+  ref.source_key = key;
+  ref.source_name = source->Name();
+  ref.entry.id = library::SavedSearchId(folder, level->query);
+  ref.entry.type = browse::Entry::Type::Folder;
+  ref.entry.name = level->query;
+  ref.entry.description = "Search in " + scope;
+  return true;
+}
 
 bool App::InFavoritesTree() const {
   if (view_ != View::Browse || current_source_ != favorites_source_ || path_.empty())

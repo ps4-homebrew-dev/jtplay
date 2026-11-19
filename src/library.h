@@ -249,6 +249,14 @@ bool DecodeId(const std::string& encoded, std::string& source_key, std::string& 
 std::string FavoriteFolderEntryId(const std::string& folder);
 bool FavoriteFolderFromEntryId(const std::string& entry_id, std::string& folder);
 
+// A saved search: a favorite that searches its source again whenever it is
+// opened (from 'folder', the source's id of the folder searched from). Its
+// id, as the source's own ids are kept, is one no source hands out; below
+// a favorite (LibrarySource) it is listed by searching rather than
+// browsing, in pages as either.
+std::string SavedSearchId(const std::string& folder, const std::string& query);
+bool ParseSavedSearchId(const std::string& id, std::string& folder, std::string& query);
+
 class LibrarySource : public browse::Source {
 public:
   // Sources: the list of every source (the app makes its root listing,

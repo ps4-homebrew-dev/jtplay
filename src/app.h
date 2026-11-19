@@ -624,6 +624,11 @@ private:
   void AddEntryActions(const browse::Entry& entry);
   // The Favorites section of a menu, for 'entry' (null: none in focus).
   void AddFavoriteActions(const browse::Entry* entry);
+  // The search on screen (a list of results) as a favorite to keep: a
+  // saved search (library::SavedSearchId), against the source searched,
+  // named by what was searched for. False when what is on screen is not
+  // the results of one source's search (Search all sources has none).
+  bool SavedSearchRef(library::Ref& ref) const;
   // Entries added to menu_items_ from here on belong under 'title': the
   // next one added gets the heading (none, if no entry follows).
   void MenuSection(const std::string& title);

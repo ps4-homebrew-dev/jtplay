@@ -179,7 +179,11 @@ Play searches its whole catalogue (shows, episodes, clips and genres), and
 Pluto TV everything its region can watch (channels, films and series). What the
 backend finds is a folder of its own that sorts, filters, plays and takes
 favorites like any other, and back returns to the folder, with the selection
-where it was. Searching from the hits searches again; Refresh asks again.
+where it was. Searching from the hits searches again; Refresh asks again. **Save search...** in the options menu of the results
+keeps the search itself in Favorites (in the folder picked), named by what
+was searched for: opening it there searches again, so what it lists is
+always current, a page at a time where the source pages. (Not Search all
+sources, which spans several.)
 
 ## Photos
 
@@ -221,7 +225,7 @@ under the name of what is in focus ("..." means a dialog asks first):
 | In focus | Favorites section |
 |---|---|
 | anything not in Favorites | *Add...* (the folder picker) |
-| a favorite | *Rename...* (its name in Favorites), *Move...* (the folder picker, on where it is), *Remove* |
+| a favorite (or a saved search) | *Rename...* (its name in Favorites), *Move...* (the folder picker, on where it is), *Remove* |
 | a folder of yours | *Rename...*, *Move...*, *Delete* |
 
 In the Favorites tab the section also has *New folder...* (made in the
