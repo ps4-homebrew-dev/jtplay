@@ -564,7 +564,18 @@ void App::RebuildEntryRows() {
   art_scan_pending_ = true; // artwork for the new rows, this frame
 }
 
+bool App::ListScrolls() const {
+  Rml::Element* list = document_ ? document_->GetElementById("entry-list") : nullptr;
+  return list && list->GetScrollHeight() > list->GetClientHeight() + 1.0f;
+}
+
+void App::SetListScroll(bool on) {
+  Set("list_scroll", bind_list_scroll_, on);
+}
+
 void App::RebuildCrumb() {
+  // Another folder (or the same, listed anew): the focus back on its list.
+  SetListScroll(false);
   // The source is the pane title already; the crumb is the path below it
   // (all of it when the browse started at a favorite folder, not the root).
   std::string crumb;
@@ -943,6 +954,37 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     return;
   }
   const bool grid = view_mode_ == ViewMode::Grid;
+  // The scroll bar in focus: up / down page (or go by initial, sorted by
+  // name); left, select or back return to the list; anything else returns
+  // to it and does what it does there.
+  if (bind_list_scroll_) {
+    switch (key) {
+    case Rml::Input::KI_UP:
+    case Rml::Input::KI_DOWN: {
+      const int direction = key == Rml::Input::KI_UP ? -1 : +1;
+      if (sort_mode_ == SortMode::Name)
+        JumpLetter(direction);
+      else
+        MoveSelection(direction * (grid ? 3 * kGridColumns : kPageRows));
+      event.StopPropagation();
+      return;
+    }
+    case Rml::Input::KI_RIGHT:
+      event.StopPropagation();
+      return;
+    case Rml::Input::KI_LEFT:
+    case Rml::Input::KI_RETURN:
+    case Rml::Input::KI_NUMPADENTER:
+    case Rml::Input::KI_ESCAPE:
+    case Rml::Input::KI_BACK:
+      SetListScroll(false);
+      event.StopPropagation();
+      return;
+    default:
+      SetListScroll(false);
+      break;
+    }
+  }
   // A tab page: up from its first row reaches the tabs over it.
   if (key == Rml::Input::KI_UP && OnTabPage() &&
       sel_entry_ < (grid ? kGridColumns : 1)) {
@@ -975,15 +1017,20 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
   case Rml::Input::KI_DOWN:
     if (grid) grid_row(+1); else MoveSelection(+1);
     break;
-  case Rml::Input::KI_LEFT:  // remotes rarely have page keys
-    if (grid) MoveSelection(-1);
-    else if (sort_mode_ == SortMode::Name) JumpLetter(-1);
-    else MoveSelection(-kPageRows);
+  // Left is the options menu (which comes in from the left), right the
+  // scroll bar (on the right); in a grid once at the end of the row.
+  case Rml::Input::KI_LEFT:
+    if (grid && sel_entry_ % kGridColumns != 0)
+      MoveSelection(-1);
+    else
+      OpenMenu();
     break;
   case Rml::Input::KI_RIGHT:
-    if (grid) MoveSelection(+1);
-    else if (sort_mode_ == SortMode::Name) JumpLetter(+1);
-    else MoveSelection(+kPageRows);
+    if (grid && sel_entry_ % kGridColumns != kGridColumns - 1 &&
+        sel_entry_ + 1 < entry_count_)
+      MoveSelection(+1);
+    else if (ListScrolls())
+      SetListScroll(true);
     break;
   case Rml::Input::KI_PRIOR:
     MoveSelection(grid ? -3 * kGridColumns : -kPageRows);
@@ -1284,13 +1331,14 @@ void App::ShowMenu(int selection) {
 //   Folder         the folder on screen: play all, shuffle, slideshow,
 //                  load more, refresh
 //   Find           search, filter
-//   View           list or grid, sort, order
+//   View           display as list or grid, sort, order
 //   Plugin         the settings of the plugin it is from
 //   Now playing    what plays behind the menus, if anything does
 //
 // Within a section, what is used most comes first and what removes or
 // undoes something last.
 void App::OpenMenu() {
+  SetListScroll(false);
   menu_items_.clear();
   menu_parent_ = nullptr;
   plugin_menu_open_ = false;
@@ -1306,7 +1354,7 @@ void App::OpenMenu() {
     AddMenuItem({"Search\u2026", nullptr, [this](int) { OpenSearch(); }});
     AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
     MenuSection("View");
-    AddMenuItem({"View",
+    AddMenuItem({"Display as",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
         SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
@@ -1317,7 +1365,7 @@ void App::OpenMenu() {
     MenuSection("Favorites");
     AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
     MenuSection("View");
-    AddMenuItem({"View",
+    AddMenuItem({"Display as",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
         SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
@@ -1399,7 +1447,7 @@ void App::OpenMenu() {
       AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
 
     MenuSection("View");
-    AddMenuItem({"View",
+    AddMenuItem({"Display as",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
         SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
@@ -1819,6 +1867,7 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
 // ---------------------------------------------------------------------------
 
 void App::SetViewMode(ViewMode mode) {
+  SetListScroll(false);
   BrowseLevel* level = CurrentLevel();
   if (!level || !current_source_)
     return;

@@ -590,6 +590,13 @@ private:
   // may be up on them (moving along them leaves it for the others).
   bool bind_tab_page_ = false;
   bool bind_browse_tabs_ = false;
+  // The list's scroll bar has the focus (right from the list; left, select
+  // or back returns): up / down move a page, or to the next initial when
+  // the list is sorted by name (see JumpLetter). In a list, left is the
+  // options menu, which comes in from that side.
+  bool bind_list_scroll_ = false;
+  void SetListScroll(bool on);
+  bool ListScrolls() const; // more rows than fit: a scroll bar to focus
   void SetBrowseTabs(bool on);
   // From a tab page's tabs to Home's or Settings' tab ("home",
   // "settings"), the focus staying on the tabs; or down into Home's rows

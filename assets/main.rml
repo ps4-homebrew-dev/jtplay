@@ -160,7 +160,8 @@
 			<!-- (Bare: nothing listed -- waiting, empty or failed. The message
 			     takes the whole page, the info panel having nothing to say.) -->
 			<div id="browse" class="content" data-if="view == 'browse'"
-			     data-class-grid="view_mode == 'grid'" data-class-bare="entry_count == 0">
+			     data-class-grid="view_mode == 'grid'" data-class-bare="entry_count == 0"
+			     data-class-scrolling="list_scroll">
 				<div id="entries" class="pane">
 					<div class="pane-head">
 						<!-- (No count of a folder that is not there: on its way, or failed.) -->

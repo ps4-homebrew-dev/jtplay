@@ -40,6 +40,7 @@
 using namespace appdetail;
 
 void App::GoHome() {
+  SetListScroll(false);
   CancelForegroundLaunch();
   AbandonBrowse(); // any browse that is still in flight
   RememberPlace(); // to open the source there the next time
@@ -453,6 +454,7 @@ void App::MoveRail(int delta) {
 }
 
 void App::SetBrowseTabs(bool on) {
+  SetListScroll(false);
   Set("browse_tabs", bind_browse_tabs_, on);
   RefreshImageBindings();
 }

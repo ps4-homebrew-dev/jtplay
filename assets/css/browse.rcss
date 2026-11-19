@@ -154,6 +154,20 @@
 .entry-row.selected .emeta { color: #0d3d33; }
 .entry-row.selected .emark { color: #06231d; }
 
+/* The scroll bar in focus (App::SetListScroll): it in the accent, the
+   row (or tile) it moves only outlined, as the focus is not on it. */
+#browse.scrolling .list scrollbarvertical sliderbar {
+	background-color: #4dd6b8;
+}
+#browse.scrolling .entry-row.selected {
+	decorator: none;
+	background-color: #4dd6b81f;
+	border: 2px #4dd6b8;
+}
+#browse.scrolling .entry-row.selected .etitle { color: #e8edf7; }
+#browse.scrolling .entry-row.selected .emeta { color: #8593ab; }
+#browse.scrolling .entry-row.selected .emark { color: #4dd6b8; }
+
 /* "Load more", after the last entry (App::LoadMore): an outlined tile and
    the title in the accent, a row that does something rather than one that
    is something. */
@@ -257,6 +271,18 @@
 #browse.grid .entry-row.selected .etitle {
 	color: #ffffff;
 	font-weight: bold;
+}
+#browse.grid.scrolling .entry-row.selected {
+	background-color: transparent;
+	border: 0px;
+	transform: scale(1);
+}
+#browse.grid.scrolling .entry-row.selected .art-tile {
+	border: 3px #4dd6b8;
+	box-shadow: none;
+}
+#browse.grid.scrolling .entry-row.selected .etitle {
+	font-weight: normal;
 }
 #browse.grid .etitle.more {
 	color: #4dd6b8;

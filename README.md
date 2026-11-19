@@ -96,11 +96,11 @@ Folders are always listed first, and files are named without their
 extension ("Episode 1", not "Episode 1.mkv"). A folder is shown as a
 **list** (with a thumbnail per row and an info panel with artwork, type,
 size, duration, date and resume point) or as a **grid** of artwork tiles
-with the focused item's details along the bottom; switch with View in the
-options menu. List or grid is set per folder and remembered; a folder that
+with the focused item's details along the bottom; switch with View > Display
+as in the options menu. List or grid is set per folder and remembered; a folder that
 has not been set is shown as the folder it is in, and the top of a source
-as the list of sources (whose View, also in the options menu on the
-Sources tab, so goes for every source not set otherwise). Artwork is
+as the list of sources (whose Display as, also in the options menu on
+the Sources tab, so goes for every source not set otherwise). Artwork is
 loaded in the background, newest request first, and shrunk to thumbnails
 so even a folder of camera photos stays light; the selected item's artwork
 is the backdrop.
@@ -112,9 +112,12 @@ servers). The right-hand column of the list shows whatever it is sorted by.
 The sort is remembered between sessions.
 
 Moving past the last row of a list (or the last row of the grid) wraps
-around to the first, and the other way round. In a list sorted by name,
-left and right jump to the previous / next letter (shown large for a
-moment) instead of paging.
+around to the first, and the other way round. Left opens the options menu
+(in the grid: from the first tile of a row) and right moves the focus to
+the scroll bar (in the grid: from the last tile of a row), when there is
+more than fits on the screen: there up and down move a page, or in a
+list sorted by name to the previous / next letter (shown large for a
+moment). Left, select or back return to the list.
 
 A source opens where it was left: in the folder it was left in, on the
 entry it was left on, with the folders above it in the path (listed as
@@ -449,7 +452,7 @@ that is not on the d-pad.
 | Button          | Home                        | Lists, menus, Settings            | Playing (full screen)                       | Photos             |
 |-----------------|-----------------------------|-----------------------------------|---------------------------------------------|--------------------|
 | up / down       | between rows; tabs above    | move (lists and menus wrap; up from the top of the favorites or the list of sources: the tabs) | seek +5 / -5 min                            | caption            |
-| left / right    | along a row (or the tabs)   | list: page or letter; grid: move; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
+| left / right    | along a row (or the tabs)   | left: options, right: the scroll bar (up / down: page or letter); grid: along the row, then the same; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
 | select          | open / play                 | open / play / choose              | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
 | back            | first card; full screen*    | back (a source's top: its place in the list of sources; that list, and the top of the favorites: the tabs); closes a menu; folder picker: up a folder, at the top Cancel | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
 | options         | options for the card        | options menu; closes a menu       | info bar / away                             | photo menu         |
