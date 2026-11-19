@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <algorithm>
 #include <atomic>
+#include <ctime>
+#include <set>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
@@ -37,14 +39,23 @@ constexpr long kStallTimeoutMs = 15000; // no data for this long: give up
 constexpr const char* kUserAgent =
   "jtplay/" JTPLAY_VERSION " (+https://github.com/ps4-homebrew-dev/jtplay)";
 
-// Files kept across runs. A few hundred covers is a couple of tens of MiB,
-// and the oldest ones are dropped on the next start.
-constexpr size_t kMaxCachedFiles = 1024; // covers and their thumbnails
+// What the cache may keep, in files and in bytes; past either, the least
+// lately used go, down to nine tenths, so that one more file does not mean
+// another sweep. The disk the cache is on also holds the library and the
+// settings, which must still fit when the disk is nearly full.
+constexpr size_t kMaxCachedFiles = 8192;            // covers and their copies
+constexpr uint64_t kMaxCachedBytes = 512ull << 20;  // of /download0's 1 GiB on a PS4
 
 std::mutex g_mutex;               // guards everything below
 std::string g_dir;                // "" = cache unavailable
 std::map<std::string, std::string> g_index;  // uri -> path ("" = failed)
-std::map<std::string, std::string> g_ondisk; // "<hash>" -> path, from Initialize
+struct OnDisk {
+  std::string path;
+  uint64_t bytes = 0;
+  time_t used = 0; // last written or looked up: what Trim() keeps
+};
+std::map<std::string, OnDisk> g_ondisk; // "<hash>" -> its file
+uint64_t g_bytes = 0;                   // of everything in g_ondisk
 
 // A name for a file being written, unique to this process and call: two
 // threads may be making the same file at once (a cover and its thumbnail
@@ -115,29 +126,66 @@ std::string HashFromFilename(const std::string& name) {
   return hash;
 }
 
-// Keeps the newest kMaxCachedFiles entries and unlinks the rest. Called once,
-// from Initialize(), with the index already built.
-void TrimLocked() {
-  if (g_ondisk.size() <= kMaxCachedFiles)
+// Forgets the least lately used files once the cache is past either limit,
+// and unlinks them. 'keep' (the file just written) stays in any case.
+void TrimLocked(const std::string& keep = std::string()) {
+  if (g_ondisk.size() <= kMaxCachedFiles && g_bytes <= kMaxCachedBytes)
     return;
 
-  std::vector<std::pair<time_t, std::string>> by_age; // (mtime, hash)
+  std::vector<std::pair<time_t, std::string>> by_age; // (used, hash)
   by_age.reserve(g_ondisk.size());
-  for (const auto& entry : g_ondisk) {
-    struct stat st = {};
-    const time_t mtime = (::stat(entry.second.c_str(), &st) == 0) ? st.st_mtime : 0;
-    by_age.emplace_back(mtime, entry.first);
-  }
+  for (const auto& entry : g_ondisk)
+    by_age.emplace_back(entry.second.used, entry.first);
   std::sort(by_age.begin(), by_age.end()); // oldest first
 
-  const size_t drop = by_age.size() - kMaxCachedFiles;
-  for (size_t i = 0; i < drop; i++) {
-    auto it = g_ondisk.find(by_age[i].second);
-    if (it == g_ondisk.end())
+  std::set<std::string> removed;
+  for (const auto& old : by_age) {
+    if (g_ondisk.size() <= kMaxCachedFiles * 9 / 10 && g_bytes <= kMaxCachedBytes / 10 * 9)
+      break;
+    auto it = g_ondisk.find(old.second);
+    if (it == g_ondisk.end() || it->second.path == keep)
       continue;
-    ::remove(it->second.c_str());
+    ::remove(it->second.path.c_str());
+    removed.insert(it->second.path);
+    g_bytes -= std::min(g_bytes, it->second.bytes);
     g_ondisk.erase(it);
   }
+  // Whatever resolved to those files must be looked for again.
+  for (auto it = g_index.begin(); it != g_index.end();)
+    it = removed.count(it->second) ? g_index.erase(it) : std::next(it);
+}
+
+// Indexes a file now in the cache directory.
+void AddLocked(const std::string& hash, const std::string& path, bool trim) {
+  struct stat st = {};
+  if (::stat(path.c_str(), &st) != 0)
+    return;
+  OnDisk& entry = g_ondisk[hash];
+  g_bytes -= std::min(g_bytes, entry.bytes);
+  entry.path = path;
+  entry.bytes = (uint64_t)st.st_size;
+  entry.used = trim ? std::time(nullptr) : st.st_mtime;
+  g_bytes += entry.bytes;
+  if (trim)
+    TrimLocked(path);
+}
+
+// A copy found on disk is in use again: the last to be trimmed.
+void TouchLocked(OnDisk& entry) {
+  entry.used = std::time(nullptr);
+}
+
+// True when no pixel of 'rgba' (RGBA32) is transparent at all: a photo or
+// a cover, stored as a JPEG a fraction of the PNG's size. Logos and station
+// icons with a transparent background stay PNG.
+bool Opaque(const SDL_Surface* rgba) {
+  for (int y = 0; y < rgba->h; y++) {
+    const uint8_t* row = (const uint8_t*)rgba->pixels + (size_t)y * rgba->pitch;
+    for (int x = 0; x < rgba->w; x++)
+      if (row[x * 4 + 3] != 0xff)
+        return false;
+  }
+  return true;
 }
 
 } // namespace
@@ -147,6 +195,7 @@ bool Initialize(const std::string& dir) {
   g_dir.clear();
   g_index.clear();
   g_ondisk.clear();
+  g_bytes = 0;
 
   if (dir.empty())
     return false;
@@ -166,7 +215,7 @@ bool Initialize(const std::string& dir) {
       }
       const std::string hash = HashFromFilename(name);
       if (!hash.empty())
-        g_ondisk[hash] = dir + "/" + name;
+        AddLocked(hash, dir + "/" + name, false);
     }
     ::closedir(d);
   }
@@ -181,6 +230,7 @@ void Shutdown() {
   g_dir.clear();
   g_index.clear();
   g_ondisk.clear();
+  g_bytes = 0;
 }
 
 Status Lookup(const std::string& uri, std::string& path) {
@@ -207,7 +257,8 @@ Status Lookup(const std::string& uri, std::string& path) {
 
   auto disk = g_ondisk.find(HashKey(uri));
   if (disk != g_ondisk.end()) {
-    path = disk->second;
+    path = disk->second.path;
+    TouchLocked(disk->second);
     g_index[uri] = path;
     return Status::Ready;
   }
@@ -349,7 +400,8 @@ Status LookupScaled(const std::string& uri, int size, std::string& path) {
       }
       auto disk = g_ondisk.find(HashKey(key));
       if (disk != g_ondisk.end()) {
-        path = disk->second;
+        path = disk->second.path;
+        TouchLocked(disk->second);
         g_index[key] = path;
         return Status::Ready;
       }
@@ -362,8 +414,8 @@ Status LookupScaled(const std::string& uri, int size, std::string& path) {
 
 // Decodes the original, turns it upright, scales it to fit 'size' and
 // stores it; the original itself when it is small and upright already.
-// Thumbnails are PNG (they may have alpha: logos, station icons); the
-// screen-sized copies of photos are JPEG, a tenth of the size.
+// JPEG, unless something in the picture is transparent (logos, station
+// icons): a PNG of a photo's thumbnail is larger than the photo itself.
 std::string FetchScaled(const std::string& uri, int size) {
   std::string path;
   const Status status = LookupScaled(uri, size, path);
@@ -390,7 +442,11 @@ std::string FetchScaled(const std::string& uri, int size) {
             std::lock_guard<std::mutex> lock(g_mutex);
             dir = g_dir;
           }
-          const bool jpeg = size != kThumbSize;
+#if SDL_IMAGE_VERSION_ATLEAST(2, 0, 2)
+          const bool jpeg = Opaque(upright);
+#else
+          const bool jpeg = false; // no JPEG writer
+#endif
           const std::string final_path = dir + "/art-" + HashKey(ScaledKey(uri, size)) +
                                          (jpeg ? ".jpg" : ".png");
           const std::string tmp_path = final_path + TempSuffix();
@@ -422,7 +478,7 @@ std::string FetchScaled(const std::string& uri, int size) {
   const std::string key = ScaledKey(uri, size);
   g_index[key] = result;
   if (!result.empty() && result != original)
-    g_ondisk[HashKey(key)] = result;
+    AddLocked(HashKey(key), result, true);
   return result;
 }
 
@@ -505,7 +561,7 @@ std::string Fetch(const std::string& uri) {
   std::lock_guard<std::mutex> lock(g_mutex);
   g_index[uri] = full; // "" is remembered too: do not retry a dead URL
   if (!full.empty())
-    g_ondisk[HashKey(uri)] = full;
+    AddLocked(HashKey(uri), full, true);
   return full;
 }
 

@@ -249,7 +249,10 @@ played past 92% is marked watched with a tick. A video without artwork of
 its own gets a snapshot of the frame it was stopped on, so its card shows
 where you left off. Moving to the next item in a folder resumes it without
 asking. All of this, and what was played lately and the sources seen, is
-stored in `library.xml` in the cache directory.
+stored in `library.xml` in the cache directory. The copy that loaded at
+the last start is kept beside it as `library.xml.bak` (and `settings.ini`
+as `settings.ini.bak`): a library cut short by a power cut or a full disk
+is moved aside as `library.xml.broken` and the backup used instead.
 
 ## Playing
 
@@ -529,7 +532,8 @@ The package is a non-game application (param.sfo category `gdc`), which a
 PS5 treats as a media app: that is what gets the remote's play, pause,
 stop, previous / next and seek keys to jtplay there, as a game they stay
 with the system. Its cache directory, with the artwork, `settings.ini` and
-`library.xml`, is in the title's download data, `/download0` (512 MiB),
+`library.xml`, is in the title's download data, `/download0` (1 GiB, of
+which the artwork may take 512 MiB, so the library always has room),
 which SDL2main sets up (it needs the SDL port's
 `0006-ps4-SDL2main-the-XDG-base-directories-in-download0` patch; without
 it, it is `common_temp`, which all homebrew shares). Versions built as a

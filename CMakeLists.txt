@@ -117,13 +117,13 @@ if(ORBIS)
     # A non-game has no /temp0 (temporary data, games only), so it asks for
     # download data instead, mounted at /download0, where SDL2main puts the
     # XDG base directories (the cache, settings and library: see README).
-    # Its size is in MiB.
+    # Its size is in MiB; 1 GiB is the most param.sfo allows.
     orbis_add_pkg(jtplay
         TITLE jtplay
         TITLE_ID BREW04327
         CONTENT_ID IV0000-BREW04327_00-JTPLAY0000000000
         CATEGORY gdc
-        DOWNLOAD_DATA_SIZE 512
+        DOWNLOAD_DATA_SIZE 1024
         # 0x2 | 0x10000 (7 CPU mode) | 0x800000 (PS4 Pro mode)
         ATTRIBUTE 8454146
         ASSETS sce_sys assets fonts plugins ca-bundle.crt

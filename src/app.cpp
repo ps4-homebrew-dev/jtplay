@@ -195,7 +195,12 @@ void App::Shutdown() {
 // A handful of "key=value" lines; unknown keys and bad values are ignored,
 // so the file never stops the app from starting.
 void App::LoadSettings() {
-  std::ifstream in(settings_path_);
+  // As the library: an empty or missing file (a power cut) falls back on
+  // the copy from the last start.
+  std::string text;
+  bool restored = false;
+  util::ReadWithBackup(settings_path_, text, [](const std::string&) { return true; }, restored);
+  std::istringstream in(text);
   std::string line;
   while (std::getline(in, line)) {
     const size_t eq = line.find('=');
@@ -249,6 +254,8 @@ void App::LoadSettings() {
       plugin_settings_->SetNamed(key.substr(7), value);
     }
   }
+  if (restored)
+    SaveSettings();
 }
 
 void App::SaveSettings() const {

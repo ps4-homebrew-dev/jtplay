@@ -13,6 +13,7 @@
 #include <set>
 
 #include "net/cancel.h"
+#include "util/atomic_file.h"
 
 #include <tinyxml2.h>
 
@@ -96,9 +97,20 @@ void Library::Load(const std::string& path) {
   places_.clear();
   views_.clear();
 
+  // A library that does not parse (cut short by a full disk or a power
+  // cut) is not taken for an empty one, which the next save would make
+  // permanent: the copy from the last start is used instead.
   XMLDocument doc;
-  if (doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS || !doc.RootElement())
-    return; // first run, or unreadable: start empty
+  std::string text;
+  bool restored = false;
+  auto valid = [&doc](const std::string& xml) {
+    return doc.Parse(xml.c_str(), xml.size()) == tinyxml2::XML_SUCCESS && doc.RootElement() &&
+           std::string(doc.RootElement()->Name()) == "library";
+  };
+  if (!util::ReadWithBackup(path, text, valid, restored))
+    return; // first run: start empty
+  if (restored)
+    dirty_ = true; // written again by the next save
 
   for (const XMLElement* e = doc.RootElement()->FirstChildElement(); e;
        e = e->NextSiblingElement()) {
@@ -282,11 +294,16 @@ void Library::Save() {
     root->InsertEndChild(e);
   }
 
-  // Write next to it and rename, so a crash mid-write never loses the lot.
-  const std::string tmp = path_ + ".tmp";
-  if (doc.SaveFile(tmp.c_str()) == tinyxml2::XML_SUCCESS &&
-      std::rename(tmp.c_str(), path_.c_str()) == 0)
+  // Whole or not at all (tinyxml2's SaveFile does not check its writes: on
+  // a full disk it left a cut-off library, which then replaced the good
+  // one). On failure it stays dirty and the next save tries again.
+  tinyxml2::XMLPrinter printer;
+  doc.Print(&printer);
+  const std::string text(printer.CStr(), printer.CStrSize() > 0 ? printer.CStrSize() - 1 : 0);
+  if (util::WriteFileAtomic(path_, text))
     dirty_ = false;
+  else
+    std::fprintf(stderr, "Cannot write %s (disk full?)\n", path_.c_str());
 }
 
 void Library::Changed() {
