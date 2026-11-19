@@ -101,22 +101,35 @@ body.home.featured #backdrop-shade {
 	text-overflow: ellipsis;
 }
 
-/* What plays behind the menus: a pill by the clock, with the time and a
- * hairline of progress along its bottom. It is what gives way when the
- * top bar is short of room: the title is cut short, never the tabs. */
+/* What plays behind the menus: a card floating in the bottom right
+ * corner, over the page (which keeps all of its room), with the title (and
+ * a station's song under it), the time, and a hairline of progress along
+ * its bottom. #np-bar spans the width so that the card can grow to the
+ * left from the corner, up to its max-width. */
+#np-bar {
+	z-index: 5; /* over the page; under menus, dialogs and toasts */
+	position: absolute;
+	left: 72px;
+	right: 72px;
+	bottom: 32px;
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+}
 #np-chip {
 	position: relative;
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	flex: 0 1 auto;
-	min-width: 140px;
-	max-width: 520px;
-	height: 52px;
-	margin-left: 24px;
-	padding: 0px 22px 0px 18px;
-	background-color: #ffffff14;
-	border-radius: 26px;
+	max-width: 1000px;
+	min-width: 360px;
+	height: 76px;
+	padding: 0px 26px 0px 22px;
+	background-color: #151d2ff5;
+	border: 1px #ffffff1f;
+	border-radius: 14px;
+	box-shadow: #000000a0 0px 12px 40px 0px;
 	overflow: hidden;
 	white-space: nowrap;
 	animation: 0.25s cubic-out np-chip-in;
@@ -127,26 +140,26 @@ body.home.featured #backdrop-shade {
 }
 .np-chip-state {
 	flex-shrink: 0;
-	margin-right: 12px;
-	font-size: 22px;
+	margin-right: 16px;
+	font-size: 26px;
 	color: #4dd6b8;
 }
-.np-chip-title {
-	flex: 0 1 auto;
+.np-chip-text {
+	flex: 1 1 auto;
 	min-width: 0px;
-	max-width: 380px;
-	font-size: 23px;
+	overflow: hidden;
+}
+.np-chip-title {
+	font-size: 24px;
 	font-weight: bold;
 	color: #e8edf7;
+	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-/* The song on a station, after its name; gives way first. */
+/* The song on a station, under its name. */
 .np-chip-song {
-	flex: 0 100 auto;
-	min-width: 0px;
-	max-width: 320px;
-	margin-left: 12px;
+	margin-top: 2px;
 	font-size: 21px;
 	color: #4dd6b8;
 	white-space: nowrap;
@@ -155,15 +168,15 @@ body.home.featured #backdrop-shade {
 }
 .np-chip-time {
 	flex-shrink: 0;
-	margin-left: 14px;
-	font-size: 21px;
+	margin-left: 20px;
+	font-size: 22px;
 	color: #8593ab;
 }
 .np-chip-bar {
 	position: absolute;
 	left: 22px;
 	right: 22px;
-	bottom: 6px;
+	bottom: 8px;
 	height: 3px;
 	background-color: #ffffff1f;
 	border-radius: 2px;

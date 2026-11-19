@@ -257,7 +257,8 @@ the place of the banner's picture), and can be used as ever while it
 plays on (music plays on under the usual menus). It keeps moving through
 the folder it was started from, wherever the menus are by then.
 
-What plays is in the top bar, by the clock, with its time; Home's first
+What plays is in the bottom right corner, with its time and progress (and
+a station's song under its name); Home's first
 row, **Now playing**, holds its card. The way back to full screen is the
 way out of it: back, step by step (from a list to Home, from the rows to
 the video), as on any remote; or selecting the

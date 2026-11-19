@@ -1177,7 +1177,7 @@ bool App::HandleMediaKey(int key) {
   case Rml::Input::KI_MEDIA_PLAY_PAUSE: {
     player_->TogglePause();
     if (bind_fullscreen_)
-      PeekWatchInfo(); // (behind the menus, the chip by the clock says so)
+      PeekWatchInfo(); // (behind the menus, the card in the corner says so)
     return true;
   }
   case Rml::Input::KI_MEDIA_STOP:

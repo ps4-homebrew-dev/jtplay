@@ -35,23 +35,11 @@
 						<span class="tab-label">{{r.label}}</span>
 					</div>
 				</div>
-				<!-- (The tabs keep their width; what plays gives way to them.) -->
+				<!-- (The tabs keep their width.) -->
 				<div class="spacer" data-if="view == 'home' || (view == 'browse' && tab_page)"/>
 				<div class="location" data-if="view != 'home' && !(view == 'browse' && tab_page)">
 					<span class="location-source" data-if="view == 'browse'">{{source_name}}</span>
 					<span class="location-path" data-if="view == 'browse' && crumb != ''">›  {{crumb}}</span>
-				</div>
-				<!-- Something playing behind the menus: what, and how far. Back
-				     leads to it from the tabs; so does its card on Home. -->
-				<div id="np-chip" data-if="watching && !fullscreen">
-					<span class="np-chip-state" data-if="watch_paused">&#xE132;</span>
-					<span class="np-chip-state" data-if="!watch_paused">&#xE140;</span>
-					<span class="np-chip-title">{{watch_name}}</span>
-					<span class="np-chip-song" data-if="watch_audio && watch_stream_title != ''">{{watch_stream_title}}</span>
-					<span class="np-chip-time" data-if="watch_pos != ''">{{watch_pos}}</span>
-					<div class="np-chip-bar" data-if="watch_seekable">
-						<div class="np-chip-played" data-style-width="watch_progress"/>
-					</div>
 				</div>
 				<span class="busy">
 					<span class="busy-dot busy-dot0"/>
@@ -282,6 +270,24 @@
 							</div>
 							<div class="child-more" data-if="detail_more != ''">{{detail_more}}</div>
 						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Something playing behind the menus: what, and how far, floating
+			     in the bottom right corner over the page. Back leads to it from
+			     the tabs; so does its card on Home. -->
+			<div id="np-bar" data-if="watching && !fullscreen">
+				<div id="np-chip">
+					<span class="np-chip-state" data-if="watch_paused">&#xE132;</span>
+					<span class="np-chip-state" data-if="!watch_paused">&#xE140;</span>
+					<div class="np-chip-text">
+						<div class="np-chip-title">{{watch_name}}</div>
+						<div class="np-chip-song" data-if="watch_audio && watch_stream_title != ''">{{watch_stream_title}}</div>
+					</div>
+					<span class="np-chip-time" data-if="watch_pos != ''">{{watch_pos}}</span>
+					<div class="np-chip-bar" data-if="watch_seekable">
+						<div class="np-chip-played" data-style-width="watch_progress"/>
 					</div>
 				</div>
 			</div>
