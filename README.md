@@ -112,7 +112,8 @@ servers). The right-hand column of the list shows whatever it is sorted by.
 The sort is remembered between sessions.
 
 Moving past the last row of a list (or the last row of the grid) wraps
-around to the first, and the other way round. Left opens the options menu
+around to the first, and the other way round, once all of it is there:
+while there is more to load, down goes on to Load more and loads it. Left opens the options menu
 (in the grid: from the first tile of a row) and right moves the focus to
 the scroll bar (in the grid: from the last tile of a row), when there is
 more than fits on the screen: there up and down move a page, or in a

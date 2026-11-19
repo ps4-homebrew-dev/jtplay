@@ -733,6 +733,12 @@ void App::MoveSelection(int delta) {
   if (entry_count_ == 0)
     return;
   const bool was_on_more = OnMoreRow();
+  // On down from "Load more" there is more to come, not the top again: the
+  // list wraps round only once it is all there.
+  if (delta > 0 && was_on_more) {
+    LoadMore(); // (unless it already is loading)
+    return;
+  }
   more_seek_id_.clear(); // (moved: the cursor is where it is wanted now)
   sel_entry_ = StepIndex(sel_entry_, delta, entry_count_);
   if (BrowseLevel* level = CurrentLevel())
@@ -993,15 +999,20 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     return;
   }
   // Grid: up/down move a row, staying in the column, and wrap from the
-  // last row to the first (and back) like the list does.
+  // last row to the first (and back) like the list does; but while there
+  // is more to load, down past the last row is "Load more" (the last tile).
   auto grid_row = [this](int direction) {
     const int n = entry_count_;
     if (n == 0)
       return;
     const int col = sel_entry_ % kGridColumns;
     int target = sel_entry_ + direction * kGridColumns;
+    if (target >= n && OnMoreRow()) {
+      MoveSelection(+1); // loads more
+      return;
+    }
     if (target >= n)
-      target = col;                          // past the bottom: top row
+      target = HasMore() ? n - 1 : col;      // past the bottom: top row
     else if (target < 0) {
       target = ((n - 1) / kGridColumns) * kGridColumns + col; // bottom row
       if (target >= n)
