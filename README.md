@@ -188,6 +188,12 @@ was searched for: opening it there searches again, so what it lists is
 always current, a page at a time where the source pages. (Not Search all
 sources, which spans several.)
 
+In Favorites, Search searches what is in the folder (and the folders in
+it), or at the top all favorites: the favorites themselves by name, and
+every source or folder saved there, asked from where it was saved (from
+its top, when its source cannot search from there). So a folder of a few
+sources is a search of just those.
+
 ## Photos
 
 Pictures open full screen. Left / right step through the folder's

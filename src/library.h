@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -278,7 +279,9 @@ public:
   bool BrowsePage(const std::string& id, const std::string& cursor, browse::Listing& out,
                   std::string& next, std::string& error) override;
   // Below a favorite folder the original source searches, if it can; of
-  // the roots, only that of Sources can (everything, see above).
+  // the roots, that of Sources (everything, see above) and those of
+  // Favorites and the folders made to sort them (what is in them, see
+  // SearchFavorites).
   bool CanSearch(const std::string& folder_id) const override;
   bool Search(const std::string& folder_id, const std::string& query,
               browse::Listing& out, std::string& error) override;
@@ -288,7 +291,21 @@ public:
   bool Resolve(const browse::Entry& entry, browse::Playable& out, std::string& error) override;
 
 private:
+  // A source to ask, and from which of its folders.
+  struct Target {
+    browse::SourcePtr source;
+    std::string folder;
+  };
   bool SearchEverything(const std::string& query, browse::Listing& out, std::string& error);
+  bool SearchFavorites(const std::string& folder, const std::string& query,
+                       browse::Listing& out, std::string& error);
+  // The favorites in 'folder' and in the folders below it.
+  std::vector<Ref> FavoritesBelow(const std::string& folder) const;
+  // Asks every target at once and adds what they found to 'out' (what
+  // 'seen' already holds left out). What failed goes to 'failures'.
+  static bool SearchTargets(const std::vector<Target>& targets, const std::string& query,
+                            std::set<std::string>& seen, browse::Listing& out,
+                            std::string& failures, std::string& error);
 
   Kind kind_;
   Library& library_;

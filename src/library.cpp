@@ -1054,7 +1054,9 @@ bool LibrarySource::BrowsePage(const std::string& id, const std::string& cursor,
 }
 
 bool LibrarySource::CanSearch(const std::string& folder_id) const {
-  std::string key, inner;
+  std::string key, inner, fav_folder;
+  if (kind_ == Kind::Favorites && (folder_id.empty() || FavoriteFolderFromEntryId(folder_id, fav_folder)))
+    return !FavoritesBelow(fav_folder).empty(); // by name, if nothing else
   if (!DecodeId(folder_id, key, inner))
     return kind_ == Kind::Sources; // the root: of everything, or of the library
   const browse::SourcePtr source = registry_.Find(key);
@@ -1067,7 +1069,9 @@ bool LibrarySource::CanSearch(const std::string& folder_id) const {
 
 bool LibrarySource::Search(const std::string& folder_id, const std::string& query,
                            browse::Listing& out, std::string& error) {
-  std::string key, inner;
+  std::string key, inner, fav_folder;
+  if (kind_ == Kind::Favorites && (folder_id.empty() || FavoriteFolderFromEntryId(folder_id, fav_folder)))
+    return SearchFavorites(fav_folder, query, out, error);
   if (!DecodeId(folder_id, key, inner)) {
     if (kind_ == Kind::Sources)
       return SearchEverything(query, out, error);
@@ -1142,26 +1146,105 @@ bool LibrarySource::SearchEverything(const std::string& query, browse::Listing& 
     if (std::find(sources.begin(), sources.end(), s) == sources.end())
       sources.push_back(s);
 
-  // All at once, each on a thread of its own: a search is mostly waiting
-  // for a server, and the slowest should not add up with the others. They
-  // are given up on together, as the search they belong to is.
+  std::vector<Target> targets;
+  for (const browse::SourcePtr& s : sources)
+    if (s->CanSearch(s->RootId()))
+      targets.push_back({s, s->RootId()});
+  std::string failures;
+  if (!SearchTargets(targets, query, seen, out, failures, error))
+    return false;
+  // Something found: what failed is not worth spoiling it for.
+  if (out.empty() && !failures.empty()) {
+    error = failures;
+    return false;
+  }
+  return true;
+}
+
+std::vector<Ref> LibrarySource::FavoritesBelow(const std::string& folder) const {
+  std::vector<std::string> folders{folder};
+  const std::vector<FavoriteFolder> all = library_.FavoriteFolders();
+  for (size_t i = 0; i < folders.size(); i++) // (grows as it goes: breadth first)
+    for (const FavoriteFolder& f : all)
+      if (f.parent == folders[i] && !f.id.empty())
+        folders.push_back(f.id);
+  std::vector<Ref> out;
+  for (const std::string& f : folders) {
+    std::vector<Ref> refs = library_.FavoritesIn(f);
+    out.insert(out.end(), refs.begin(), refs.end());
+  }
+  return out;
+}
+
+// What is in a folder of favorites (and the folders in it): the favorites
+// by name, as SearchEverything has the library, then each source or folder
+// that is a favorite there searched from where it was saved; one whose
+// source cannot search from there, from its top instead (a folder of
+// sources means those sources). Saved searches are left out: a query, not
+// a place to search.
+bool LibrarySource::SearchFavorites(const std::string& folder, const std::string& query,
+                                    browse::Listing& out, std::string& error) {
+  const std::string needle = Lower(query);
+  const std::vector<Ref> refs = FavoritesBelow(folder);
+  std::set<std::string> seen;
+  for (const Ref& ref : refs) {
+    std::string searched, saved;
+    if (ParseSavedSearchId(ref.entry.id, searched, saved) ||
+        Lower(ref.entry.name).find(needle) == std::string::npos ||
+        !seen.insert(ref.source_key + '\n' + ref.entry.id).second)
+      continue;
+    browse::Entry e = ref.entry;
+    e.id = EncodeId(ref.source_key, ref.entry.id);
+    out.push_back(std::move(e));
+  }
+
+  std::vector<Target> targets;
+  std::set<std::string> asked; // "<key>\n<folder>"
+  for (const Ref& ref : refs) {
+    std::string searched, saved;
+    if (!ref.entry.IsFolder() || ParseSavedSearchId(ref.entry.id, searched, saved))
+      continue;
+    const browse::SourcePtr s = registry_.Find(ref.source_key);
+    if (!s)
+      continue; // not found right now
+    const std::string from = s->CanSearch(ref.entry.id) ? ref.entry.id
+                           : s->CanSearch(s->RootId()) ? s->RootId() : std::string("\n");
+    if (from == "\n" || !asked.insert(s->Key() + '\n' + from).second)
+      continue;
+    targets.push_back({s, from});
+  }
+  std::string failures;
+  if (!SearchTargets(targets, query, seen, out, failures, error))
+    return false;
+  if (out.empty() && !failures.empty()) {
+    error = failures;
+    return false;
+  }
+  return true;
+}
+
+// All at once, each on a thread of its own: a search is mostly waiting for
+// a server, and the slowest should not add up with the others. They are
+// given up on together, as the search they belong to is.
+bool LibrarySource::SearchTargets(const std::vector<Target>& targets, const std::string& query,
+                                  std::set<std::string>& seen, browse::Listing& out,
+                                  std::string& failures, std::string& error) {
   struct Job {
-    browse::SourcePtr source;
+    Target target;
     browse::Listing found;
     std::string why;
     bool ok = false;
   };
   std::vector<Job> jobs;
-  for (const browse::SourcePtr& s : sources)
-    if (s->CanSearch(s->RootId()))
-      jobs.push_back({s, {}, {}, false});
+  for (const Target& t : targets)
+    jobs.push_back({t, {}, {}, false});
   const net::CancelToken token = net::MakeCancelToken();
   std::atomic<size_t> left(jobs.size());
   std::vector<std::thread> threads;
   for (Job& job : jobs) {
     threads.emplace_back([&job, &left, token, query] {
       net::CancelScope scope(token);
-      job.ok = job.source->Search(job.source->RootId(), query, job.found, job.why);
+      job.ok = job.target.source->Search(job.target.folder, query, job.found, job.why);
       left--;
     });
   }
@@ -1177,9 +1260,8 @@ bool LibrarySource::SearchEverything(const std::string& query, browse::Listing& 
     return false;
   }
 
-  std::string failures;
   for (Job& job : jobs) {
-    const browse::SourcePtr& s = job.source;
+    const browse::SourcePtr& s = job.target.source;
     if (!job.ok) {
       if (!failures.empty())
         failures += "; ";
@@ -1192,11 +1274,6 @@ bool LibrarySource::SearchEverything(const std::string& query, browse::Listing& 
       e.id = EncodeId(s->Key(), e.id);
       out.push_back(std::move(e));
     }
-  }
-  // Something found: what failed is not worth spoiling it for.
-  if (out.empty() && !failures.empty()) {
-    error = failures;
-    return false;
   }
   return true;
 }

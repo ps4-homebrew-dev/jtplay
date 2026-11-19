@@ -2175,11 +2175,17 @@ void App::OpenSearch() {
     return;
   }
   // "Search Podcasts"; under Favorites it is the favorite's own source that
-  // is asked, whose name is not at hand.
+  // is asked, whose name is not at hand. A folder of favorites (or the
+  // top of them) is searched as what is in it: "Search Movies".
   const bool library = LibraryView(current_source_);
   const bool everything = current_source_ == sources_source_ && SearchScope() == 0;
+  const BrowseLevel& from = path_[SearchScope()];
+  std::string fav_folder;
+  const bool favorites = current_source_ == favorites_source_ &&
+    (from.id.empty() || library::FavoriteFolderFromEntryId(from.id, fav_folder));
   Set("search_title", bind_search_title_,
       everything ? std::string("Search all sources")
+      : favorites ? "Search " + from.name
       : library  ? std::string("Search") : "Search " + current_source_->Name());
   // The field is only hidden between searches (data-if), so it still holds
   // the last query.
