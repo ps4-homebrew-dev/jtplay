@@ -781,6 +781,7 @@ private:
   // Cached PlayOrder(), and what it was computed for.
   mutable std::vector<int> play_order_;
   mutable std::string play_order_key_;
+  std::string PlayOrderKey() const; // what play_order_ was worked out for
   int launch_failures_ = 0;           // skipped in a row; bounds the skipping
   bool upnext_dismissed_ = false;
   // Language codes ("en", "sv", ...; "" = the file's own default).
@@ -1074,7 +1075,25 @@ private:
     browse::SourcePtr source;
     std::string id;              // the folder's id; "" for a single item
     browse::Listing entries;
+    // A folder the source lists a page at a time (BrowseLevel::next): its
+    // next page, and what was searched for (from where) when it is a list
+    // of search results. Playback that runs out of it fetches that page
+    // and plays on into it (see QueueLoadMore).
+    std::string next, query, folder;
   };
+  // The folder 'level' as a play queue.
+  PlayQueue QueueOf(const BrowseLevel& level) const;
+  // Fetches the queue's next page and adds it on (and to the list, when
+  // that folder is on screen). 'advance': then plays on into it, as the
+  // queue ran out (at the end of an item, or on next); otherwise it is
+  // fetched ahead, while the last item listed plays.
+  void QueueLoadMore(bool advance);
+  void DropQueueMore(); // gives up on the page on its way
+  uint32_t queue_more_request_ = 0;    // the page on its way, or 0
+  uint32_t queue_more_counter_ = 0;
+  net::CancelToken queue_more_cancel_;
+  bool queue_more_advance_ = false;    // play on into it when it is here
+  int queue_more_empty_ = 0;           // pages in a row that had nothing to play
   PlayQueue queue_;
   PlayQueue launch_queue_;             // what a launch from the menus brings
   bool launch_from_queue_ = false;     // the launch in flight is queue_'s

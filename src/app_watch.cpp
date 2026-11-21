@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <random>
+#include <unordered_set>
 
 #include "app.h"
 #include "app_internal.h"
@@ -173,7 +174,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
       const BrowseLevel& level = path_.back();
       for (const browse::Entry& e : level.entries) {
         if (e.id == entry.id) {
-          launch_queue_ = PlayQueue{current_source_, level.id, level.entries};
+          launch_queue_ = QueueOf(level);
           // And where that folder is, to be back in it to resume (a
           // folder of a source, or under a favorite; not search results).
           std::vector<library::PlaceLevel> place = CurrentPlace();
@@ -269,6 +270,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
         watch_last_pos_us_ = watch_last_dur_us_ = -1;
         watch_last_seekable_ = false;
         if (!launch_from_queue_) {
+          DropQueueMore(); // (another folder's page)
           queue_ = std::move(launch_queue_);
           playing_place_source_ = std::move(launch_place_source_);
           playing_place_ = std::move(launch_place_);
@@ -276,6 +278,11 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
         const bool behind = launch_behind_;
         CancelLaunch();
         EnterWatch(playing_, !behind);
+        // The last of what is listed: the next page on its way already, so
+        // that what follows it (and "Up next") is there when it ends.
+        queue_more_empty_ = 0;
+        if (NeighborIndex(+1) < 0)
+          QueueLoadMore(false);
       }
     });
   });
@@ -406,6 +413,7 @@ void App::SetFullscreen(bool on) {
 
 void App::StopPlayback() {
   CancelLaunch();
+  DropQueueMore();
   if (bind_watching_)
     RecordProgress(true);
   ExitWatch();
@@ -849,6 +857,14 @@ bool App::HandleKeyControls(int key) {
 // The playable items of the play queue in play order: display order, or a
 // shuffle of it that stays put for as long as the queue and the shuffle do
 // (so "up next" is what really comes next).
+std::string App::PlayOrderKey() const {
+  const browse::Listing& entries = queue_.entries;
+  return (queue_.source ? queue_.source->Key() : std::string()) + '\n' +
+    queue_.id + '\n' + std::to_string(entries.size()) + '\n' +
+    (entries.empty() ? std::string() : entries.front().id) + '\n' +
+    (shuffle_ ? std::to_string(shuffle_seed_) : std::string("-"));
+}
+
 const std::vector<int>& App::PlayOrder() const {
   if (queue_.entries.empty()) {
     play_order_.clear();
@@ -856,10 +872,7 @@ const std::vector<int>& App::PlayOrder() const {
     return play_order_;
   }
   const browse::Listing& entries = queue_.entries;
-  const std::string key = (queue_.source ? queue_.source->Key() : std::string()) + '\n' +
-    queue_.id + '\n' + std::to_string(entries.size()) + '\n' +
-    (entries.empty() ? std::string() : entries.front().id) + '\n' +
-    (shuffle_ ? std::to_string(shuffle_seed_) : std::string("-"));
+  const std::string key = PlayOrderKey();
   if (key == play_order_key_)
     return play_order_;
   play_order_key_ = key;
@@ -915,7 +928,8 @@ int App::NeighborIndex(int direction) const {
   if (at < 0)
     return -1;
   int next = at + direction;
-  if (repeat_ == Repeat::All && !order.empty())
+  // (Round to the first again only once there is no more to come.)
+  if (repeat_ == Repeat::All && !order.empty() && (direction < 0 || queue_.next.empty()))
     next = (next + (int)order.size()) % (int)order.size();
   if (next < 0 || next >= (int)order.size() || next == at)
     return -1;
@@ -926,6 +940,15 @@ int App::NeighborIndex(int direction) const {
 // two episodes (or tracks) would only interrupt.
 bool App::PlayNeighbor(int direction) {
   const int i = NeighborIndex(direction);
+  // Past the last of what is listed, with more to come: on into that, once
+  // it is here. (A few pages that have nothing to play are given up on.)
+  if (i < 0 && direction > 0 && !queue_.next.empty() && queue_more_empty_ < kQueueEmptyPages &&
+      (launch_request_ || !playing_.id.empty())) {
+    if (!queue_more_request_ || !queue_more_advance_)
+      ShowToast("Loading more\u2026", icon::kMore);
+    QueueLoadMore(true);
+    return true;
+  }
   if (i < 0)
     return false;
   const browse::Entry entry = queue_.entries[i];
@@ -957,10 +980,147 @@ bool App::PlayNeighbor(int direction) {
 }
 
 void App::QueueCurrentFolder() {
+  DropQueueMore();
   if (path_.empty())
     queue_ = PlayQueue{};
   else
-    queue_ = PlayQueue{current_source_, path_.back().id, path_.back().entries};
+    queue_ = QueueOf(path_.back());
+}
+
+void App::DropQueueMore() {
+  if (queue_more_cancel_)
+    net::Cancel(queue_more_cancel_);
+  queue_more_cancel_.reset();
+  queue_more_request_ = 0;
+  queue_more_advance_ = false;
+}
+
+App::PlayQueue App::QueueOf(const BrowseLevel& level) const {
+  PlayQueue q{current_source_, level.id, level.entries};
+  q.next = level.next;
+  q.query = level.query;
+  q.folder = level.folder;
+  return q;
+}
+
+void App::QueueLoadMore(bool advance) {
+  if (queue_.next.empty() || !queue_.source)
+    return;
+  if (advance)
+    queue_more_advance_ = true;
+  if (queue_more_request_)
+    return; // on its way already
+  const uint32_t request = queue_more_request_ = ++queue_more_counter_;
+  if (queue_more_request_ == 0)
+    queue_more_request_ = ++queue_more_counter_; // (0 is "none")
+  const net::CancelToken cancel = queue_more_cancel_ = net::MakeCancelToken();
+  const browse::SourcePtr source = queue_.source;
+  const std::string id = queue_.id, cursor = queue_.next;
+  const std::string query = queue_.query, folder = queue_.folder;
+
+  PostTask(Lane::Browse, [this, request, cancel, source, id, cursor, query, folder] {
+    browse::Listing result;
+    std::string next, error;
+    {
+      net::CancelScope scope(cancel);
+      if (!net::Cancelled()) {
+        if (query.empty())
+          source->BrowsePage(id, cursor, result, next, error);
+        else if (!source->SearchPage(folder, query, cursor, result, next, error) && error.empty())
+          error = "the search failed";
+      }
+    }
+    Reply([this, request, source, id, cursor, query, result = std::move(result), next,
+           error]() mutable {
+      if (request != queue_more_request_)
+        return;
+      queue_more_request_ = 0;
+      queue_more_cancel_.reset();
+      const bool play_on = queue_more_advance_;
+      queue_more_advance_ = false;
+      // Still the queue it was fetched for: not another folder started
+      // meanwhile, nor this one's next page fetched some other way.
+      if (queue_.source != source || queue_.id != id || queue_.query != query ||
+          queue_.next != cursor)
+        return;
+      // Waiting at the end of an item (not over something still playing,
+      // nor a launch since): with nothing to go on to, the player stops.
+      const auto stop_if_ended = [this] {
+        if (bind_watching_ && !launch_request_ && !player_->IsPlaying())
+          StopPlayback();
+      };
+      if (!error.empty()) {
+        if (play_on) {
+          ShowToast(error, icon::kWarning);
+          stop_if_ended();
+        }
+        return;
+      }
+
+      // Added on behind what is there (whatever the order on screen: it
+      // is what comes next); what is there already is left out.
+      std::unordered_set<std::string> seen;
+      for (const browse::Entry& e : queue_.entries)
+        seen.insert(e.id);
+      const size_t before = queue_.entries.size();
+      const bool fresh_order = play_order_key_ == PlayOrderKey();
+      for (const browse::Entry& e : result)
+        if (seen.insert(e.id).second)
+          queue_.entries.push_back(e);
+      const size_t added = queue_.entries.size() - before;
+      queue_.next = added == 0 && next == cursor ? std::string() : next;
+      // The play order grows the same way: shuffled, the new page is a
+      // shuffle of its own after the rest, so nothing plays twice.
+      if (fresh_order && added > 0) {
+        std::vector<int> more;
+        for (size_t i = before; i < queue_.entries.size(); i++)
+          if (!queue_.entries[i].IsFolder() && !queue_.entries[i].IsImage())
+            more.push_back((int)i);
+        if (shuffle_) {
+          std::mt19937 rng(shuffle_seed_ ^ (uint32_t)before);
+          std::shuffle(more.begin(), more.end(), rng);
+        }
+        play_order_.insert(play_order_.end(), more.begin(), more.end());
+        play_order_key_ = PlayOrderKey();
+      }
+
+      // The same folder on screen, at the same page: its list grows too.
+      if (view_ == View::Browse && !path_.empty() && current_source_ == source) {
+        BrowseLevel& here = path_.back();
+        if (here.id == id && here.query == query && here.next == cursor) {
+          const std::string keep = sel_entry_ >= 0 && sel_entry_ < (int)here.entries.size()
+                                 ? here.entries[sel_entry_].id : std::string();
+          std::unordered_set<std::string> listed;
+          for (const browse::Entry& e : here.raw)
+            listed.insert(e.id);
+          for (const browse::Entry& e : result)
+            if (listed.insert(e.id).second)
+              here.raw.push_back(e);
+          here.next = queue_.next;
+          NoteSourceArt(current_source_, here.raw);
+          SortLevel(here);
+          here.selection = std::min(sel_entry_, std::max(0, (int)here.entries.size() - 1));
+          for (size_t i = 0; i < here.entries.size() && !keep.empty(); i++)
+            if (here.entries[i].id == keep)
+              here.selection = (int)i;
+          sel_entry_ = here.selection;
+          RebuildEntryRows();
+          RebuildDetail();
+        }
+      }
+
+      bool playable = false;
+      for (size_t i = before; i < queue_.entries.size(); i++)
+        playable = playable || (!queue_.entries[i].IsFolder() && !queue_.entries[i].IsImage());
+      queue_more_empty_ = playable ? 0 : queue_more_empty_ + 1;
+      if (play_on) {
+        if (!PlayNeighbor(+1))
+          stop_if_ended();
+      } else if (!playable && NeighborIndex(+1) < 0 && queue_more_empty_ < kQueueEmptyPages) {
+        QueueLoadMore(false); // nothing to play on that page: the one after
+      }
+    });
+  }, false);
 }
 
 size_t App::FolderPlayableCount() const {

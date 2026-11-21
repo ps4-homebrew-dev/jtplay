@@ -41,6 +41,9 @@ inline constexpr size_t kSearchMaxLength = 100;
 // Pages loaded, at most, to find the entry a folder was left on (see
 // App::more_seek_id_).
 inline constexpr int kSeekPages = 5;
+// Pages in a row with nothing to play (all folders, say) after which
+// playback that ran out of a folder stops looking for more.
+inline constexpr int kQueueEmptyPages = 5;
 // A folder of favorites' name, as typed.
 inline constexpr size_t kFolderNameMaxLength = 60;
 // What a plugin's text setting may be: a sign-in token runs to a couple of

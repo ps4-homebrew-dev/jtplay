@@ -268,7 +268,10 @@ in Kodi: the menus fade in over the video, which plays on behind them as
 it is, under a shade that keeps them readable (on Home the video takes
 the place of the banner's picture), and can be used as ever while it
 plays on (music plays on under the usual menus). It keeps moving through
-the folder it was started from, wherever the menus are by then.
+the folder it was started from, wherever the menus are by then, and on
+past its Load more: the next page is fetched as the last item listed
+starts (so Up next shows what follows), and comes after it in the list
+too when that folder is on screen.
 
 What plays is in the bottom right corner, with its time and progress (and
 a station's song under its name); Home's first
