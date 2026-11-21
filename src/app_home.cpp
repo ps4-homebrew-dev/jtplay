@@ -174,7 +174,18 @@ void App::StartDiscovery(browse::Source::Group group,
       for (const std::function<void()>& then : waiting)
         then();
     });
-  });
+  }, false); // not busy in itself: see DiscoveryShown()
+}
+
+// Sources are looked for at start, behind whatever is on screen: that is
+// only worth the busy dots where it is waited on, the list of sources (a
+// network server takes seconds to answer), or something that is to open
+// once its source is found.
+bool App::DiscoveryShown() const {
+  for (const GroupScan& scan : scans_)
+    if (scan.running && (OnSourcesList() || !scan.waiting.empty()))
+      return true;
+  return false;
 }
 
 bool App::SourceKnown(const std::string& key) const {

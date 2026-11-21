@@ -1030,6 +1030,7 @@ private:
     Rml::String errors;
   };
   GroupScan scans_[3];
+  bool DiscoveryShown() const; // a scan running that is waited on
   std::vector<Shelf> shelves_;
   std::vector<int> shelf_card_sel_;    // remembered column per shelf
 

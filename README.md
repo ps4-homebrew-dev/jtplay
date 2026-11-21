@@ -142,7 +142,8 @@ lists what is in it (the first eight entries, folders first, and how many
 more) in place of its icon, a moment after the focus stops there.
 
 Waiting of any kind -- a folder on a slow server, an item opening,
-sources being looked for, a picture loading -- has one sign: the dots by
+sources being looked for (on the Sources tab, or when something waits
+for its source; not the search at start), a picture loading -- has one sign: the dots by
 the clock (over full-screen video and pictures, in that corner, beside the
 time when a bar is up). Back gives up on a folder on its way and stays
 put. A folder that cannot be listed says why in place of the list;
