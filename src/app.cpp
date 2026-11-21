@@ -607,7 +607,7 @@ void App::Update() {
   // folder, a search, an item opening, sources looked for, a picture).
   // Over full-screen playback and pictures they are in the corner there.
   Set("browse_loading", bind_browse_loading_, view_ == View::Browse && browse_pending_);
-  Set("busy", bind_busy_, busy_ops_.load() > 0 || bind_photo_loading_ || DiscoveryShown());
+  Set("busy", bind_busy_, busy_ops_.load() > 0 || photo_loading_ || DiscoveryShown());
 
   if (scroll_entries_deferred_) {
     scroll_entries_deferred_ = false;

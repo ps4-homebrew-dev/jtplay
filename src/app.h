@@ -940,7 +940,7 @@ private:
   bool bind_photo_ = false;
   bool bind_photo_info_ = false;       // caption along the bottom
   bool bind_photo_playing_ = false;    // slideshow running
-  bool bind_photo_loading_ = false;    // (not bound: one of bind_busy_'s)
+  bool photo_loading_ = false;         // (not bound: feeds bind_busy_)
   bool bind_photo_fade_ = true;        // cross-fade between pictures
   int bind_photo_front_ = 0;           // layer showing the current picture
   Rml::String bind_photo_art_[2] = {"none", "none"};  // decorators

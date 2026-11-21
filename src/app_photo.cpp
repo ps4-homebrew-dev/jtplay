@@ -99,7 +99,7 @@ void App::ClosePhotos() {
   }
   Set("photo", bind_photo_, false);
   Set("photo_playing", bind_photo_playing_, false);
-  Set("photo_loading", bind_photo_loading_, false);
+  photo_loading_ = false;
   Set("photo_info", bind_photo_info_, false);
   if (bind_menu_open_)
     CloseMenu();
@@ -137,7 +137,7 @@ void App::ShowPhoto(int index) {
   Set("photo_sideways", bind_photo_sideways_, (turns & 1) != 0);
 
   photo_pending_ = true;
-  Set("photo_loading", bind_photo_loading_, false);
+  photo_loading_ = false;
 
   // The neighbours first: the art thread takes the newest request first,
   // so the picture asked for last -- this one -- comes before them.
@@ -197,10 +197,10 @@ void App::UpdatePhotos(double now) {
                                                 : artcache::LookupScreen(uri, path);
     if (status == artcache::Status::Missing) {
       ImagePathFor(uri); // queues it (once)
-      Set("photo_loading", bind_photo_loading_, true);
+      photo_loading_ = true;
     } else {
       photo_pending_ = false;
-      Set("photo_loading", bind_photo_loading_, false);
+      photo_loading_ = false;
       if (status == artcache::Status::Failed) {
         ShowToast("Cannot show " + DisplayName(photo_list_[photo_index_]), icon::kWarning);
       } else {
