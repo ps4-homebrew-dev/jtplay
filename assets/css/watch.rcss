@@ -204,6 +204,9 @@ body.behind #shell {
 .osd-played {
 	decorator: linear-gradient(90deg, #2fa58c 0%, #4dd6b8 100%);
 	box-shadow: #4dd6b880 0px 0px 14px 0px;
+	/* Never of no width (at 0%, under the knob): RmlUi before 96fda45
+	   (October 2026) trips over the shadow of an element with no area. */
+	min-width: 1px;
 }
 
 .osd-knob {

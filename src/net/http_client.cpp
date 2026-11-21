@@ -138,14 +138,27 @@ namespace net {
 
     // Goes by a response's Date header, when there is one. Returns whether
     // that changed the clock.
-    bool LearnSkew(const std::map<std::string, std::string>& headers) {
+    //
+    // A response from a cache (a CDN's, a proxy's) has the Date of when it
+    // was made, and says in Age how long it has been kept: weeks, for an
+    // image. Without Age a Date far in the past may be the same thing from
+    // a cache that does not say so, so a clock found behind is believed only
+    // from a request made just to ask (LearnServerTime, no cache in the
+    // way), not from whatever response comes along; a clock found ahead
+    // (the servers' later than this one) cannot come from a cache.
+    bool LearnSkew(const std::map<std::string, std::string>& headers, bool asked = false) {
       const auto date = headers.find("date");
       if (date == headers.end())
         return false;
-      const time_t server = ::curl_getdate(date->second.c_str(), nullptr);
+      time_t server = ::curl_getdate(date->second.c_str(), nullptr);
       if (server <= 0)
         return false;
+      const auto age = headers.find("age");
+      if (age != headers.end())
+        server += (time_t)std::strtoll(age->second.c_str(), nullptr, 10);
       int64_t skew = (int64_t)server - (int64_t)std::time(nullptr);
+      if (skew < -netclock::kToleranceSec && !asked)
+        return false;
       if (skew >= -netclock::kToleranceSec && skew <= netclock::kToleranceSec)
         skew = 0;
       const int64_t was = netclock::skew.exchange(skew);
@@ -196,6 +209,9 @@ namespace net {
     ::curl_easy_setopt(curl_, CURLOPT_HEADERFUNCTION, WriteHeader);
     ::curl_easy_setopt(curl_, CURLOPT_HEADERDATA, &headers);
     ::curl_easy_setopt(curl_, CURLOPT_USERAGENT, "jtplay");
+    // Past any cache: its Date would be of when the cache got it.
+    struct curl_slist* fresh = ::curl_slist_append(nullptr, "Cache-Control: no-cache");
+    ::curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, fresh);
     ::curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYPEER, 0L);
     ::curl_easy_setopt(curl_, CURLOPT_SSL_VERIFYHOST, 0L);
     ::curl_easy_setopt(curl_, CURLOPT_TIMEOUT_MS, kConnectTimeoutMs);
@@ -204,7 +220,9 @@ namespace net {
     ::curl_easy_setopt(curl_, CURLOPT_FORBID_REUSE, 1L);
     ::curl_easy_setopt(curl_, CURLOPT_FRESH_CONNECT, 1L);
     ::curl_easy_perform(curl_);
-    return LearnSkew(headers);
+    ::curl_easy_setopt(curl_, CURLOPT_HTTPHEADER, nullptr);
+    ::curl_slist_free_all(fresh);
+    return LearnSkew(headers, true);
   }
 
   // What one transfer needs to stay alive while libcurl runs it.
