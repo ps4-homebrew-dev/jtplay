@@ -50,7 +50,6 @@
 				</span>
 				<div class="clockbox">
 					<div class="clock">{{clock}}</div>
-					<div class="date">{{date}}</div>
 				</div>
 			</div>
 
