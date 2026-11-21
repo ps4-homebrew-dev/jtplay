@@ -139,23 +139,25 @@ namespace net {
     // Goes by a response's Date header, when there is one. Returns whether
     // that changed the clock.
     //
-    // A response from a cache (a CDN's, a proxy's) has the Date of when it
-    // was made, and says in Age how long it has been kept: weeks, for an
-    // image. Without Age a Date far in the past may be the same thing from
-    // a cache that does not say so, so a clock found behind is believed only
-    // from a request made just to ask (LearnServerTime, no cache in the
-    // way), not from whatever response comes along; a clock found ahead
-    // (the servers' later than this one) cannot come from a cache.
+    // Not from a cache's response (a CDN's, a proxy's): which time its Date
+    // is depends on the cache. Some keep the origin's, of when the copy was
+    // made (weeks ago, for an image), others put the time now; either way
+    // Age, how long the copy has been kept, cannot be added or subtracted
+    // safely. A response with an Age is passed over. Without one, a Date far
+    // in the past may still be a cache that does not say so, so a clock found
+    // ahead of the servers' is believed only from a request made just to ask
+    // (LearnServerTime, which asks past any cache). A clock found behind
+    // theirs, the usual case on an offline console, cannot be a cache's doing.
     bool LearnSkew(const std::map<std::string, std::string>& headers, bool asked = false) {
       const auto date = headers.find("date");
       if (date == headers.end())
         return false;
-      time_t server = ::curl_getdate(date->second.c_str(), nullptr);
+      const time_t server = ::curl_getdate(date->second.c_str(), nullptr);
       if (server <= 0)
         return false;
       const auto age = headers.find("age");
-      if (age != headers.end())
-        server += (time_t)std::strtoll(age->second.c_str(), nullptr, 10);
+      if (!asked && age != headers.end() && std::strtoll(age->second.c_str(), nullptr, 10) > 0)
+        return false;
       int64_t skew = (int64_t)server - (int64_t)std::time(nullptr);
       if (skew < -netclock::kToleranceSec && !asked)
         return false;
