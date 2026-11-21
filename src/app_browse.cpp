@@ -1253,14 +1253,11 @@ void App::AddEntryActions(const browse::Entry& entry) {
   } else if (!entry.IsFolder()) {
     library::Progress p;
     const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
-    if (known && !p.watched && p.position > 0) {
-      const int64_t at = p.position;
-      AddMenuItem({"Resume from " + FormatTime(at * 1000000), nullptr,
-        [this, entry, at](int) { Launch(entry, at); }});
+    // (Resuming is select's, here as on Home: only the other way round
+    // needs an entry, first, a press away.)
+    if (known && !p.watched && p.position > 0)
       AddMenuItem({"Play from beginning", nullptr,
         [this, entry](int) { Launch(entry, 0); }});
-    }
-    // (Anything else plays with select: no entry for that.)
   }
   if (entry.IsVideo() || entry.IsAudio()) {
     library::Progress p;
@@ -1278,8 +1275,8 @@ void App::AddEntryActions(const browse::Entry& entry) {
 // where a dialog asks something first:
 //
 //   not a favorite        Add...
-//   a favorite            Rename...  Move...  Remove
-//   a folder of yours     Rename...  Move...  Delete
+//   a favorite            Move...  Rename...  Remove
+//   a folder of yours     Move...  Rename...  Delete
 //
 // In the Favorites tab, where favorites are organized, New folder... (in
 // the folder on screen) is one of them too: before what removes, which
@@ -1300,15 +1297,15 @@ void App::AddFavoriteActions(const browse::Entry* entry) {
     const browse::Entry e = *entry;
     if (library_.IsFavorite(ref.source_key, ref.entry.id)) {
       // (Its name in Favorites; where it is from keeps its own.)
+      AddMenuItem({"Move\u2026", nullptr, [this, ref, e](int) {
+        OpenSaveSheet(ref, DisplayName(e));
+      }});
       AddMenuItem({"Rename\u2026", nullptr, [this, ref, e](int) {
         OpenTextEntry("Rename favorite", DisplayName(e), kFolderNameMaxLength, false,
                       [this, ref](const std::string& name) {
           if (library_.RenameFavorite(ref.source_key, ref.entry.id, name))
             library_.Save();
         });
-      }});
-      AddMenuItem({"Move\u2026", nullptr, [this, ref, e](int) {
-        OpenSaveSheet(ref, DisplayName(e));
       }});
       new_folder();
       AddMenuItem({"Remove", nullptr, [this, e](int) { ToggleFavorite(e); }});
@@ -1339,19 +1336,23 @@ void App::ShowMenu(int selection) {
 }
 
 // Every menu runs in the same order, from what is in focus out to what is
-// around it:
+// around it, and so that what is wanted most is fewest presses away on a
+// remote's arrows: the first rows down, or (the menu wraps round) the
+// last rows up.
 //
-//   (no heading)   the item in focus: play, resume, mark as watched
+//   (no heading)   the item in focus: play from beginning, mark as watched
 //   Favorites      the item in Favorites (AddFavoriteActions)
+//   Find           save search, search, filter
 //   Folder         the folder on screen: play all, shuffle, slideshow,
 //                  load more, refresh
-//   Find           search, filter
-//   View           display as list or grid, sort, order
+//   View           sort, order, display as list or grid
 //   Plugin         the settings of the plugin it is from
-//   Now playing    what plays behind the menus, if anything does
+//   Now playing    what plays behind the menus: stop is the last row, one
+//                  press up from the first
 //
 // Within a section, what is used most comes first and what removes or
-// undoes something last.
+// undoes something last. Nothing select already does on the item (play,
+// resume, open) has a row.
 void App::OpenMenu() {
   SetListScroll(false);
   menu_items_.clear();
@@ -1418,8 +1419,28 @@ void App::OpenMenu() {
       AddFavoriteActions(e);
     }
 
-    // (The list of sources: what is done to the lot of them.)
+    // Search: what a menu is opened for most, after the item itself; a
+    // few presses down at most. Filter narrows what is listed (typing, on
+    // a remote: less often).
     const bool everything = current_source_ == sources_source_ && SearchScope() == 0;
+    MenuSection("Find");
+    // Results: saving them is what is likely wanted now.
+    if (library::Ref search; SavedSearchRef(search) &&
+                             !library_.IsFavorite(search.source_key, search.entry.id))
+      AddMenuItem({"Save search\u2026", nullptr, [this, search](int) {
+        OpenSaveSheet(search, search.entry.name);
+      }});
+    if (current_source_ && !path_.empty() &&
+        current_source_->CanSearch(path_[SearchScope()].id))
+      AddMenuItem({everything ? "Search all sources\u2026" : "Search\u2026", nullptr,
+                   [this](int) { OpenSearch(); }});
+    if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
+      AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
+    AddMenuItem({"Filter\u2026", nullptr, [this](int) { OpenFilter(); }});
+
+    // The folder on screen as a whole (the list of sources: the lot of
+    // them). Fetching again comes last: rarely wanted (Load more is also
+    // the list's last row).
     MenuSection(everything ? "Sources" : "Folder");
     // A folder of music or episodes plays as a whole, in order or shuffled.
     if (FolderPlayableCount() > 1) {
@@ -1444,35 +1465,20 @@ void App::OpenMenu() {
     if (!InFavoritesTree())
       AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
 
-    // Search asks the source for more, and is only there for sources that
-    // can; Filter narrows what is listed.
-    MenuSection("Find");
-    if (current_source_ && !path_.empty() &&
-        current_source_->CanSearch(path_[SearchScope()].id))
-      AddMenuItem({everything ? "Search all sources\u2026" : "Search\u2026", nullptr,
-                   [this](int) { OpenSearch(); }});
-    // Results: the search itself, to Favorites, to run again from there.
-    if (library::Ref search; SavedSearchRef(search) &&
-                             !library_.IsFavorite(search.source_key, search.entry.id))
-      AddMenuItem({"Save search\u2026", nullptr, [this, search](int) {
-        OpenSaveSheet(search, search.entry.name);
-      }});
-    AddMenuItem({"Filter\u2026", nullptr, [this](int) { OpenFilter(); }});
-    if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
-      AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
-
+    // How it is shown: the sort is changed far more often than list or
+    // grid, which is set once per folder.
     MenuSection("View");
-    AddMenuItem({"Display as",
-      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
-      [this](int) {
-        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
-      }});
     AddMenuItem({"Sort by",
       [this] { return std::string(SortModeName((int)sort_mode_)); },
       [this](int d) { CycleSortMode(d == 0 ? +1 : d); }});
     AddMenuItem({"Order",
       [this] { return std::string(sort_desc_ ? "Descending" : "Ascending"); },
       [this](int) { SetSort(sort_mode_, !sort_desc_); }});
+    AddMenuItem({"Display as",
+      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
+      [this](int) {
+        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
+      }});
 
     // The plugin this is from: of the source, or in Favorites and Continue
     // watching, of the item in focus.
@@ -1654,6 +1660,7 @@ void App::AddFavoriteFolderActions(const browse::Entry& entry,
   if (!library::FavoriteFolderFromEntryId(entry.id, folder) ||
       !library_.FindFavoriteFolder(folder, f))
     return;
+  AddMenuItem({"Move\u2026", nullptr, [this, f](int) { OpenFolderMoveSheet(f.id); }});
   AddMenuItem({"Rename\u2026", nullptr, [this, f](int) {
     OpenTextEntry("Rename folder", f.name, kFolderNameMaxLength, false,
                   [this, f](const std::string& name) {
@@ -1661,7 +1668,6 @@ void App::AddFavoriteFolderActions(const browse::Entry& entry,
         library_.Save();
     });
   }});
-  AddMenuItem({"Move\u2026", nullptr, [this, f](int) { OpenFolderMoveSheet(f.id); }});
   if (before_delete)
     before_delete();
   AddMenuItem({"Delete", nullptr,

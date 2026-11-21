@@ -203,14 +203,23 @@ last favorite went to, on OK, so saving the next one there is triangle
 then select. On a favorite already, triangle removes it. A source added
 from the list of sources keeps its logo.
 
-Every options menu has a **Favorites** section, the same wherever it is,
-under the name of what is in focus ("..." means a dialog asks first):
+Every options menu runs in the same order, so that what is wanted most is
+the fewest presses away: what can be done to the item in focus (*Play
+from beginning*, *Mark as watched*; select plays and resumes, so neither
+has a row), its **Favorites** section, **Find** (*Search...*, *Filter...*),
+the **Folder** (*Play all*, *Shuffle all*, *Slideshow*, *Load more*,
+*Refresh*), **View** (*Sort by*, *Order*, *Display as*), the plugin's
+settings, and last, while something plays, **Now playing**: the menu
+wraps round, so *Stop playback* is one press up from the top.
+
+The **Favorites** section is the same wherever it is, under the name of
+what is in focus ("..." means a dialog asks first):
 
 | In focus | Favorites section |
 |---|---|
 | anything not in Favorites | *Add...* (the folder picker) |
-| a favorite (or a saved search) | *Rename...* (its name in Favorites), *Move...* (the folder picker, on where it is), *Remove* |
-| a folder of yours | *Rename...*, *Move...*, *Delete* |
+| a favorite (or a saved search) | *Move...* (the folder picker, on where it is), *Rename...* (its name in Favorites), *Remove* |
+| a folder of yours | *Move...*, *Rename...*, *Delete* |
 
 In the Favorites tab the section also has *New folder...* (made in the
 folder on screen), just before *Remove* or *Delete*. Favorites are the
