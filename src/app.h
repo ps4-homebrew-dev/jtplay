@@ -281,9 +281,10 @@ private:
   // with its picture (its logo, or artwork seen in it).
   library::Ref SourceRef(const browse::SourcePtr& source) const;
   void ToggleSourceFavorite(const browse::SourcePtr& source);
-  // Of a favorite that is a source's top folder (see SourceRef): its
-  // picture as the source has it now, and whether that is its own logo
-  // (shown whole, as on the list of sources). "" for anything else.
+  // Of a favorite that is a source's top folder (see SourceRef) or a saved
+  // search of it: its picture as the source has it now, and whether that
+  // is its own logo (shown whole, as on the list of sources). "" for
+  // anything else.
   std::string SourceFavoriteArt(const browse::Entry& entry, bool* logo = nullptr) const;
   // Snapshots of where a video was stopped (see RecordProgress) live in the
   // cache directory and go when their resume point does.

@@ -88,15 +88,18 @@ std::string App::SourceFavoriteArt(const browse::Entry& entry, bool* logo) const
   if (!entry.IsFolder() || !library::DecodeId(entry.id, key, id))
     return {};
   // Its top folder: by the source's root id once it is found; until then,
-  // by the name the library knows it by.
+  // by the name the library knows it by. A saved search of it shows it too
+  // (what it searches is said by its name).
   library::KnownSource known;
   const bool remembered = library_.FindKnownSource(key, known);
+  std::string folder, query;
+  const bool search = library::ParseSavedSearchId(id, folder, query);
   std::string own;
   if (const browse::SourcePtr source = registry_.Find(key)) {
-    if (id != source->RootId())
+    if (id != source->RootId() && !search)
       return {};
     own = source->Image();
-  } else if (remembered && entry.name == known.name) {
+  } else if (remembered && (search || entry.name == known.name)) {
     own = known.logo;
   } else {
     return {};
