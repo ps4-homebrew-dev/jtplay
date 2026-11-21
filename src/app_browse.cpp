@@ -882,7 +882,7 @@ void App::LoadMore() {
       sel_entry_ = here.selection;
       RebuildEntryRows();
       RebuildDetail();
-      scroll_entries_deferred_ = true;
+      scroll_entries_pending_ = true;
       if (seek_on)
         LoadMore();
       else if (added == 0 && here.next.empty())

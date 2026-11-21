@@ -32,7 +32,9 @@
 	flex-direction: column;
 	decorator: linear-gradient(90deg, #141c2e 0%, #10172a 100%);
 	border-right: 2px #ffffff14;
-	box-shadow: #000000a0 20px 0px 60px 0px;
+	/* (No shadow: the shade over the rest of the screen sets it apart, and
+	   a shadow of a panel the height of the screen is a texture taller
+	   than the screen, which RmlUi clips and warns about.) */
 	animation: 0.18s cubic-out blade-in;
 }
 

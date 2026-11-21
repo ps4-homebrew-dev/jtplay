@@ -59,6 +59,8 @@ inline constexpr size_t kArtQueueMax = 96;
 // Rows kept visible above/below the selection while scrolling, so the
 // next item is always in view before it is reached.
 inline constexpr int kScrollMarginRows = 2;
+// Frames a scroll waits for its list to be laid out that far, at most.
+inline constexpr int kScrollWaitFrames = 10;
 
 // Rows jumped by page up/down (L1/R1, PageUp/PageDown, and up/down on a
 // list's scroll bar).

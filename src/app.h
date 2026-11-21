@@ -800,10 +800,22 @@ private:
   // unless a video is playing.
   void UpdateScreensaver(double now);
 
-  void EnsureRowVisible(const char* list_id, int index, float row_pitch);
+  // Scrolls a list so that a row (and a little around it) is in view.
+  // Only once the list is laid out with that row in it: the rows the data
+  // bindings make exist from the context update after the change, and a
+  // scroll before that is measured against the rows that were (a list
+  // left at its top, blank, when back returns to a long folder). Nor while
+  // the list is hidden (#shell under full-screen playback). Done: false
+  // means not yet, try again next frame.
+  enum class Scrolled { Done, Hidden, NotLaidOut };
+  Scrolled EnsureRowVisible(const char* list_id, int index, float row_pitch);
   // The same for rows that are not all of one height: 'top' to 'bottom' is
   // where the row is in the list, 'row_pitch' what a row of context is.
-  void EnsureSpanVisible(const char* list_id, float top, float bottom, float row_pitch);
+  Scrolled EnsureSpanVisible(const char* list_id, float top, float bottom, float row_pitch);
+  // A pending scroll is over: done, or waited for long enough (a list that
+  // never grows that far is scrolled as it is). Hidden waits for good.
+  static bool ScrollSettled(Scrolled result, int& waited);
+  int scroll_entries_waited_ = 0, scroll_sheet_waited_ = 0, scroll_menu_waited_ = 0;
   bool ScrollRows();
   // A notification in the corner; 'icon' is a glyph ("⭐", "⚠", ...).
   void ShowToast(const std::string& text, const char* icon = nullptr);
@@ -1183,9 +1195,6 @@ private:
   bool bind_seekbar_visible_ = false; // the top bar
   double seekbar_deadline_ = 0.0;
   bool scroll_entries_pending_ = false;
-  // The same, a frame later: for rows a reply has just added, which the
-  // list has no room for until the context has laid them out.
-  bool scroll_entries_deferred_ = false;
   bool scroll_sheet_pending_ = false; // the folder picker's selection into view
   bool scroll_menu_pending_ = false;
   bool scroll_settings_pending_ = false;
