@@ -31,7 +31,7 @@
 				     of sources, in the browse view, under them as well. -->
 				<div id="tabs" data-if="view == 'home' || (view == 'browse' && tab_page)"
 				     data-class-away="view == 'home' ? (home_shelves || home_settings) : !browse_tabs">
-					<div class="tab" data-for="r, ri : rail" data-class-selected="ri == sel_rail">
+					<div class="tab" data-for="r, ri : tabs" data-class-selected="ri == sel_tab">
 						<span class="tab-icon">{{r.icon}}</span>
 						<span class="tab-label">{{r.label}}</span>
 					</div>

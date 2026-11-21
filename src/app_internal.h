@@ -60,7 +60,8 @@ inline constexpr size_t kArtQueueMax = 96;
 // next item is always in view before it is reached.
 inline constexpr int kScrollMarginRows = 2;
 
-// Rows jumped by page up/down (L1/R1, left/right in the browse list).
+// Rows jumped by page up/down (L1/R1, PageUp/PageDown, and up/down on a
+// list's scroll bar).
 inline constexpr int kPageRows = 10;
 // A folder's preview in the info panel: asked for once the focus has
 // rested on it this long; this many of its entries shown; previews kept.

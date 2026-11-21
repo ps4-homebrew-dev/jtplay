@@ -192,12 +192,12 @@ bool App::ResumeInPlace(const browse::Entry& card) {
   current_source_ = source;
   // Under the Favorites tab: that tab is the one its top is the page of.
   if (source == favorites_source_ && place.front().id.empty()) {
-    if (rail_.empty())
+    if (tabs_.empty())
       RebuildHome("favorites");
-    for (size_t i = 0; i < rail_.size(); i++) {
-      if (rail_[i].kind == RailKind::Favorites && sel_rail_ != (int)i) {
-        sel_rail_ = (int)i;
-        model_.DirtyVariable("sel_rail");
+    for (size_t i = 0; i < tabs_.size(); i++) {
+      if (tabs_[i].kind == TabKind::Favorites && sel_tab_ != (int)i) {
+        sel_tab_ = (int)i;
+        model_.DirtyVariable("sel_tab");
       }
     }
   }
@@ -536,9 +536,11 @@ void App::RebuildEntryRows() {
   Set("has_more", bind_has_more_, HasMore());
   // Favorites, and their folders, say how they fill up.
   Set("empty_text", bind_empty_text_, Rml::String(
-    OnFavoritesTab() ? "No favorites yet. Triangle on any folder or item adds it."
-    : InFavoritesTree() ? "Nothing in this folder yet. Triangle on anything can save it "
-                          "here, and Move... in a favorite's options menu move it here."
+    // (No button names: they differ from one device to the next. The
+    // options menu is reached the same way everywhere.)
+    OnFavoritesTab() ? "No favorites yet. Add... in the options menu of any folder or item saves it here."
+    : InFavoritesTree() ? "Nothing in this folder yet. Add... in an options menu saves "
+                          "things here, Move... moves a favorite here."
     : "This folder is empty."));
   if (bind_has_more_) {
     EntryRow row;
@@ -1264,7 +1266,9 @@ void App::AddEntryActions(const browse::Entry& entry) {
     library::Progress p;
     const bool known = library_.GetProgress(ref.source_key, ref.entry.id, p);
     const bool watched = known && p.watched;
-    AddMenuItem({watched ? "Mark as unwatched" : "Mark as watched",
+    const bool music = entry.IsAudio();
+    AddMenuItem({watched ? (music ? "Mark as unplayed" : "Mark as unwatched")
+                         : (music ? "Mark as played" : "Mark as watched"),
       nullptr, [this, entry, watched](int) { SetWatched(entry, !watched); }});
   }
 }
@@ -1498,7 +1502,7 @@ void App::OpenMenu() {
     MenuSection("Sources");
     AddMenuItem({"Refresh", nullptr, [this](int) { SearchAllSources(); }});
   } else if (bind_watching_) {
-    // The top level of the rail: only what plays.
+    // On Home's tabs: only what plays.
     Set("menu_title", bind_menu_title_, bind_watch_name_);
   }
 
@@ -1513,7 +1517,7 @@ void App::OpenMenu() {
   }
 
   if (menu_items_.empty())
-    return; // nothing to offer on the top level of the rail
+    return; // nothing to offer on the tabs
   ShowMenu();
 }
 
@@ -1900,9 +1904,16 @@ App::ViewMode App::LevelView(size_t index) {
     bool grid = false;
     if (current_source_ && level.query.empty() &&
         library_.GetView(current_source_->Key(), level.id, grid))
-      level.view = (int)(grid ? ViewMode::Grid : ViewMode::List);
-    else
-      level.view = (int)(index == 0 ? view_root_ : LevelView(index - 1));
+      return (ViewMode)(level.view = (int)(grid ? ViewMode::Grid : ViewMode::List));
+    const ViewMode inherited = index == 0 ? view_root_ : LevelView(index - 1);
+    // Not set for this folder: as the one it is in, but a folder of
+    // pictures is thumbnails. (Worked out once it is listed.)
+    if (level.entries.empty())
+      return inherited;
+    size_t pictures = 0;
+    for (const browse::Entry& e : level.entries)
+      pictures += e.IsImage() ? 1 : 0;
+    level.view = (int)(pictures * 10 >= level.entries.size() * 8 ? ViewMode::Grid : inherited);
   }
   return (ViewMode)level.view;
 }

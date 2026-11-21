@@ -357,11 +357,11 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
     return false;
   }
 
-  if (auto row = ctor.RegisterStruct<RailRow>()) {
-    row.RegisterMember("icon", &RailRow::icon);
-    row.RegisterMember("label", &RailRow::label);
+  if (auto row = ctor.RegisterStruct<TabRow>()) {
+    row.RegisterMember("icon", &TabRow::icon);
+    row.RegisterMember("label", &TabRow::label);
   }
-  ctor.RegisterArray<std::vector<RailRow>>();
+  ctor.RegisterArray<std::vector<TabRow>>();
 
   if (auto row = ctor.RegisterStruct<CardRow>()) {
     row.RegisterMember("title", &CardRow::title);
@@ -455,8 +455,8 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("browse_loading", &bind_browse_loading_);
   ctor.Bind("browse_error", &bind_browse_error_);
 
-  ctor.Bind("rail", &rail_rows_);
-  ctor.Bind("sel_rail", &sel_rail_);
+  ctor.Bind("tabs", &tab_rows_);
+  ctor.Bind("sel_tab", &sel_tab_);
   ctor.Bind("shelves", &shelf_rows_);
   ctor.Bind("sel_shelf", &sel_shelf_);
   ctor.Bind("sel_card", &sel_card_);

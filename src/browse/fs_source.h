@@ -18,7 +18,7 @@ public:
   const std::string& Detail() const override { return root_; }
   const char* Icon() const override { return icon::kDrive; }
   std::string Key() const override { return "fs:" + root_; }
-  Group RailGroup() const override { return Group::Local; }
+  Group SourceGroup() const override { return Group::Local; }
   std::string RootId() const override { return root_; }
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
 
@@ -37,7 +37,7 @@ bool ClassifyFileName(const std::string& name, Entry::Type& type);
 class FsProvider : public Provider {
 public:
   const char* Name() const override { return "fs"; }
-  Source::Group RailGroup() const override { return Source::Group::Local; }
+  Source::Group SourceGroup() const override { return Source::Group::Local; }
   bool Discover(std::vector<SourcePtr>& out, std::string& error) override;
 };
 

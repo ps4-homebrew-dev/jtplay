@@ -26,9 +26,6 @@
 // of the screen, its title, what is left of it, its description -- and so
 // follows the focus along the rows, as the big streaming apps do. Whatever
 // a card has no data for is left out rather than shown empty.
-//
-// The internals still say "rail" for the tabs: they were a rail down the
-// left once.
 #include <algorithm>
 
 #include "app.h"
@@ -103,7 +100,7 @@ void App::StartDiscovery(browse::Source::Group group,
   // plain pointers to the ones it needs.
   std::vector<browse::Provider*> providers;
   for (const std::unique_ptr<browse::Provider>& p : providers_)
-    if (p->RailGroup() == group)
+    if (p->SourceGroup() == group)
       providers.push_back(p.get());
 
   PostTask(Lane::Discovery, [this, group, providers] {
@@ -121,17 +118,17 @@ void App::StartDiscovery(browse::Source::Group group,
     Reply([this, group, sources = std::move(sources), errors]() mutable {
       // This group's sources make way for what was found now.
       discovered_.erase(std::remove_if(discovered_.begin(), discovered_.end(),
-        [group](const browse::SourcePtr& s) { return s->RailGroup() == group; }),
+        [group](const browse::SourcePtr& s) { return s->SourceGroup() == group; }),
         discovered_.end());
       for (browse::SourcePtr& s : sources)
-        if (s->RailGroup() == group)
+        if (s->SourceGroup() == group)
           discovered_.push_back(std::move(s));
       registry_.Set(discovered_);
 
       // Remembered, for the list of sources the next time round (and the
       // name a library item's source goes by while it is not found).
       for (const browse::SourcePtr& s : discovered_) {
-        if (s->RailGroup() != group)
+        if (s->SourceGroup() != group)
           continue;
         library::KnownSource known;
         known.key = s->Key();
@@ -297,12 +294,12 @@ void App::OpenSourcesList(const std::string& select_key) {
   view_root_ = default_view_;
   SetBrowseTabs(false);
   // (Under its tab.)
-  if (rail_.empty())
+  if (tabs_.empty())
     RebuildHome("sources");
-  for (size_t i = 0; i < rail_.size(); i++) {
-    if (rail_[i].kind == RailKind::Sources && sel_rail_ != (int)i) {
-      sel_rail_ = (int)i;
-      model_.DirtyVariable("sel_rail");
+  for (size_t i = 0; i < tabs_.size(); i++) {
+    if (tabs_[i].kind == TabKind::Sources && sel_tab_ != (int)i) {
+      sel_tab_ = (int)i;
+      model_.DirtyVariable("sel_tab");
     }
   }
   BrowseLevel top;
@@ -368,12 +365,12 @@ void App::OpenFavoritesTab() {
   path_.clear();
   view_root_ = default_view_;
   SetBrowseTabs(false);
-  if (rail_.empty())
+  if (tabs_.empty())
     RebuildHome("favorites");
-  for (size_t i = 0; i < rail_.size(); i++) {
-    if (rail_[i].kind == RailKind::Favorites && sel_rail_ != (int)i) {
-      sel_rail_ = (int)i;
-      model_.DirtyVariable("sel_rail");
+  for (size_t i = 0; i < tabs_.size(); i++) {
+    if (tabs_[i].kind == TabKind::Favorites && sel_tab_ != (int)i) {
+      sel_tab_ = (int)i;
+      model_.DirtyVariable("sel_tab");
     }
   }
   BrowseLevel top;
@@ -392,63 +389,63 @@ void App::OpenFavoritesTab() {
 // Tabs
 // ---------------------------------------------------------------------------
 
-std::string App::RailKey(const RailItem& item) {
+std::string App::TabKey(const TabItem& item) {
   switch (item.kind) {
-  case RailKind::Favorites: return "favorites";
-  case RailKind::Sources:  return "sources";
-  case RailKind::Settings: return "settings";
+  case TabKind::Favorites: return "favorites";
+  case TabKind::Sources:  return "sources";
+  case TabKind::Settings: return "settings";
   default:                 return "home";
   }
 }
 
 void App::RebuildHome(const std::string& select) {
   const std::string selected = !select.empty() ? select
-    : sel_rail_ < (int)rail_.size() ? RailKey(rail_[sel_rail_])
+    : sel_tab_ < (int)tabs_.size() ? TabKey(tabs_[sel_tab_])
     : std::string("home");
 
-  rail_.clear();
-  rail_rows_.clear();
-  rail_.push_back({RailKind::Home});
-  rail_rows_.push_back({icon::kHome, "Home"});
-  rail_.push_back({RailKind::Favorites});
-  rail_rows_.push_back({icon::kStar, "Favorites"});
-  rail_.push_back({RailKind::Sources});
-  rail_rows_.push_back({icon::kDrive, "Sources"});
-  rail_.push_back({RailKind::Settings});
-  rail_rows_.push_back({icon::kSettings, "Settings"});
+  tabs_.clear();
+  tab_rows_.clear();
+  tabs_.push_back({TabKind::Home});
+  tab_rows_.push_back({icon::kHome, "Home"});
+  tabs_.push_back({TabKind::Favorites});
+  tab_rows_.push_back({icon::kStar, "Favorites"});
+  tabs_.push_back({TabKind::Sources});
+  tab_rows_.push_back({icon::kDrive, "Sources"});
+  tabs_.push_back({TabKind::Settings});
+  tab_rows_.push_back({icon::kSettings, "Settings"});
 
-  sel_rail_ = 0;
-  for (size_t i = 0; i < rail_.size(); i++) {
-    if (RailKey(rail_[i]) == selected) {
-      sel_rail_ = (int)i;
+  sel_tab_ = 0;
+  for (size_t i = 0; i < tabs_.size(); i++) {
+    if (TabKey(tabs_[i]) == selected) {
+      sel_tab_ = (int)i;
       break;
     }
   }
-  model_.DirtyVariable("rail");
-  model_.DirtyVariable("sel_rail");
+  model_.DirtyVariable("tabs");
+  model_.DirtyVariable("sel_tab");
   RebuildShelves();
   scroll_rows_pending_ = true;
 }
 
-void App::MoveRail(int delta) {
-  const int n = (int)rail_.size();
+void App::MoveTab(int delta) {
+  const int n = (int)tabs_.size();
   if (n == 0)
     return;
   // Tabs stop at either end, rather than wrap round behind the screen edge.
-  const int to = std::clamp(sel_rail_ + delta, 0, n - 1);
-  if (to == sel_rail_)
+  const int to = std::clamp(sel_tab_ + delta, 0, n - 1);
+  if (to == sel_tab_)
     return;
-  sel_rail_ = to;
-  model_.DirtyVariable("sel_rail");
+  sel_tab_ = to;
+  model_.DirtyVariable("sel_tab");
   home_rows_wanted_ = false; // along the tabs: the focus stays on them
   // Favorites: its page is in the browse view, at once.
-  if (rail_[to].kind == RailKind::Favorites) {
+  if (tabs_[to].kind == TabKind::Favorites) {
     OpenFavoritesTab();
     SetBrowseTabs(true);
     return;
   }
   // Sources: its page is the list of them, in the browse view, at once.
-  if (rail_[to].kind == RailKind::Sources) {
+  if (tabs_[to].kind == TabKind::Sources) {
     OpenSourcesList();
     SetBrowseTabs(true);
     // What went wrong looking for them (a plugin that failed to load).
@@ -481,20 +478,20 @@ void App::LeaveSourcesTab(const std::string& tab, bool rows) {
 }
 
 void App::GoToTab(int index) {
-  index = std::clamp(index, 0, std::max(0, (int)rail_.size() - 1));
-  if (rail_.empty() || index == sel_rail_)
+  index = std::clamp(index, 0, std::max(0, (int)tabs_.size() - 1));
+  if (tabs_.empty() || index == sel_tab_)
     return;
-  switch (rail_[index].kind) {
-  case RailKind::Favorites:
+  switch (tabs_[index].kind) {
+  case TabKind::Favorites:
     OpenFavoritesTab();
     SetBrowseTabs(true);
     break;
-  case RailKind::Sources:
+  case TabKind::Sources:
     OpenSourcesList();
     SetBrowseTabs(true);
     break;
   default:
-    LeaveSourcesTab(RailKey(rail_[index]), false);
+    LeaveSourcesTab(TabKey(tabs_[index]), false);
     break;
   }
 }
@@ -506,16 +503,16 @@ void App::GoToTab(int index) {
 void App::HandleKeySourcesTabs(Rml::Event& event, int key) {
   switch (key) {
   case Rml::Input::KI_LEFT:
-    GoToTab(sel_rail_ - 1);
+    GoToTab(sel_tab_ - 1);
     break;
   case Rml::Input::KI_HOME:
     GoToTab(0);
     break;
   case Rml::Input::KI_RIGHT:
-    GoToTab(sel_rail_ + 1);
+    GoToTab(sel_tab_ + 1);
     break;
   case Rml::Input::KI_END:
-    GoToTab((int)rail_.size() - 1);
+    GoToTab((int)tabs_.size() - 1);
     break;
   case Rml::Input::KI_DOWN:
   case Rml::Input::KI_RETURN:
@@ -544,10 +541,10 @@ void App::HandleKeySourcesTabs(Rml::Event& event, int key) {
   event.StopPropagation();
 }
 
-void App::ActivateRail() {
-  if (sel_rail_ >= (int)rail_.size())
+void App::ActivateTab() {
+  if (sel_tab_ >= (int)tabs_.size())
     return;
-  if (rail_[sel_rail_].kind == RailKind::Settings) {
+  if (tabs_[sel_tab_].kind == TabKind::Settings) {
     EnterSettings();
     return;
   }
@@ -562,8 +559,8 @@ void App::ActivateRail() {
 // ---------------------------------------------------------------------------
 
 void App::RebuildShelves() {
-  const RailKind place = sel_rail_ < (int)rail_.size() ? rail_[sel_rail_].kind : RailKind::Home;
-  const bool settings = place == RailKind::Settings;
+  const TabKind place = sel_tab_ < (int)tabs_.size() ? tabs_[sel_tab_].kind : TabKind::Home;
+  const bool settings = place == TabKind::Settings;
 
   // What the rows were, to keep the focus on the same row when the one of
   // what is playing comes or goes above it.
@@ -576,7 +573,7 @@ void App::RebuildShelves() {
   else
     Set("home_settings", bind_home_settings_, false);
 
-  if (place == RailKind::Home) {
+  if (place == TabKind::Home) {
     if (bind_watching_) {
       Shelf now{"Now playing", nullptr, {playing_}};
       now.now_playing = true;
@@ -595,7 +592,7 @@ void App::RebuildShelves() {
 
   // Nothing to show: Home before anything was played (or with all of it
   // finished).
-  const bool empty = place == RailKind::Home && shelves_.empty();
+  const bool empty = place == TabKind::Home && shelves_.empty();
   Set("hero_icon", bind_hero_icon_, Rml::String(empty ? icon::kHome : ""));
   Set("hero_title", bind_hero_title_, Rml::String(empty ? "Welcome" : ""));
   Set("hero_detail", bind_hero_detail_,
@@ -702,7 +699,7 @@ bool App::FeaturedIndex(int& shelf, int& card) const {
   if (view_ != View::Home || shelves_.empty())
     return false;
   // (Only Home has the banner.)
-  if (sel_rail_ >= (int)rail_.size() || rail_[sel_rail_].kind != RailKind::Home)
+  if (sel_tab_ >= (int)tabs_.size() || tabs_[sel_tab_].kind != TabKind::Home)
     return false;
   if (bind_home_shelves_) {
     shelf = sel_shelf_;
@@ -826,10 +823,10 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
 
   if (!on_shelves) {
     switch (key) {
-    case Rml::Input::KI_LEFT:  MoveRail(-1); break;
-    case Rml::Input::KI_RIGHT: MoveRail(+1); break;
-    case Rml::Input::KI_HOME:  MoveRail(-sel_rail_); break;
-    case Rml::Input::KI_END:   MoveRail((int)rail_.size() - 1 - sel_rail_); break;
+    case Rml::Input::KI_LEFT:  MoveTab(-1); break;
+    case Rml::Input::KI_RIGHT: MoveTab(+1); break;
+    case Rml::Input::KI_HOME:  MoveTab(-sel_tab_); break;
+    case Rml::Input::KI_END:   MoveTab((int)tabs_.size() - 1 - sel_tab_); break;
     case Rml::Input::KI_DOWN:  // into the page under the tab
       if (bind_settings_page_) {
         EnterSettings();
@@ -848,7 +845,7 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
     case gamepad::kKeyOptions: OpenMenu(); break;
     case Rml::Input::KI_RETURN:
     case Rml::Input::KI_NUMPADENTER:
-      ActivateRail();
+      ActivateTab();
       break;
     case Rml::Input::KI_BACK:
     case Rml::Input::KI_ESCAPE:
@@ -857,8 +854,8 @@ void App::HandleKeyHome(Rml::Event& event, int key) {
       if (bind_watching_) {
         SetFullscreen(true);
       } else {
-        MoveRail(-sel_rail_);
-        ActivateRail();
+        MoveTab(-sel_tab_);
+        ActivateTab();
       }
       break;
     default:

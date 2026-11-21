@@ -120,7 +120,7 @@ private:
   };
 
   // Rows exposed to the RmlUi data model.
-  struct RailRow {      // home: a tab across the top
+  struct TabRow {      // home: a tab across the top
     Rml::String icon;
     Rml::String label;
   };
@@ -310,9 +310,9 @@ private:
   // watching. Favorites' page is the favorites, in their folders, and
   // Sources' the list of sources, both in the browse view (see
   // OpenFavoritesTab, OpenSourcesList); Settings', a list of what can be set.
-  enum class RailKind { Home, Favorites, Sources, Settings };
-  struct RailItem {
-    RailKind kind;
+  enum class TabKind { Home, Favorites, Sources, Settings };
+  struct TabItem {
+    TabKind kind;
   };
   struct Shelf {
     std::string title;
@@ -328,13 +328,13 @@ private:
   void StartDiscovery(browse::Source::Group group,
                       std::function<void()> done = nullptr);
   bool SourceKnown(const std::string& key) const;
-  // Rail, then shelves for its selection. The rail stays on the place it
-  // was on, or moves to the one keyed 'select' (see RailKey) if given.
+  // The tabs, then Home's rows. The focus stays on the tab it was on, or
+  // moves to the one keyed 'select' (see TabKey) if given.
   void RebuildHome(const std::string& select = std::string());
   void RebuildShelves();
   void RebuildCards();         // card rows from shelves_ (artwork, progress)
-  void MoveRail(int delta);
-  void ActivateRail();
+  void MoveTab(int delta);
+  void ActivateTab();
   // Every group of sources looked for again (square on Home, Refresh on
   // the list of sources).
   void SearchAllSources();
@@ -346,7 +346,7 @@ private:
   bool NowPlayingShelf(int shelf) const {
     return shelf >= 0 && shelf < (int)shelves_.size() && shelves_[shelf].now_playing;
   }
-  static std::string RailKey(const RailItem& item); // what RebuildHome keeps
+  static std::string TabKey(const TabItem& item); // what RebuildHome keeps
   void ActivateCard();
   void OpenCard(const browse::Entry& entry, const browse::SourcePtr& shelf_source);
   void HandleKeyHome(Rml::Event& event, int key);
@@ -989,9 +989,9 @@ private:
   uint64_t plugin_menu_revision_ = 0;
 
   // Home.
-  std::vector<RailRow> rail_rows_;
+  std::vector<TabRow> tab_rows_;
   std::vector<ShelfRow> shelf_rows_;
-  int sel_rail_ = 0;
+  int sel_tab_ = 0;
   int sel_shelf_ = 0;
   int sel_card_ = 0;
   bool bind_home_shelves_ = false;     // focus is on the shelves
@@ -1019,7 +1019,7 @@ private:
   // On the Settings page: no banner, so that the list starts right under
   // the tabs (the tab already says where we are).
   bool bind_home_compact_ = false;
-  std::vector<RailItem> rail_;
+  std::vector<TabItem> tabs_;
   // Per group of sources (indexed by browse::Source::Group): looked for at
   // least once, a search under way and what to do when it ends, and what
   // the providers had to say about the last one ("" when all went well).

@@ -127,10 +127,10 @@ public:
   // find it again. Entry ids are only meaningful together with this.
   virtual std::string Key() const { return Name(); }
 
-  // Where the home rail lists the source: under Local filesystem, Network
-  // sources or Plugins.
+  // What kind of source it is (its group is looked for on its own, see
+  // App::StartDiscovery).
   enum class Group { Local, Network, Plugin };
-  virtual Group RailGroup() const { return Group::Plugin; }
+  virtual Group SourceGroup() const { return Group::Plugin; }
 
   // Id of the root folder; passed back to Browse() to start.
   virtual std::string RootId() const = 0;
@@ -216,9 +216,8 @@ public:
   // errors say for themselves what they are about.
   virtual const char* Name() const = 0;
 
-  // The rail group of the sources it finds; each group is searched on its
-  // own, when the rail enters it.
-  virtual Source::Group RailGroup() const { return Source::Group::Plugin; }
+  // The group of the sources it finds; each group is looked for on its own.
+  virtual Source::Group SourceGroup() const { return Source::Group::Plugin; }
 
   // Appends whatever it finds to 'out'. Returning false (with a reason in
   // 'error') means the scan itself failed; an empty result is not an error.

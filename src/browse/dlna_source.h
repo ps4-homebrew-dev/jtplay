@@ -23,7 +23,7 @@ public:
     return "dlna:" + (server_.udn.empty() ? server_.location : server_.udn);
   }
 
-  Group RailGroup() const override { return Group::Network; }
+  Group SourceGroup() const override { return Group::Network; }
   std::string RootId() const override { return "0"; } // ContentDirectory root
 
   bool Browse(const std::string& id, Listing& out, std::string& error) override;
@@ -40,7 +40,7 @@ public:
   explicit DlnaProvider(int discovery_wait_ms);
 
   const char* Name() const override { return "DLNA"; }
-  Source::Group RailGroup() const override { return Source::Group::Network; }
+  Source::Group SourceGroup() const override { return Source::Group::Network; }
   bool Discover(std::vector<SourcePtr>& out, std::string& error) override;
 
 private:
