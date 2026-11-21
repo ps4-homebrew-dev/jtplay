@@ -12,7 +12,8 @@
 		<link type="text/rcss" href="css/photo.rcss"/>
 	</head>
 	<body data-model="jtplay" data-class-watching="watching && fullscreen"
-	      data-class-behind="video_behind" data-class-photo="photo"
+	      data-class-behind="video_behind" data-class-music="video_behind && watch_audio"
+	      data-class-photo="photo"
 	      data-class-home="view == 'home'" data-class-featured="feat_title != ''"
 	      data-class-compact="view == 'home' && home_compact">
 

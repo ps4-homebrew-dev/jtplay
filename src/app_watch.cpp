@@ -313,7 +313,7 @@ void App::EnterWatch(const browse::Entry& entry, bool fullscreen) {
   Set("watching", bind_watching_, true);
   Set("fullscreen", bind_fullscreen_, fullscreen);
   Set("watch_audio", bind_watch_audio_, entry.IsAudio());
-  Set("video_behind", bind_video_behind_, !fullscreen && !entry.IsAudio());
+  Set("video_behind", bind_video_behind_, !fullscreen);
   back_held_ = false;
   Set("watch_name", bind_watch_name_, DisplayName(entry));
   Set("watch_description", bind_watch_description_, entry.description);
@@ -387,7 +387,7 @@ void App::SetFullscreen(bool on) {
   if (bind_menu_open_)
     CloseMenu(); // the playback options, or the menu over the menus
   Set("fullscreen", bind_fullscreen_, on);
-  Set("video_behind", bind_video_behind_, !on && !bind_watch_audio_);
+  Set("video_behind", bind_video_behind_, !on);
   if (on) {
     PeekWatchInfo();
   } else {

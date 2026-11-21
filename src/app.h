@@ -867,7 +867,8 @@ private:
   Rml::String bind_browse_error_;
   bool bind_watching_ = false;     // a playback session is on
   bool bind_fullscreen_ = false;   // ... and has the screen (chrome hidden)
-  // Video plays behind the menus: their background turns see-through.
+  // Playback goes on behind the menus (a video, or the visualizer for
+  // audio): their background turns see-through.
   bool bind_video_behind_ = false;
   // Back held in full screen stops (see HandleKeyUp); a short press leaves
   // full screen instead, so the press is only acted on when it ends.

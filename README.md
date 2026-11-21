@@ -267,7 +267,7 @@ Playback starts full screen. Back leaves full screen without stopping, as
 in Kodi: the menus fade in over the video, which plays on behind them as
 it is, under a shade that keeps them readable (on Home the video takes
 the place of the banner's picture), and can be used as ever while it
-plays on (music plays on under the usual menus). It keeps moving through
+plays on (music too, its visualizer behind them). It keeps moving through
 the folder it was started from, wherever the menus are by then, and on
 past its Load more: the next page is fetched as the last item listed
 starts (so Up next shows what follows), and comes after it in the list

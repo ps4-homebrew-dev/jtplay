@@ -50,6 +50,18 @@ body.home.compact #video-shade {
 	decorator: none;
 	background-color: #0b1020d6;
 }
+/* Music: the visualizer behind, a night sky dark of its own but for the
+ * horizon, wants less of a shade than a film does to be seen at all. */
+body.music #video-shade,
+body.music.home.compact #video-shade {
+	decorator: none;
+	background-color: #0b102080;
+}
+body.music.home #video-shade {
+	background-color: #0b102000;
+	decorator: linear-gradient(90deg, #0b1020c0 0%, #0b102080 28%, #0b102020 58%, #0b102000 78%),
+	           linear-gradient(180deg, #0b102080 0%, #0b102000 14%, #0b102000 28%, #0b1020c0 45%);
+}
 
 /* Coming and going: the background eases between solid and clear, and the
    menus and their shade fade in over the video. */
