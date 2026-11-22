@@ -500,7 +500,6 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("sheet_on_buttons", &bind_sheet_on_buttons_);
   ctor.Bind("sel_entry", &sel_entry_);
   ctor.Bind("sort_label", &bind_sort_label_);
-  ctor.Bind("jump_letter", &bind_jump_letter_);
 
   ctor.Bind("detail_name", &bind_detail_name_);
   ctor.Bind("detail_icon", &bind_detail_icon_);
@@ -666,8 +665,6 @@ void App::Update() {
     }
   }
 
-  if (!bind_jump_letter_.empty() && now > jump_letter_until_)
-    Set("jump_letter", bind_jump_letter_, Rml::String());
   if (!bind_toast_.empty() && now > toast_deadline_)
     Set("toast", bind_toast_, Rml::String());
 
@@ -838,7 +835,13 @@ App::Scrolled App::EnsureSpanVisible(const char* list_id, float top, float botto
     scroll = row_top;
   else if (row_bottom > scroll + view_h)
     scroll = row_bottom - view_h;
-  list->SetScrollTop(std::max(0.0f, scroll));
+  scroll = std::max(0.0f, scroll);
+  list->SetScrollTop(scroll);
+  // Held short by the end of the list: rows just added may not be laid out
+  // yet. Again next frame (ScrollSettled gives up after a few, at the real
+  // end of a list).
+  if (list->GetScrollTop() < scroll - 0.5f)
+    return Scrolled::NotLaidOut;
   return Scrolled::Done;
 }
 

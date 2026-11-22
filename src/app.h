@@ -414,9 +414,6 @@ private:
   // Moves the selection; single steps wrap around the ends of the list,
   // larger jumps stop at them.
   void MoveSelection(int delta);
-  // List sorted by name: the first entry whose name starts with the
-  // next (+1) or previous (-1) letter, flashed large on screen.
-  void JumpLetter(int direction);
   void ActivateSelection();
   // The folder on screen has more than it listed: the next page of it,
   // added to what is listed (the "Load more" row at the end of the list,
@@ -592,9 +589,8 @@ private:
   bool bind_tab_page_ = false;
   bool bind_browse_tabs_ = false;
   // The list's scroll bar has the focus (right from the list; left, select
-  // or back returns): up / down move a page, or to the next initial when
-  // the list is sorted by name (see JumpLetter). In a list, left is the
-  // options menu, which comes in from that side.
+  // or back returns): up / down move a page (three rows of a grid). In a
+  // list, left is the options menu, which comes in from that side.
   bool bind_list_scroll_ = false;
   void SetListScroll(bool on);
   bool ListScrolls() const; // more rows than fit: a scroll bar to focus
@@ -792,8 +788,6 @@ private:
   // also those nothing reacts to, to find out what a remote sends.
   bool input_trace_ = false;
   void SetInputTrace(bool on);
-  Rml::String bind_jump_letter_;      // letter flashed by JumpLetter()
-  double jump_letter_until_ = 0.0;
 
   // --- Screensaver -------------------------------------------------------
   // Dims the screen with a drifting clock after a while without input,

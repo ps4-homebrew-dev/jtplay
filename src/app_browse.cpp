@@ -32,26 +32,6 @@ int StepIndex(int index, int delta, int count) {
   return std::clamp(index + delta, 0, count - 1);
 }
 
-// The letter a name files under: its first letter or digit, upper-cased
-// (ASCII; anything else is kept as its whole UTF-8 character), with
-// leading "The " and punctuation skipped. Digits all file under "#".
-std::string Initial(const std::string& name) {
-  size_t i = 0;
-  if (name.size() > 4 && (name.compare(0, 4, "The ") == 0 || name.compare(0, 4, "the ") == 0))
-    i = 4;
-  while (i < name.size() && (unsigned char)name[i] < 0x80 && !std::isalnum((unsigned char)name[i]))
-    i++;
-  if (i >= name.size())
-    return "#";
-  const unsigned char c = (unsigned char)name[i];
-  if (c < 0x80)
-    return std::isdigit(c) ? std::string("#") : std::string(1, (char)std::toupper(c));
-  size_t n = 1;
-  while (i + n < name.size() && ((unsigned char)name[i + n] & 0xc0) == 0x80)
-    n++;
-  return name.substr(i, n);
-}
-
 const char* SortModeName(int mode) {
   static const char* const kNames[] = {"Default", "Name", "Date", "Size"};
   return kNames[mode];
@@ -825,10 +805,14 @@ void App::LoadMore() {
         return;
       }
 
-      // Where the cursor goes: on the first of the new entries if it was on
-      // "Load more" (in the folder's own order, that is where the row was),
-      // and otherwise where it is.
+      // Where the cursor goes: from "Load more", it stays where that row
+      // was, which in the folder's own order is the first of the new
+      // entries; sorted any other way, the new entries join the rest all
+      // through the list, and following the first of them would throw the
+      // cursor back up (paging down the scroll bar, a jump the wrong way).
+      // Otherwise it stays on the entry it is on.
       const bool was_on_more = sel_entry_ >= (int)here.entries.size();
+      const int more_row = (int)here.entries.size();
       std::string keep;
       if (!was_on_more && sel_entry_ >= 0)
         keep = here.entries[sel_entry_].id;
@@ -842,8 +826,6 @@ void App::LoadMore() {
       for (browse::Entry& e : result) {
         if (!seen.insert(e.id).second)
           continue;
-        if (keep.empty() && was_on_more)
-          keep = e.id;
         here.raw.push_back(std::move(e));
         added++;
       }
@@ -853,9 +835,9 @@ void App::LoadMore() {
 
       here.selection = -1;
       SortLevel(here);
-      // Nothing new to go to (or all of it filtered out): "Load more"
-      // again, or the last entry when that has gone.
-      here.selection = was_on_more ? (int)here.entries.size() : 0;
+      // (Nothing new to go to, or all of it filtered out: "Load more"
+      // again, or the last entry when that has gone.)
+      here.selection = was_on_more ? more_row : 0;
       for (size_t i = 0; i < here.entries.size() && !keep.empty(); i++) {
         if (here.entries[i].id == keep) {
           here.selection = (int)i;
@@ -889,45 +871,6 @@ void App::LoadMore() {
         ShowToast("That was all", icon::kMore);
     });
   });
-}
-
-// Folders come first, so the letters run twice (folders A-Z, then items
-// A-Z); a jump simply goes to where the initial changes, so it walks
-// through both runs and wraps around at the ends.
-void App::JumpLetter(int direction) {
-  const BrowseLevel* level = CurrentLevel();
-  const int n = level ? (int)level->entries.size() : 0;
-  if (n == 0)
-    return;
-  const browse::Listing& entries = level->entries;
-  if (sel_entry_ >= n) // on "Load more": from the last entry
-    sel_entry_ = n - 1;
-  auto group_start = [&](int i) {
-    const std::string letter = Initial(entries[i].name);
-    while (i > 0 && Initial(entries[i - 1].name) == letter &&
-           entries[i - 1].IsFolder() == entries[i].IsFolder())
-      i--;
-    return i;
-  };
-  int target;
-  if (direction > 0) {
-    const std::string letter = Initial(entries[sel_entry_].name);
-    const bool folder = entries[sel_entry_].IsFolder();
-    target = sel_entry_;
-    while (target < n && Initial(entries[target].name) == letter &&
-           entries[target].IsFolder() == folder)
-      target++;
-    if (target >= n)
-      target = 0;
-  } else {
-    const int start = group_start(sel_entry_);
-    // In the middle of a group: back to its start; at the start: the
-    // start of the group before (the last one, from the top).
-    target = start < sel_entry_ ? start : group_start(start > 0 ? start - 1 : n - 1);
-  }
-  MoveSelection(target - sel_entry_);
-  Set("jump_letter", bind_jump_letter_, Rml::String(Initial(entries[target].name)));
-  jump_letter_until_ = Now() + 0.8;
 }
 
 void App::ActivateSelection() {
@@ -970,10 +913,7 @@ void App::HandleKeyBrowse(Rml::Event& event, int key) {
     case Rml::Input::KI_UP:
     case Rml::Input::KI_DOWN: {
       const int direction = key == Rml::Input::KI_UP ? -1 : +1;
-      if (sort_mode_ == SortMode::Name)
-        JumpLetter(direction);
-      else
-        MoveSelection(direction * (grid ? 3 * kGridColumns : kPageRows));
+      MoveSelection(direction * (grid ? 3 * kGridColumns : kPageRows));
       event.StopPropagation();
       return;
     }

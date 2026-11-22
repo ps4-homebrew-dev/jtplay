@@ -89,9 +89,9 @@ around to the first, and the other way round, once all of it is there:
 while there is more to load, down goes on to Load more and loads it. Left opens the options menu
 (in the grid: from the first tile of a row) and right moves the focus to
 the scroll bar (in the grid: from the last tile of a row), when there is
-more than fits on the screen: there up and down move a page, or in a
-list sorted by name to the previous / next letter (shown large for a
-moment). Left, select or back return to the list.
+more than fits on the screen: there up and down move a page (three rows
+of the grid), whatever the list is sorted by. Left, select or back return
+to the list.
 
 A source opens where it was left: in the folder it was left in, on the
 entry it was left on, with the folders above it in the path (listed as
@@ -372,7 +372,7 @@ that is not on the d-pad.
 | Button          | Home                        | Lists, menus, Settings            | Playing (full screen)                       | Photos             |
 |-----------------|-----------------------------|-----------------------------------|---------------------------------------------|--------------------|
 | up / down       | between rows; tabs above    | move (lists and menus wrap; up from the top of the favorites or the list of sources: the tabs) | seek +5 / -5 min                            | caption            |
-| left / right    | along a row (or the tabs)   | left: options, right: the scroll bar (up / down: page or letter); grid: along the row, then the same; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
+| left / right    | along a row (or the tabs)   | left: options, right: the scroll bar (up / down: a page); grid: along the row, then the same; menu, Settings: change the value | seek (speeds up); on the controls: along them | previous / next |
 | select          | open / play                 | open / play / choose              | onto the controls, on play / pause; there: press the button; up next: play now | slideshow on / off |
 | back            | first card; full screen*    | back (a source's top: its place in the list of sources; that list, and the top of the favorites: the tabs); closes a menu; folder picker: up a folder, at the top Cancel | off the controls; else the menus, playing on; held: stop; up next: dismiss | close |
 | options         | options for the card        | options menu; closes a menu       | info bar / away                             | photo menu         |

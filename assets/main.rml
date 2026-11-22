@@ -178,8 +178,6 @@
 						<span class="filter-icon">&#xE155;</span>
 						<input id="filter-input" type="text" maxlength="100"/>
 					</div>
-					<!-- The letter a left / right jump landed on, briefly and large. -->
-					<div id="jump-letter" data-if="jump_letter != ''">{{jump_letter}}</div>
 					<div id="entry-list" class="list">
 						<!-- Only the rows around the selection are here; these stand
 						     in for the rest (see App::SyncEntryWindow). -->
