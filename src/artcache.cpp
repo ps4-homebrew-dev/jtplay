@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <map>
 #include <mutex>
 #include <string>
@@ -45,6 +46,11 @@ constexpr const char* kUserAgent =
 // settings, which must still fit when the disk is nearly full.
 constexpr size_t kMaxCachedFiles = 8192;            // covers and their copies
 constexpr uint64_t kMaxCachedBytes = 512ull << 20;  // of /download0's 1 GiB on a PS4
+// URIs that failed (a dead host, an HTML error page) are remembered so the
+// same one is not asked for again, but they have no file behind them for
+// TrimLocked to drop them by: without a bound of their own they accumulate
+// for the life of the process, one per dead image.
+constexpr size_t kMaxFailedUris = 256;
 
 std::mutex g_mutex;               // guards everything below
 std::string g_dir;                // "" = cache unavailable
@@ -56,6 +62,9 @@ struct OnDisk {
 };
 std::map<std::string, OnDisk> g_ondisk; // "<hash>" -> its file
 uint64_t g_bytes = 0;                   // of everything in g_ondisk
+// The index keys that resolved to nothing (""), oldest first: they have no
+// file for TrimLocked to drop them by, so they are bounded on their own.
+std::deque<std::string> g_failed;
 
 // A name for a file being written, unique to this process and call: two
 // threads may be making the same file at once (a cover and its thumbnail
@@ -175,6 +184,27 @@ void TouchLocked(OnDisk& entry) {
   entry.used = std::time(nullptr);
 }
 
+// Records what a URI resolved to. An empty path is a failure, kept so the
+// same dead URL is not asked for again; those have no file behind them, so
+// only the oldest kMaxFailedUris are kept.
+void RememberLocked(const std::string& key, const std::string& path) {
+  auto it = g_index.find(key);
+  const bool was_failed = it != g_index.end() && it->second.empty();
+  g_index[key] = path;
+  if (!path.empty()) {
+    if (was_failed) // it resolved this time: no longer one of the dead ones
+      g_failed.erase(std::remove(g_failed.begin(), g_failed.end(), key), g_failed.end());
+    return;
+  }
+  if (was_failed)
+    return; // already counted
+  g_failed.push_back(key);
+  while (g_failed.size() > kMaxFailedUris) {
+    g_index.erase(g_failed.front());
+    g_failed.pop_front();
+  }
+}
+
 // True when no pixel of 'rgba' (RGBA32) is transparent at all: a photo or
 // a cover, stored as a JPEG a fraction of the PNG's size. Logos and station
 // icons with a transparent background stay PNG.
@@ -195,6 +225,7 @@ bool Initialize(const std::string& dir) {
   g_dir.clear();
   g_index.clear();
   g_ondisk.clear();
+  g_failed.clear();
   g_bytes = 0;
 
   if (dir.empty())
@@ -230,6 +261,7 @@ void Shutdown() {
   g_dir.clear();
   g_index.clear();
   g_ondisk.clear();
+  g_failed.clear();
   g_bytes = 0;
 }
 
@@ -259,7 +291,7 @@ Status Lookup(const std::string& uri, std::string& path) {
   if (disk != g_ondisk.end()) {
     path = disk->second.path;
     TouchLocked(disk->second);
-    g_index[uri] = path;
+    RememberLocked(uri, path);
     return Status::Ready;
   }
 
@@ -402,7 +434,7 @@ Status LookupScaled(const std::string& uri, int size, std::string& path) {
       if (disk != g_ondisk.end()) {
         path = disk->second.path;
         TouchLocked(disk->second);
-        g_index[key] = path;
+        RememberLocked(key, path);
         return Status::Ready;
       }
       return Status::Missing;
@@ -476,7 +508,7 @@ std::string FetchScaled(const std::string& uri, int size) {
 
   std::lock_guard<std::mutex> lock(g_mutex);
   const std::string key = ScaledKey(uri, size);
-  g_index[key] = result;
+  RememberLocked(key, result);
   if (!result.empty() && result != original)
     AddLocked(HashKey(key), result, true);
   return result;
@@ -559,7 +591,7 @@ std::string Fetch(const std::string& uri) {
   }
 
   std::lock_guard<std::mutex> lock(g_mutex);
-  g_index[uri] = full; // "" is remembered too: do not retry a dead URL
+  RememberLocked(uri, full); // "" is remembered too: do not retry a dead URL
   if (!full.empty())
     AddLocked(HashKey(uri), full, true);
   return full;
