@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <SDL.h>
 
@@ -246,6 +247,8 @@ void App::LoadSettings() {
       sub_lang_ = value;
     } else if (key == "screensaver") {
       screensaver_sec_ = std::max(0.0, std::atof(value.c_str()));
+    } else if (key == "mem_overlay") {
+      mem_overlay_ = value == "1";
     } else if (key == "sub_scale") {
       player_->SetSubtitleScale(std::clamp(std::atof(value.c_str()), 0.5, 2.5));
     } else if (key.compare(0, 7, "plugin.") == 0) {
@@ -277,7 +280,8 @@ void App::SaveSettings() const {
       << "sub_scale=" << player_->SubtitleScale() << "\n"
       << "audio_lang=" << audio_lang_ << "\n"
       << "sub_lang=" << sub_lang_ << "\n"
-      << "screensaver=" << screensaver_sec_ << "\n";
+      << "screensaver=" << screensaver_sec_ << "\n"
+      << "mem_overlay=" << (mem_overlay_ ? 1 : 0) << "\n";
   for (const auto& setting : plugin_settings_->All())
     out << "plugin." << setting.first << "=" << setting.second << "\n";
   // Whole or not at all: a console switched off mid-write must not come
@@ -451,6 +455,7 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("source_name", &bind_source_name_);
   ctor.Bind("clock", &bind_clock_);
   ctor.Bind("date", &bind_date_);
+  ctor.Bind("mem_overlay", &bind_mem_overlay_);
   ctor.Bind("busy", &bind_busy_);
   ctor.Bind("browse_loading", &bind_browse_loading_);
   ctor.Bind("browse_error", &bind_browse_error_);
@@ -607,6 +612,8 @@ void App::Update() {
   // Over full-screen playback and pictures they are in the corner there.
   Set("browse_loading", bind_browse_loading_, view_ == View::Browse && browse_pending_);
   Set("busy", bind_busy_, busy_ops_.load() > 0 || photo_loading_ || DiscoveryShown());
+
+  UpdateMemoryOverlay(now);
 
   RunReplies();
 
@@ -1160,6 +1167,106 @@ void App::RefreshImageBindings() {
 // The selected item's artwork behind everything: at home, the featured
 // card's, large across the top as the banner's picture; while browsing,
 // the selection's, dim (Kodi's fanart).
+// ---------------------------------------------------------------------------
+// Memory overlay
+// ---------------------------------------------------------------------------
+//
+// One line for watching memory while navigating: the libc's heap, which every
+// allocation in the process shares and which is what a leak fills, and the
+// flexible memory pool the system hands out. Measured once a second, not
+// every frame: the call is not free and nothing here changes faster.
+
+namespace {
+
+#if defined(__SCE__)
+extern "C" {
+int sceKernelAvailableFlexibleMemorySize(size_t* size);
+int sceKernelConfiguredFlexibleMemorySize(size_t* size);
+int malloc_stats_fast(void* managed_size);
+}
+
+// SceLibcMallocManagedSize, as malloc_stats_fast() fills it in.
+struct LibcManagedSize {
+  unsigned short size;
+  unsigned short version;
+  unsigned int reserved;
+  uint64_t max_system_size;
+  uint64_t current_system_size;
+  uint64_t max_inuse_size;
+  uint64_t current_inuse_size;
+};
+
+// malloc_stats_fast() answers only when the caller has put the version and
+// size it speaks into the struct first (it refuses anything else, so that a
+// caller with an older layout is not written over). The decompiled check
+// names them the other way round from the struct's own comments, so both
+// readings are tried; one of them is the one this libc wants.
+bool ReadLibcHeap(LibcManagedSize& out) {
+  for (int attempt = 0; attempt < 2; attempt++) {
+    LibcManagedSize managed{};
+    managed.size = attempt == 0 ? 40 : 1;
+    managed.version = attempt == 0 ? 1 : 40;
+    if (malloc_stats_fast(&managed) == 0) {
+      out = managed;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string MemoryLine() {
+  char buf[160];
+  LibcManagedSize managed{};
+  const bool have_heap = ReadLibcHeap(managed);
+  size_t flex_free = 0;
+  size_t flex_total = 0;
+  const bool have_flex = sceKernelAvailableFlexibleMemorySize(&flex_free) == 0;
+  if (have_flex)
+    sceKernelConfiguredFlexibleMemorySize(&flex_total);
+
+  if (have_heap) {
+    std::snprintf(buf, sizeof(buf), "heap %llu / %llu KB   flex %llu / %llu MB",
+                  (unsigned long long)(managed.current_inuse_size / 1024),
+                  (unsigned long long)(managed.max_inuse_size / 1024),
+                  (unsigned long long)(flex_free >> 20),
+                  (unsigned long long)(flex_total >> 20));
+  } else {
+    std::snprintf(buf, sizeof(buf), "flex %llu / %llu MB",
+                  (unsigned long long)(flex_free >> 20),
+                  (unsigned long long)(flex_total >> 20));
+  }
+  return buf;
+}
+#else
+// On a PC, the process's resident size is the closest thing to the libc heap
+// number a console reports: enough to see a leak while developing.
+std::string MemoryLine() {
+  char buf[96];
+  unsigned long long rss_kb = 0;
+  if (FILE* f = std::fopen("/proc/self/statm", "r")) {
+    unsigned long long total = 0, resident = 0;
+    if (std::fscanf(f, "%llu %llu", &total, &resident) == 2)
+      rss_kb = resident * (unsigned long long)(sysconf(_SC_PAGESIZE) / 1024);
+    std::fclose(f);
+  }
+  std::snprintf(buf, sizeof(buf), "rss %llu MB", rss_kb >> 10);
+  return buf;
+}
+#endif
+
+} // namespace
+
+void App::UpdateMemoryOverlay(double now) {
+  if (!mem_overlay_) {
+    Set("mem_overlay", bind_mem_overlay_, Rml::String());
+    return;
+  }
+  if (!bind_mem_overlay_.empty() && now - mem_overlay_at_ < 1.0)
+    return;
+  mem_overlay_at_ = now;
+  Set("mem_overlay", bind_mem_overlay_, Rml::String(MemoryLine()));
+}
+
 void App::UpdateBackdrop() {
   std::string uri;
   if (view_ == View::Browse) {

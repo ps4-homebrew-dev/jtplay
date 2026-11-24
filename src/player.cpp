@@ -19,6 +19,8 @@
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
 
+#include "RmlUi/RmlUi_Include_GL3.h"
+
 #include "net/http_client.h"
 
 namespace {
@@ -464,8 +466,10 @@ void Player::Shutdown() {
   if (event_thread_.joinable())
     event_thread_.join();
   // The renderer goes first, while the GL context is still current.
-  if (render_)
+  if (render_) {
+    ReleaseVideoTarget(); // GL objects; the context is still current here
     mpv_render_context_free(render_);
+  }
   render_ = nullptr;
   mpv_terminate_destroy(mpv_);
   mpv_ = nullptr;
@@ -478,6 +482,8 @@ void Player::Command(const char* const* args) {
 
 void Player::ResetFileState() {
   active_ = false;
+  // A new file's first frame must be rendered, not the last one's copy.
+  video_frame_ready_ = false;
   playing_id_ = -1;
   seekable_ = false;
   paused_ = false;
@@ -1110,12 +1116,95 @@ void Player::RenderVideo(int width, int height) {
   // fetches it itself (RenderSpectrum) and draws the screen.
   if (HasSpectrum())
     return;
-  RenderTo(0, width, height);
+  // Rendering starts with the open, not after it: mpv hands the first frame
+  // over before Open() returns, and gives up on a renderer that doesn't take
+  // it within 200 ms.
+  if (!render_ || !(active_ || opening_))
+    return;
+
+  // mpv renders a frame only when it has one. Asking it for the frames in
+  // between (most of them while playing, and every one while paused) is work
+  // for a picture that is already on screen, and the renderer allocates a
+  // little on each call regardless: at 60 calls a second that is a steady
+  // 160 bytes per frame, 10 KB a second, which is what the memory overlay
+  // showed. The last frame is kept in a texture and copied to the screen
+  // instead.
+  if (!EnsureVideoTarget(width, height)) {
+    RenderTo(0, width, height); // no offscreen target: draw straight out
+    return;
+  }
+
+  const uint64_t flags = mpv_render_context_update(render_);
+  if ((flags & MPV_RENDER_UPDATE_FRAME) || !video_frame_ready_) {
+    if (!RenderTo(video_fbo_, width, height))
+      return;
+    video_frame_ready_ = true;
+  }
+
+  // The copy: same size and orientation, so no flip is needed (mpv drew into
+  // the target with FLIP_Y, exactly as it would have into the window).
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, video_fbo_);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+  glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT,
+                    GL_NEAREST);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+bool Player::EnsureVideoTarget(int width, int height) {
+  if (width <= 0 || height <= 0)
+    return false;
+  if (video_fbo_ && video_w_ == width && video_h_ == height)
+    return true;
+  ReleaseVideoTarget();
+
+  glGenTextures(1, &video_tex_);
+  if (!video_tex_)
+    return false;
+  glBindTexture(GL_TEXTURE_2D, video_tex_);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+               nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glGenFramebuffers(1, &video_fbo_);
+  if (!video_fbo_) {
+    glBindTexture(GL_TEXTURE_2D, 0);
+    ReleaseVideoTarget();
+    return false;
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER, video_fbo_);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, video_tex_, 0);
+  const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  if (status != GL_FRAMEBUFFER_COMPLETE) {
+    ReleaseVideoTarget();
+    return false;
+  }
+  video_w_ = width;
+  video_h_ = height;
+  video_frame_ready_ = false;
+  return true;
+}
+
+void Player::ReleaseVideoTarget() {
+  if (video_fbo_) {
+    glDeleteFramebuffers(1, &video_fbo_);
+    video_fbo_ = 0;
+  }
+  if (video_tex_) {
+    glDeleteTextures(1, &video_tex_);
+    video_tex_ = 0;
+  }
+  video_w_ = 0;
+  video_h_ = 0;
+  video_frame_ready_ = false;
 }
 
 bool Player::RenderSpectrum(unsigned fbo) {
   if (!HasSpectrum())
     return false;
+  if (render_)
+    mpv_render_context_update(render_);
   return RenderTo(fbo, kSpectrumWidth, kSpectrumHeight);
 }
 
@@ -1125,8 +1214,6 @@ bool Player::RenderTo(unsigned target, int width, int height) {
   // take it within 200 ms.
   if (!render_ || !(active_ || opening_))
     return false;
-
-  mpv_render_context_update(render_);
 
   mpv_opengl_fbo fbo = {};
   fbo.fbo = (int)target;

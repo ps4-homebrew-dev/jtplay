@@ -450,3 +450,16 @@ body.home.featured #backdrop-shade {
 	font-size: 26px;
 	color: #e8edf7;
 }
+
+/* The memory overlay: small and out of the way, under the clock. */
+#mem-overlay {
+	z-index: 19;
+	position: absolute;
+	top: 96px;
+	right: 56px;
+	padding: 6px 12px;
+	border-radius: 8px;
+	background-color: #151d2fcc;
+	font-size: 20px;
+	color: #9fb0cc;
+}

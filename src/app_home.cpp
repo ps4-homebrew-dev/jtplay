@@ -1087,6 +1087,17 @@ void App::BuildSettings() {
     "For finding out what a remote's buttons do; off again at the next start.",
     [this] { return std::string(input_trace_ ? "On" : "Off"); },
     [this](int) { SetInputTrace(!input_trace_); }});
+  // A line in the corner with the heap and the flexible memory pool, to watch
+  // for a leak while moving through sources. Remembered, unlike Show input.
+  setting_items_.push_back({"", "Memory overlay",
+    "Shows the libc heap in use and the flexible memory left, in the corner. "
+    "For watching memory while browsing; it is remembered.",
+    [this] { return std::string(mem_overlay_ ? "On" : "Off"); },
+    [this](int) {
+      mem_overlay_ = !mem_overlay_;
+      mem_overlay_at_ = 0.0; // measure now, not in a second
+      SaveSettings();
+    }});
 }
 
 // One plugin's settings as rows: of the Settings page, or of the plugin's

@@ -529,6 +529,10 @@
 			<span class="toast-text">{{toast}}</span>
 		</div>
 
+		<!-- The memory overlay (Settings > Diagnostics): the libc heap in use
+		     and the flexible memory left, for watching a leak. -->
+		<div id="mem-overlay" data-if="mem_overlay != ''">{{mem_overlay}}</div>
+
 		<!-- Screensaver: dims everything after a while without input. -->
 		<div id="saver" data-if="saver">
 			<div class="saver-box" data-style-left="saver_x" data-style-top="saver_y">

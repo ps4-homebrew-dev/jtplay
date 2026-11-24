@@ -873,6 +873,13 @@ private:
   Rml::String bind_browse_error_;
   bool bind_watching_ = false;     // a playback session is on
   bool bind_fullscreen_ = false;   // ... and has the screen (chrome hidden)
+  // --- Memory overlay (Settings > Diagnostics) ---------------------------
+  // A line in the corner with the libc heap and the flexible memory pool, to
+  // watch for a leak while navigating. Off unless asked for; remembered.
+  bool mem_overlay_ = false;
+  Rml::String bind_mem_overlay_; // "" when off; else the line to draw
+  double mem_overlay_at_ = 0.0;  // when it was last measured (once a second)
+  void UpdateMemoryOverlay(double now);
   // Playback goes on behind the menus (a video, or the visualizer for
   // audio): their background turns see-through.
   bool bind_video_behind_ = false;

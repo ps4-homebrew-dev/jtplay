@@ -209,10 +209,21 @@ private:
   void SetVisualizer(int aid);
   void Command(const char* const* args);
   bool RenderTo(unsigned fbo, int width, int height);
+  // The frame mpv last drew, kept so that the frames in between (and every
+  // frame while paused) are a copy rather than another mpv render call: mpv
+  // allocates a little on every call, whether it has a new frame or not, and
+  // at 60 calls a second that adds up to a steady leak.
+  bool EnsureVideoTarget(int width, int height);
+  void ReleaseVideoTarget();
   void ResetFileState();
 
   mpv_handle* mpv_ = nullptr;
   mpv_render_context* render_ = nullptr;
+  unsigned video_fbo_ = 0;
+  unsigned video_tex_ = 0;
+  int video_w_ = 0;
+  int video_h_ = 0;
+  bool video_frame_ready_ = false;
   std::thread event_thread_;
   std::atomic<bool> quitting_{false};
 
