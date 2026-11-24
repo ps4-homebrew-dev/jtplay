@@ -1172,16 +1172,14 @@ void App::RefreshImageBindings() {
 // ---------------------------------------------------------------------------
 //
 // One line for watching memory while navigating: the libc's heap, which every
-// allocation in the process shares and which is what a leak fills, and the
-// flexible memory pool the system hands out. Measured once a second, not
-// every frame: the call is not free and nothing here changes faster.
+// allocation in the process shares and which is what a leak fills. Measured
+// once a second, not every frame: the call is not free and nothing here
+// changes faster.
 
 namespace {
 
 #if defined(__SCE__)
 extern "C" {
-int sceKernelAvailableFlexibleMemorySize(size_t* size);
-int sceKernelConfiguredFlexibleMemorySize(size_t* size);
 int malloc_stats_fast(void* managed_size);
 }
 
@@ -1215,33 +1213,18 @@ bool ReadLibcHeap(LibcManagedSize& out) {
 }
 
 std::string MemoryLine() {
-  char buf[160];
   LibcManagedSize managed{};
-  const bool have_heap = ReadLibcHeap(managed);
-  size_t flex_free = 0;
-  size_t flex_total = 0;
-  const bool have_flex = sceKernelAvailableFlexibleMemorySize(&flex_free) == 0;
-  if (have_flex)
-    sceKernelConfiguredFlexibleMemorySize(&flex_total);
-
-  if (have_heap) {
-    std::snprintf(buf, sizeof(buf), "heap %llu / %llu KB   flex %llu / %llu MB",
-                  (unsigned long long)(managed.current_inuse_size / 1024),
-                  (unsigned long long)(managed.max_inuse_size / 1024),
-                  (unsigned long long)(flex_free >> 20),
-                  (unsigned long long)(flex_total >> 20));
-  } else {
-    std::snprintf(buf, sizeof(buf), "flex %llu / %llu MB",
-                  (unsigned long long)(flex_free >> 20),
-                  (unsigned long long)(flex_total >> 20));
-  }
+  if (!ReadLibcHeap(managed))
+    return "heap n/a";
+  char buf[64];
+  std::snprintf(buf, sizeof(buf), "heap %.1f MB",
+                (double)managed.current_inuse_size / (1024.0 * 1024.0));
   return buf;
 }
 #else
 // On a PC, the process's resident size is the closest thing to the libc heap
 // number a console reports: enough to see a leak while developing.
 std::string MemoryLine() {
-  char buf[96];
   unsigned long long rss_kb = 0;
   if (FILE* f = std::fopen("/proc/self/statm", "r")) {
     unsigned long long total = 0, resident = 0;
@@ -1249,7 +1232,8 @@ std::string MemoryLine() {
       rss_kb = resident * (unsigned long long)(sysconf(_SC_PAGESIZE) / 1024);
     std::fclose(f);
   }
-  std::snprintf(buf, sizeof(buf), "rss %llu MB", rss_kb >> 10);
+  char buf[64];
+  std::snprintf(buf, sizeof(buf), "rss %.1f MB", (double)rss_kb / 1024.0);
   return buf;
 }
 #endif
