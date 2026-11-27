@@ -1248,7 +1248,22 @@ void App::UpdateMemoryOverlay(double now) {
   if (!bind_mem_overlay_.empty() && now - mem_overlay_at_ < 1.0)
     return;
   mem_overlay_at_ = now;
-  Set("mem_overlay", bind_mem_overlay_, Rml::String(MemoryLine()));
+
+  // The heap, then what the plugins' script heaps hold. A plugin's heap is a
+  // budget of its own (JsPlugin::kMemoryLimitBytes): running out of it says
+  // nothing about the process heap, which is why both are shown.
+  std::string line = MemoryLine();
+  if (js_provider_) {
+    const size_t used = js_provider_->ScriptMemoryUsed();
+    if (used > 0) {
+      char js[64];
+      std::snprintf(js, sizeof(js), "\njs %.1f / %.0f MB",
+                    (double)used / (1024.0 * 1024.0),
+                    (double)browse::JsProvider::ScriptMemoryLimit() / (1024.0 * 1024.0));
+      line += js;
+    }
+  }
+  Set("mem_overlay", bind_mem_overlay_, Rml::String(line));
 }
 
 void App::UpdateBackdrop() {

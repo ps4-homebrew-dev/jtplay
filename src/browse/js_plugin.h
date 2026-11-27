@@ -111,6 +111,24 @@ public:
   // Runtime. The plugin's HTTP client; null if libcurl could not be set up.
   net::HttpClient* Http() const { return http_.get(); }
 
+  // What the script's heap holds, and what it may hold. Written by the thread
+  // that last ran the script (an atomic, so the memory overlay can read it
+  // from the main thread without waiting for a script that is busy). This is
+  // the budget a plugin runs out of, and it is not part of the process heap
+  // the overlay's other figure comes from.
+  size_t MemoryUsed() const { return memory_used_.load(); }
+
+  // How much the script's own heap may hold. A plugin's http.json() can parse
+  // a response of up to 8 MiB (see js_http.cpp), and a parsed document takes
+  // several times its text, so a large listing needs room: Pluto TV sends a
+  // whole series, every episode of every season, in one answer, and at the
+  // 32 MiB this used to be it failed with QuickJS's "InternalError: out of
+  // memory" while the process heap was nowhere near full. This budget is the
+  // script's own; nothing else sees it, which is why the memory overlay
+  // reports it separately.
+  static constexpr size_t kMemoryLimitBytes = 64u << 20;
+  static size_t MemoryLimit() { return kMemoryLimitBytes; }
+
   void Log(JsLogLevel level, const std::string& text) const;
 
   // Any thread, no lock needed: lets go of a reference into the runtime
@@ -137,6 +155,7 @@ private:
   std::string CallError();
   void ReadSettings();
   void FreeReleased(); // runtime
+  void NoteMemoryUsed(); // runtime
 
   std::shared_ptr<const JsEnvironment> env_;
   std::unique_ptr<net::HttpClient> http_;
@@ -150,6 +169,7 @@ private:
   std::string id_;
   std::string name_;
   std::string load_error_;
+  std::atomic<size_t> memory_used_{0}; // see MemoryUsed()
   std::vector<PluginSetting> settings_;
 };
 

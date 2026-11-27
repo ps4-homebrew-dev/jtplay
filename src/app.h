@@ -1184,6 +1184,11 @@ private:
   // launch_request_ no longer matches the result that comes back.
   uint32_t launch_seq_ = 0;         // ever-increasing ticket source
   uint32_t launch_request_ = 0;     // ticket we are waiting for; 0 = idle
+  // The ticket of the launch that last asked the player to open (playback
+  // lane). An abandoned launch that opened anyway is stopped only while it
+  // is still the last to have opened: a launch after it, on the same lane,
+  // has opened its own item by then, and that one must not be stopped.
+  std::atomic<uint32_t> opened_launch_{0};
   net::CancelToken launch_cancel_;  // gives up on its resolve()
   browse::Entry launch_entry_;      // item being opened
   // Direction of a next/previous (or auto-advance) launch, so an item that

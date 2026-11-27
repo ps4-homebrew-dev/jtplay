@@ -83,7 +83,10 @@ std::string ResolveUrl(const std::string& base, const std::string& ref) {
   if (!Url::Parse(base, b))
     return ref;
 
-  std::string origin = "http://" + b.host + ":" + std::to_string(b.port);
+  // Url::Parse takes the brackets off an IPv6 literal; they go back on, or
+  // its colons would read as the port's.
+  const std::string host = b.host.find(':') != std::string::npos ? "[" + b.host + "]" : b.host;
+  std::string origin = "http://" + host + ":" + std::to_string(b.port);
   if (ref[0] == '/')
     return origin + ref;
 

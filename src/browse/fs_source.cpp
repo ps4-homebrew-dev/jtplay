@@ -102,6 +102,24 @@ bool IsCoverName(const std::string& name) {
   return false;
 }
 
+// Whether 'path' has a "." or ".." among its components. No id this
+// source hands out has one (names starting with a dot are not listed), so
+// one that does was made elsewhere, and ".." would climb out of the root
+// past a check by prefix.
+bool HasDotSegment(const std::string& path) {
+  size_t at = 0;
+  while (at <= path.size()) {
+    size_t end = path.find('/', at);
+    if (end == std::string::npos)
+      end = path.size();
+    const std::string part = path.substr(at, end - at);
+    if (part == "." || part == "..")
+      return true;
+    at = end + 1;
+  }
+  return false;
+}
+
 std::string TrimTrailingSlashes(std::string path) {
   while (path.size() > 1 && path.back() == '/')
     path.pop_back();
@@ -126,10 +144,12 @@ bool FsSource::Browse(const std::string& id, Listing& out, std::string& error) {
   const std::string dir = TrimTrailingSlashes(id);
 
   // Ids come back from the UI verbatim, but stay paranoid: only paths
-  // inside this source's root are browsable.
-  if (root_ != "/" &&
-      (dir.compare(0, root_.size(), root_) != 0 ||
-       (dir.size() > root_.size() && dir[root_.size()] != '/'))) {
+  // inside this source's root are browsable, and "a/../.." is not inside
+  // 'a' however it starts.
+  if (HasDotSegment(dir) ||
+      (root_ != "/" &&
+       (dir.compare(0, root_.size(), root_) != 0 ||
+        (dir.size() > root_.size() && dir[root_.size()] != '/')))) {
     error = "path outside this source";
     return false;
   }

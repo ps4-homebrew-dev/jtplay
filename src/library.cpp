@@ -711,8 +711,10 @@ void Library::RememberSource(const KnownSource& source) {
   s.image.clear();
   sources_.push_back(std::move(s));
   if (sources_.size() > kMaxSources) {
-    // The one opened least (and longest ago) makes way.
-    auto least = std::min_element(sources_.begin(), sources_.end(),
+    // The one opened least (and longest ago) makes way; not the one just
+    // found, which has had no chance to be opened yet and would otherwise
+    // always be the least.
+    auto least = std::min_element(sources_.begin(), sources_.end() - 1,
       [](const KnownSource& a, const KnownSource& b) {
         return a.uses != b.uses ? a.uses < b.uses : a.used < b.used;
       });

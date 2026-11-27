@@ -702,9 +702,14 @@ bool Player::Open(const Media& media, std::string& error, int64_t start_seconds)
   if (!media.avoid_audio.empty())
     AvoidAudio(media.avoid_audio);
 
-  // Nothing to look at: draw the sound instead.
-  if (vtrack_count_ == 0 && atrack_count_ > 0)
-    SetVisualizer(audio_id_ >= 0 ? audio_id_.load() : AudioTracks().front().stream_index);
+  // Nothing to look at: draw the sound instead. The tracks are copied once
+  // and decided on from that copy: the event thread may replace the list
+  // between a look at its count and a look at its first entry.
+  if (vtrack_count_ == 0) {
+    const std::vector<AudioTrackInfo> audio = AudioTracks();
+    if (!audio.empty())
+      SetVisualizer(audio_id_ >= 0 ? audio_id_.load() : audio.front().stream_index);
+  }
 
   active_ = true;
   opening_ = false;

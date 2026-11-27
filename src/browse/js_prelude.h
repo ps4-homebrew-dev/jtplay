@@ -233,11 +233,19 @@ function memo(key, seconds, produce) {
     if (hit && now < hit.until)
         return hit.value;
     const value = produce();
-    // An async producer: a promise that failed is not worth keeping.
-    if (value && typeof value.then === "function")
-        value.then(null, () => { memoEntries.delete(key); });
+    const entry = { until: now + seconds * 1000, value: value };
+    // An async producer: a promise that failed is not worth keeping. Only
+    // this entry goes: by the time it fails, the key may hold a newer one
+    // (and the map itself may have been replaced by a settings change).
+    if (value && typeof value.then === "function") {
+        const entries = memoEntries;
+        value.then(null, () => {
+            if (entries.get(key) === entry)
+                entries.delete(key);
+        });
+    }
     memoEntries.delete(key);
-    memoEntries.set(key, { until: now + seconds * 1000, value: value });
+    memoEntries.set(key, entry);
     while (memoEntries.size > MEMO_MAX)
         memoEntries.delete(memoEntries.keys().next().value);
     return value;

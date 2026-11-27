@@ -464,11 +464,17 @@ namespace net {
 
     // Certificates turned down for their dates: the console's clock may be
     // what is wrong (see Perform), so those go once more, one at a time.
+    // The server's time is asked for once: the clock it sets is the one
+    // every retry goes by.
+    bool asked = false;
     for (size_t i = 0; i < jobs.size(); i++) {
       if (results[i].ok || !jobs[i].dates || Cancelled())
         continue;
-      if (!LearnServerTime(requests[i].url))
-        break; // the clock is as right as it gets; the rest fail the same way
+      if (!asked) {
+        asked = true;
+        if (!LearnServerTime(requests[i].url))
+          break; // the clock is as right as it gets; the rest fail the same way
+      }
       results[i] = Result{};
       results[i].ok = PerformOnce(requests[i], results[i].response, results[i].error, nullptr);
     }

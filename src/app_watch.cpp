@@ -221,6 +221,7 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
       for (const browse::Playable::Subtitle& sub : playable.subtitles)
         media.subtitles.push_back({sub.uri, sub.language, sub.title});
       media.avoid_audio = playable.avoid_audio;
+      opened_launch_ = request;
       ok = player_->Open(media, error, start_seconds);
     } else if (error.empty()) {
       error = "this item has nothing to play";
@@ -229,9 +230,14 @@ void App::Launch(const browse::Entry& entry, int64_t start_seconds, bool from_qu
     Reply([this, request, ok, error, ref, identified] {
       if (!launch_request_ || request != launch_request_) {
         // Abandoned while it was opening (back, or another item started).
-        // If it did open, take it down again rather than showing it.
+        // If it did open, take it down again rather than showing it --
+        // unless a launch after it has opened since (the lane runs them in
+        // order): that one replaced it already, and plays.
         if (ok)
-          PostTask(Lane::Playback, [this] { player_->Stop(); }, false);
+          PostTask(Lane::Playback, [this, request] {
+            if (opened_launch_ == request)
+              player_->Stop();
+          }, false);
         // Cancelled outright, from the menus over something playing, after
         // the player had let that go to open this one: nothing plays now.
         if (!launch_request_ && bind_watching_ && (ok || !player_->IsPlaying()))
@@ -931,6 +937,10 @@ int App::NeighborIndex(int direction) const {
   // (Round to the first again only once there is no more to come.)
   if (repeat_ == Repeat::All && !order.empty() && (direction < 0 || queue_.next.empty()))
     next = (next + (int)order.size()) % (int)order.size();
+  // Wrapped round onto itself: the only playable item. Repeat All plays it
+  // again; otherwise there is no neighbour.
+  if (next == at && repeat_ == Repeat::All && direction > 0)
+    return order[next];
   if (next < 0 || next >= (int)order.size() || next == at)
     return -1;
   return order[next];

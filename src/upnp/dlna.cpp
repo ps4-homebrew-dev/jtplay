@@ -226,13 +226,18 @@ bool BrowsePage(const MediaServer& server, const std::string& object_id, const c
     return false;
   }
 
+  // A relative URL in the listing is relative to the server's base, as
+  // every other URL of its description is; not to the control URL, which
+  // may sit in another directory. (DescribeServer always sets a base; a
+  // MediaServer filled in some other way falls back on the control URL.)
+  const std::string& base = server.base_url.empty() ? server.control_url : server.base_url;
   uint32_t parsed = 0;
   for (const XMLElement* e = didl.RootElement()->FirstChildElement(); e;
        e = e->NextSiblingElement()) {
     if (NameIs(e, "container"))
-      out.objects.push_back(ParseObject(e, true, server.control_url));
+      out.objects.push_back(ParseObject(e, true, base));
     else if (NameIs(e, "item"))
-      out.objects.push_back(ParseObject(e, false, server.control_url));
+      out.objects.push_back(ParseObject(e, false, base));
     else
       continue;
     parsed++;
@@ -281,6 +286,7 @@ bool DescribeServer(const std::string& location, MediaServer& out, std::string& 
 
   out = {};
   out.location = location;
+  out.base_url = base;
   out.friendly_name = ChildText(device, "friendlyName");
   out.udn = ChildText(device, "UDN");
   const std::string manufacturer = ChildText(device, "manufacturer");

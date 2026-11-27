@@ -428,6 +428,17 @@ std::vector<JsPluginPtr> JsProvider::Plugins() const {
   return out;
 }
 
+size_t JsProvider::ScriptMemoryUsed() const {
+  std::lock_guard<std::mutex> lock(mutex_);
+  // The largest one, not the sum: each plugin has its own budget, so it is
+  // the fullest one that fails first, and that is the number worth watching.
+  size_t largest = 0;
+  for (const Loaded& l : loaded_)
+    if (l.plugin)
+      largest = std::max(largest, l.plugin->MemoryUsed());
+  return largest;
+}
+
 void JsProvider::ReadSettingsFile(const std::string& path) {
   int64_t mtime = 0, size = 0;
   if (!FileStamp(path, mtime, size)) {
@@ -438,11 +449,10 @@ void JsProvider::ReadSettingsFile(const std::string& path) {
   const auto known = settings_files_.find(path);
   if (known != settings_files_.end() && known->second == stamp)
     return;
-  settings_files_[path] = stamp;
-
   std::string text;
   if (!util::ReadFile(path, text, 1u << 20))
-    return;
+    return; // not noted as read: tried again by the next reload
+  settings_files_[path] = stamp;
   size_t at = 0, applied = 0;
   while (at < text.size()) {
     size_t end = text.find('\n', at);
