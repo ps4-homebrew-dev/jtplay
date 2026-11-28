@@ -53,6 +53,12 @@ inline constexpr const char* kLibrary = "\uE553";       // library-big
 inline constexpr const char* kSubtitles = "\uE3A8";     // captions
 inline constexpr const char* kMore = "\uE075";          // chevrons-down
 inline constexpr const char* kFavoriteFolder = "\uE337"; // folder-heart
+// Cut later, from lucide-static 1.82.0, which numbers its glyphs otherwise:
+// put at codepoints of their own from U+E700 on, lowered as the rest were
+// (150 units). They are the options menu's buttons.
+inline constexpr const char* kFullscreen = "\uE700";     // maximize
+inline constexpr const char* kRefresh = "\uE701";        // refresh-cw
+inline constexpr const char* kFilter = "\uE702";         // funnel
 
 // A source's icon as a plugin gives it, an emoji, as the icon that stands
 // for the same thing; one with no counterpart is kept as it is (the emoji

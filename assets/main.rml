@@ -483,11 +483,23 @@
 			<div id="menu-rows">
 				<div class="menu-item" data-for="m, mi : menu">
 					<div class="menu-section" data-if="m.section != ''">{{m.section}}</div>
-					<div class="menu-row" data-class-selected="mi == sel_menu">
+					<div class="menu-row" data-class-selected="!menu_on_buttons && mi == sel_menu">
 						<span class="menu-label">{{m.label}}</span>
 						<span class="menu-value" data-if="m.value != ''">‹  {{m.value}}  ›</span>
 					</div>
 				</div>
+			</div>
+			<!-- What acts on the screen as a whole: a bar of buttons, as the
+			     playback controls are drawn (App::AddMenuButton). Its label
+			     shows while it has the focus. -->
+			<div id="menu-buttons" data-if="menu_buttons.size > 0">
+				<div class="controls" data-class-focus="menu_on_buttons">
+					<div class="control-slot" data-for="b, bi : menu_buttons">
+						<div class="control" data-class-gap="b.gap" data-class-on="b.on"
+						     data-class-selected="menu_on_buttons && bi == sel_menu_button">{{b.icon}}</div>
+					</div>
+				</div>
+				<div class="menu-button-label">{{menu_button_label}}</div>
 			</div>
 		</div>
 

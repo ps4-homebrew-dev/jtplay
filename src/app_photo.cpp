@@ -236,6 +236,7 @@ void App::UpdatePhotos(double now) {
 
 void App::OpenPhotoMenu() {
   menu_items_.clear();
+  ClearMenuButtons();
   menu_section_.clear();
   menu_parent_ = nullptr;
   Set("menu_title", bind_menu_title_,

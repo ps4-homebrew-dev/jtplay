@@ -118,7 +118,10 @@ bool LanguageListed(const std::string& list, const std::string& language) {
 // live, which is what every adaptive stream was taken for before.
 bool IsLiveStream(const std::string& url,
                   const std::vector<std::pair<std::string, std::string>>& headers) {
-  net::HttpClient http;
+  // One client per thread (Open() runs on the playback lane only), kept:
+  // its connections are, so the next episode from the same CDN skips the
+  // connect and the TLS handshake a fresh client spends on every open.
+  static thread_local net::HttpClient http;
   net::HttpClient::Request req;
   req.headers = headers; // what lets the player in lets this in
   req.stall_timeout_ms = 4000;

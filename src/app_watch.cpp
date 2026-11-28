@@ -116,6 +116,7 @@ void App::PlayEntry(const browse::Entry& entry, bool resume) {
       return;
     }
     menu_items_.clear();
+    ClearMenuButtons();
     menu_section_.clear();
     menu_parent_ = nullptr;
     menu_items_.push_back({"Resume from " + FormatTime(at * 1000000), nullptr,

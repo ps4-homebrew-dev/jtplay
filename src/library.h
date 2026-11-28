@@ -87,7 +87,9 @@ class Library {
 public:
   // Reads 'path' if it exists; later Save()s write there.
   void Load(const std::string& path);
-  // Writes the file if anything changed since the last save.
+  // Writes the file if anything changed since the last save. Any thread:
+  // the library is only locked while it is put into words, not while those
+  // are written out, so the main thread is not held up by the disk.
   void Save();
 
   bool IsFavorite(const std::string& source_key, const std::string& id) const;
@@ -146,6 +148,12 @@ public:
   // Artwork remembered for an item (a snapshot of where it was stopped),
   // or "".
   std::string ImageFor(const std::string& source_key, const std::string& id) const;
+  // Puts 'image' in place of 'was' as an unfinished item's artwork: a
+  // snapshot taken in the background, once it is on disk. False (and
+  // nothing changed) when the item is not unfinished any more, or has
+  // other artwork by now.
+  bool ReplaceResumeImage(const std::string& source_key, const std::string& id,
+                          const std::string& was, const std::string& image);
   // Where an item with a resume point was played from, so that resuming
   // it can open that folder again (and play on through it from there).
   void SetResumePlace(const std::string& source_key, const std::string& id,
@@ -199,8 +207,14 @@ private:
     return key + '\n' + id;
   }
   void Changed(); // with mutex_ held
+  // The file's text. Of a copy (see Save), which nothing else can see:
+  // no lock.
+  std::string Serialize() const;
 
   mutable std::mutex mutex_;
+  // Held across a whole Save(), the write included: saves from two threads
+  // go out one after the other, so an older copy never lands over a newer.
+  std::mutex save_mutex_;
   std::string path_;
   bool dirty_ = false;
   uint64_t generation_ = 0;

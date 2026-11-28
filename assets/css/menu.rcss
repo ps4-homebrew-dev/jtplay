@@ -110,6 +110,31 @@
 .menu-row.selected .menu-label { color: #06231d; font-weight: bold; }
 .menu-row.selected .menu-value { color: #0d3d33; }
 
+/* The bar of buttons along the bottom (App::AddMenuButton): the playback
+ * controls' buttons (watch.rcss), under a rule that sets them off from the
+ * rows; the focused one's label beneath, kept a line tall when empty so the
+ * bar does not jump as the focus comes and goes. */
+#menu-buttons {
+	flex: none;
+	margin-top: 20px;
+	padding: 24px 24px 0px 24px;
+	border-top: 2px #ffffff14;
+}
+#menu-buttons .control {
+	margin-right: 10px;
+}
+.menu-button-label {
+	height: 34px;
+	margin-top: 14px;
+	font-size: 24px;
+	line-height: 34px;
+	font-weight: bold;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* ------------------------------------------------------------------ */
 /* Dialog                                                             */
 /* ------------------------------------------------------------------ */

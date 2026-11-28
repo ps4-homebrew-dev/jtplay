@@ -428,17 +428,6 @@ std::vector<JsPluginPtr> JsProvider::Plugins() const {
   return out;
 }
 
-size_t JsProvider::ScriptMemoryUsed() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  // The largest one, not the sum: each plugin has its own budget, so it is
-  // the fullest one that fails first, and that is the number worth watching.
-  size_t largest = 0;
-  for (const Loaded& l : loaded_)
-    if (l.plugin)
-      largest = std::max(largest, l.plugin->MemoryUsed());
-  return largest;
-}
-
 void JsProvider::ReadSettingsFile(const std::string& path) {
   int64_t mtime = 0, size = 0;
   if (!FileStamp(path, mtime, size)) {

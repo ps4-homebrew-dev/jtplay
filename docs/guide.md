@@ -54,9 +54,9 @@ removes it), where it keeps its logo. Back from
 the top of a source returns to it in the list; back from the list, to the
 tabs.
 
-The options menu on the Sources tab has **Search...** and **Refresh** (also
-in the list's options menu, as *Search all sources...* and *Refresh*;
-square on the tab refreshes too). Refresh looks for every source again; Search
+The options menu on the Sources tab has the buttons **Search...** and
+**Refresh** (also in the list's options menu, as *Search all sources...* and
+*Refresh*; square on the tab refreshes too). Refresh looks for every source again; Search
 (or Ctrl+S on the list) searches everything at once: your library by name
 (Continue watching, what you played lately and Favorites), then every
 source that can search, most used first, all of them side by side so the
@@ -126,18 +126,24 @@ The options button opens a side menu, titled with the name of the
 selected item, in groups under headings that come in the same order in
 every menu, from the item out to what is around it: first what can be
 done with the item itself (resume, play from the beginning, mark as
-watched); then **Favorites** (see [Favorites](#favorites-and-continue-watching)), **Folder** (play it all in
-order or shuffled, a slideshow of its pictures, load more, refresh),
-**Find** (search, where the source has it, and filter), **View** (list or
-grid, sort key and order), **Plugin** (the settings of the plugin the
-folder is from, see Settings) and, while something plays behind the
-menus, **Now playing** (back to full screen, stop). Within each, what is
-used most comes first, and what removes something last; "..." after a
-name means a dialog asks something first.
+watched); then **Favorites** (see [Favorites](#favorites-and-continue-watching)), **Find** (save the
+search on screen, clear the filter), **Folder** (play it all in order or
+shuffled, a slideshow of its pictures, load more), **View** (sort key,
+order, list or grid) and **Plugin** (the settings of the plugin the folder is from, see
+Settings). Within each, what is used most comes first, and what removes
+something last; "..." after a name means a dialog asks something first.
+
+What acts on the screen as a whole is a bar of buttons along the bottom of
+the menu, as Kodi has it: **Search**, where the source has it, **Filter**
+(lit while a filter is set), **Refresh** and, set apart while something plays behind the menus,
+**Back to full screen** (*Show player* for music) and **Stop playback**. Up
+from the first row, or down from the last, goes onto the bar; left and right
+go along it, its name shows under it, and select runs it. A menu with
+nothing but buttons (the tabs, while something plays) opens on the bar.
 
 ## Filter and search
 
-**Filter**, in the options menu of a folder (or Ctrl+F on a keyboard), narrows
+**Filter**, a button of a folder's options menu (or Ctrl+F on a keyboard), narrows
 the list on screen to the entries whose name or description hold every word
 you type. A bar opens above the list and the list follows the typing; on the
 console, focusing the field brings up the system keyboard. Up and down still
@@ -149,7 +155,7 @@ filter belongs to its folder, survives a refresh and works in every source,
 since it only looks at what is listed. Names match in any case for plain
 letters; other characters have to match as typed.
 
-**Search**, in the options menu (or Ctrl+S), is for sources that can ask a
+**Search**, a button of the options menu (or Ctrl+S), is for sources that can ask a
 backend for content that is not listed, and is only there for those. The
 podcast plugin searches all of Apple Podcasts in the country you are in,
 not just its chart, and SVT
@@ -206,11 +212,12 @@ from the list of sources keeps its logo.
 Every options menu runs in the same order, so that what is wanted most is
 the fewest presses away: what can be done to the item in focus (*Play
 from beginning*, *Mark as watched*; select plays and resumes, so neither
-has a row), its **Favorites** section, **Find** (*Search...*, *Filter...*),
-the **Folder** (*Play all*, *Shuffle all*, *Slideshow*, *Load more*,
-*Refresh*), **View** (*Sort by*, *Order*, *Display as*), the plugin's
-settings, and last, while something plays, **Now playing**: the menu
-wraps round, so *Stop playback* is one press up from the top.
+has a row), its **Favorites** section, **Find** (*Save search...*, *Clear
+filter*), the **Folder** (*Play all*, *Shuffle all*, *Slideshow*, *Load
+more*), **View** (*Sort by*, *Order*, *Display as*) and the plugin's
+settings; then the bar of buttons (search, filter, refresh; back to full screen
+and stop, while something plays), one press up from the top, so *Stop
+playback* is up, then left.
 
 The **Favorites** section is the same wherever it is, under the name of
 what is in focus ("..." means a dialog asks first):
@@ -262,9 +269,9 @@ row, **Now playing**, holds its card. The way back to full screen is the
 way out of it: back, step by step (from a list to Home, from the rows to
 the video), as on any remote; or selecting the
 Now playing card or the item that is playing, or the options menu's
-**Back to full screen**. The stop button
+**Back to full screen** button. The stop button
 of the controls, holding back in full screen, the options menu's **Stop
-playback**, a remote's stop key or X on a keyboard stops it.
+playback** button, a remote's stop key or X on a keyboard stops it.
 
 The bar along the bottom has the title and, on the right, elapsed and total
 time; under them one line across the bar (chapter, description); then the

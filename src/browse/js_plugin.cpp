@@ -515,7 +515,6 @@ bool JsPlugin::Call(JSValue object, const char* function, int argc, JSValue* arg
     ok = Settle(value, function, error);
   }
   armed_ = false;
-  NoteMemoryUsed();
 
   if (!ok) {
     JS_FreeValue(ctx, value);
@@ -523,16 +522,6 @@ bool JsPlugin::Call(JSValue object, const char* function, int argc, JSValue* arg
   }
   result = value;
   return true;
-}
-
-// What the script's heap holds, noted for the memory overlay: this budget is
-// the one a plugin runs out of, and it is invisible in the process heap.
-void JsPlugin::NoteMemoryUsed() {
-  if (!rt)
-    return;
-  JSMemoryUsage usage;
-  JS_ComputeMemoryUsage(rt, &usage);
-  memory_used_.store((size_t)usage.malloc_size);
 }
 
 // An async function hands back a promise. There is no event loop to resolve

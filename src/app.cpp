@@ -173,6 +173,9 @@ void App::Shutdown() {
     RecordProgress(true);
   RememberPlace();
   library_.Save();
+  // A write still queued on the Disk lane was dropped with the lanes: the
+  // settings as they are, once more, directly (the lanes are stopped).
+  SaveSettings();
 
   visualizer_.Shutdown(); // GL context still current
   if (player_) {
@@ -261,7 +264,7 @@ void App::LoadSettings() {
     SaveSettings();
 }
 
-void App::SaveSettings() const {
+void App::SaveSettings() {
   if (settings_path_.empty())
     return;
   std::ostringstream out;
@@ -285,10 +288,17 @@ void App::SaveSettings() const {
   for (const auto& setting : plugin_settings_->All())
     out << "plugin." << setting.first << "=" << setting.second << "\n";
   // Whole or not at all: a console switched off mid-write must not come
-  // back with half its settings.
-  if (!util::WriteFileAtomic(settings_path_, out.str()))
-    Rml::Log::Message(Rml::Log::LT_WARNING, "Cannot write %s: %s", settings_path_.c_str(),
-                      std::strerror(errno));
+  // back with half its settings. Written on the Disk lane, which keeps the
+  // fsync out of the frame the setting was changed in; one after another
+  // there, so the last change is the one that stays. Before the lanes run
+  // (a restored file, at start) and after they stop, here.
+  auto write = [path = settings_path_, text = out.str()] {
+    if (!util::WriteFileAtomic(path, text))
+      Rml::Log::Message(Rml::Log::LT_WARNING, "Cannot write %s: %s", path.c_str(),
+                        std::strerror(errno));
+  };
+  if (!lanes_[(int)Lane::Disk].Post(write))
+    write();
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +321,17 @@ void App::PostTask(Lane lane, std::function<void()> task, bool busy) {
   });
   if (!posted)
     busy_ops_--;
+}
+
+void App::SaveLibrary() {
+  if (library_save_queued_.exchange(true))
+    return; // one is waiting already, and will have this change too
+  PostTask(Lane::Disk, [this] {
+    // Cleared before saving: a change from here on is not in this save,
+    // and asks for one of its own.
+    library_save_queued_ = false;
+    library_.Save();
+  }, false);
 }
 
 App::BrowseTicket App::NewBrowseRequest() {
@@ -537,6 +558,10 @@ bool App::SetupDataModel(Rml::Context* context, std::string& error) {
   ctor.Bind("menu_progress", &bind_menu_progress_);
   ctor.Bind("menu", &menu_rows_);
   ctor.Bind("sel_menu", &sel_menu_);
+  ctor.Bind("menu_buttons", &menu_button_rows_);
+  ctor.Bind("sel_menu_button", &sel_menu_button_);
+  ctor.Bind("menu_on_buttons", &bind_menu_on_buttons_);
+  ctor.Bind("menu_button_label", &bind_menu_button_label_);
 
   ctor.Bind("photo", &bind_photo_);
   ctor.Bind("photo_info", &bind_photo_info_);
@@ -1143,16 +1168,26 @@ void App::RefreshImageBindings() {
   // Details pane follows the browse selection.
   Rml::String detail;
   bool logo = false;
+  std::string edge;
   if (view_ == View::Browse) {
     if (const browse::Entry* entry = SelectedEntry()) {
-      detail = ImagePathFor(ArtUri(*entry));
+      const std::string uri = ArtUri(*entry);
+      detail = ImagePathFor(uri);
       logo = !detail.empty() && ShowsLogo(*entry);
+      // The colour around a logo, from its thumbnail rather than the
+      // screen-sized copy shown: the same border, a twentieth of the pixels
+      // to decode (on this thread). Until the thumbnail is there, none; its
+      // arrival refreshes these bindings.
+      if (logo) {
+        const std::string thumb = ImagePathFor(uri, true);
+        if (!thumb.empty())
+          edge = EdgeColorOf(thumb);
+      }
     }
   }
   Set("detail_image", bind_detail_image_, detail);
   Set("detail_cover", bind_detail_cover_, CoverDecorator(detail));
   Set("detail_logo", bind_detail_logo_, logo);
-  const std::string edge = logo ? EdgeColorOf(detail) : std::string();
   Set("detail_bg", bind_detail_bg_, Rml::String(edge.empty() ? "transparent" : edge));
 
   // Now-playing card / transport bar follows the playing item.
@@ -1248,22 +1283,7 @@ void App::UpdateMemoryOverlay(double now) {
   if (!bind_mem_overlay_.empty() && now - mem_overlay_at_ < 1.0)
     return;
   mem_overlay_at_ = now;
-
-  // The heap, then what the plugins' script heaps hold. A plugin's heap is a
-  // budget of its own (JsPlugin::kMemoryLimitBytes): running out of it says
-  // nothing about the process heap, which is why both are shown.
-  std::string line = MemoryLine();
-  if (js_provider_) {
-    const size_t used = js_provider_->ScriptMemoryUsed();
-    if (used > 0) {
-      char js[64];
-      std::snprintf(js, sizeof(js), "\njs %.1f / %.0f MB",
-                    (double)used / (1024.0 * 1024.0),
-                    (double)browse::JsProvider::ScriptMemoryLimit() / (1024.0 * 1024.0));
-      line += js;
-    }
-  }
-  Set("mem_overlay", bind_mem_overlay_, Rml::String(line));
+  Set("mem_overlay", bind_mem_overlay_, Rml::String(MemoryLine()));
 }
 
 void App::UpdateBackdrop() {

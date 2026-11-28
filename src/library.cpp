@@ -202,10 +202,42 @@ void Library::Load(const std::string& path) {
 }
 
 void Library::Save() {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (!dirty_ || path_.empty())
-    return;
+  std::lock_guard<std::mutex> saving(save_mutex_);
+  std::string path, text;
+  Library copy; // what is saved: only its data, never its lock
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!dirty_ || path_.empty())
+      return;
+    path = path_;
+    // A copy, taken under the lock; put into words outside it, so whoever
+    // asks the library something meanwhile (the main thread, drawing rows)
+    // waits for the copy only, not for the XML.
+    copy.favorites_ = favorites_;
+    copy.folders_ = folders_;
+    copy.recent_folders_ = recent_folders_;
+    copy.progress_ = progress_;
+    copy.recent_ = recent_;
+    copy.sources_ = sources_;
+    copy.places_ = places_;
+    copy.views_ = views_;
+    // Taken as saved now: a change made while it is being written marks
+    // it again, and the next save has that.
+    dirty_ = false;
+  }
+  text = copy.Serialize();
 
+  // Whole or not at all (tinyxml2's SaveFile does not check its writes: on
+  // a full disk it left a cut-off library, which then replaced the good
+  // one). On failure it is dirty again and the next save tries again.
+  if (!util::WriteFileAtomic(path, text)) {
+    std::fprintf(stderr, "Cannot write %s (disk full?)\n", path.c_str());
+    std::lock_guard<std::mutex> lock(mutex_);
+    dirty_ = true;
+  }
+}
+
+std::string Library::Serialize() const {
   XMLDocument doc;
   doc.InsertEndChild(doc.NewDeclaration());
   XMLElement* root = doc.NewElement("library");
@@ -294,16 +326,9 @@ void Library::Save() {
     root->InsertEndChild(e);
   }
 
-  // Whole or not at all (tinyxml2's SaveFile does not check its writes: on
-  // a full disk it left a cut-off library, which then replaced the good
-  // one). On failure it stays dirty and the next save tries again.
   tinyxml2::XMLPrinter printer;
   doc.Print(&printer);
-  const std::string text(printer.CStr(), printer.CStrSize() > 0 ? printer.CStrSize() - 1 : 0);
-  if (util::WriteFileAtomic(path_, text))
-    dirty_ = false;
-  else
-    std::fprintf(stderr, "Cannot write %s (disk full?)\n", path_.c_str());
+  return std::string(printer.CStr(), printer.CStrSize() > 0 ? printer.CStrSize() - 1 : 0);
 }
 
 void Library::Changed() {
@@ -650,6 +675,18 @@ std::string Library::ImageFor(const std::string& key, const std::string& id) con
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = progress_.find(Id(key, id));
   return it == progress_.end() ? std::string() : it->second.ref.entry.image;
+}
+
+bool Library::ReplaceResumeImage(const std::string& key, const std::string& id,
+                                 const std::string& was, const std::string& image) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  auto it = progress_.find(Id(key, id));
+  if (it == progress_.end() || it->second.progress.watched || it->second.progress.position <= 0 ||
+      it->second.ref.entry.image != was)
+    return false;
+  it->second.ref.entry.image = image;
+  Changed();
+  return true;
 }
 
 std::vector<std::pair<Ref, Progress>> Library::InProgress() const {

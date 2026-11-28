@@ -100,13 +100,6 @@ public:
   // Any thread: the plugins as of the last Discover(), by name.
   std::vector<JsPluginPtr> Plugins() const;
 
-  // The fullest plugin's script heap, and the budget each one has. Any thread
-  // (the values are atomics), for the memory overlay: this is the budget a
-  // plugin runs out of, and it is not part of the process heap. The largest
-  // rather than the sum, because each plugin has its own.
-  size_t ScriptMemoryUsed() const;
-  static size_t ScriptMemoryLimit() { return JsPlugin::kMemoryLimitBytes; }
-
 private:
   struct Loaded {
     std::string path;

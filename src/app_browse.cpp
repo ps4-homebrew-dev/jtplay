@@ -111,7 +111,7 @@ void App::OpenSource(const browse::SourcePtr& source) {
   sel_entry_ = 0;
   // Counted, for the order of the list of sources.
   library_.SourceUsed(source->Key());
-  library_.Save();
+  SaveLibrary();
 
   Set("source_name", bind_source_name_, current_source_->Name());
   view_ = View::Browse;
@@ -216,7 +216,7 @@ void App::NoteSourceArt(const browse::SourcePtr& source, const browse::Listing& 
     if (e.image.empty())
       continue;
     if (library_.SetSourceImage(source->Key(), e.image))
-      library_.Save();
+      SaveLibrary();
     return;
   }
 }
@@ -1244,7 +1244,7 @@ void App::AddFavoriteActions(const browse::Entry* entry) {
         OpenTextEntry("Rename favorite", DisplayName(e), kFolderNameMaxLength, false,
                       [this, ref](const std::string& name) {
           if (library_.RenameFavorite(ref.source_key, ref.entry.id, name))
-            library_.Save();
+            SaveLibrary();
         });
       }});
       new_folder();
@@ -1268,11 +1268,40 @@ void App::AddMenuItem(MenuItem item) {
   menu_items_.push_back(std::move(item));
 }
 
+void App::ClearMenuButtons() {
+  menu_buttons_.clear();
+  menu_button_rows_.clear();
+  model_.DirtyVariable("menu_buttons");
+  FocusMenuButtons(false);
+}
+
+void App::AddMenuButton(MenuButton button, bool gap) {
+  ControlRow row;
+  row.icon = button.icon;
+  row.on = button.on;
+  row.gap = gap && !menu_buttons_.empty();
+  menu_buttons_.push_back(std::move(button));
+  menu_button_rows_.push_back(std::move(row));
+}
+
 void App::ShowMenu(int selection) {
   menu_section_.clear();
   sel_menu_ = std::clamp(selection, 0, std::max(0, (int)menu_items_.size() - 1));
   RebuildMenuRows();
+  // A menu of nothing but buttons (the tabs, with something playing)
+  // starts on them; any other on its rows.
+  sel_menu_button_ = 0;
+  FocusMenuButtons(menu_items_.empty() && !menu_buttons_.empty());
   Set("menu_open", bind_menu_open_, true);
+}
+
+void App::FocusMenuButtons(bool on) {
+  on = on && !menu_buttons_.empty();
+  Set("menu_on_buttons", bind_menu_on_buttons_, on);
+  sel_menu_button_ = std::clamp(sel_menu_button_, 0, std::max(0, (int)menu_buttons_.size() - 1));
+  model_.DirtyVariable("sel_menu_button");
+  Set("menu_button_label", bind_menu_button_label_,
+      Rml::String(on ? menu_buttons_[sel_menu_button_].label : std::string()));
 }
 
 // Every menu runs in the same order, from what is in focus out to what is
@@ -1287,8 +1316,12 @@ void App::ShowMenu(int selection) {
 //                  load more, refresh
 //   View           sort, order, display as list or grid
 //   Plugin         the settings of the plugin it is from
-//   Now playing    what plays behind the menus: stop is the last row, one
-//                  press up from the first
+//
+// What acts on the screen as a whole rather than on the item is a button
+// on the bar along the bottom (AddMenuButton), Kodi style: search, filter,
+// refresh, list or grid; then, set apart, back to what plays behind the
+// menus and stop it. The bar is one press up from the first row (and down
+// from the last); left and right go along it.
 //
 // Within a section, what is used most comes first and what removes or
 // undoes something last. Nothing select already does on the item (play,
@@ -1296,36 +1329,37 @@ void App::ShowMenu(int selection) {
 void App::OpenMenu() {
   SetListScroll(false);
   menu_items_.clear();
+  ClearMenuButtons();
   menu_parent_ = nullptr;
   plugin_menu_open_ = false;
   menu_section_.clear();
   Set("menu_dialog", bind_menu_dialog_, false);
   Set("menu_title", bind_menu_title_, Rml::String("Options"));
 
-  if (view_ == View::Browse && bind_browse_tabs_ && OnSourcesList()) {
-    // Up on the Sources tab: what is done to all of them, and how they
-    // are shown.
-    Set("menu_title", bind_menu_title_, Rml::String("Sources"));
-    MenuSection("Sources");
-    AddMenuItem({"Search\u2026", nullptr, [this](int) { OpenSearch(); }});
-    AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
-    MenuSection("View");
+  // List or grid: a row of the View section.
+  auto view_row = [this] {
     AddMenuItem({"Display as",
       [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
       [this](int) {
         SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
       }});
+  };
+
+  if (view_ == View::Browse && bind_browse_tabs_ && OnSourcesList()) {
+    // Up on the Sources tab: what is done to all of them, and how they
+    // are shown.
+    Set("menu_title", bind_menu_title_, Rml::String("Sources"));
+    AddMenuButton({icon::kSearch, "Search\u2026", [this] { OpenSearch(); }});
+    AddMenuButton({icon::kRefresh, "Refresh", [this] { RefreshContainer(); }});
+    MenuSection("View");
+    view_row();
   } else if (view_ == View::Browse && bind_browse_tabs_ && OnFavoritesTab()) {
     // Up on the Favorites tab: likewise.
     Set("menu_title", bind_menu_title_, Rml::String("Favorites"));
     MenuSection("Favorites");
     AddMenuItem({"New folder\u2026", nullptr, [this](int) { NewFavoritesFolder(); }});
     MenuSection("View");
-    AddMenuItem({"Display as",
-      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
-      [this](int) {
-        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
-      }});
+    view_row();
   } else if (view_ == View::Browse) {
     // The item in focus first: it is what the menu was most likely opened
     // for, and its name is the menu's title.
@@ -1347,7 +1381,7 @@ void App::OpenMenu() {
       } else {
         AddMenuItem({"Forget this source", nullptr, [this, key = source.key](int) {
           library_.ForgetSource(key);
-          library_.Save();
+          SaveLibrary();
           RefreshSourcesList();
         }});
       }
@@ -1359,10 +1393,12 @@ void App::OpenMenu() {
       AddFavoriteActions(e);
     }
 
-    // Search: what a menu is opened for most, after the item itself; a
-    // few presses down at most. Filter narrows what is listed (typing, on
-    // a remote: less often).
+    // Search and filter are buttons on the bar (they act on the screen,
+    // not the item); what goes with them stays a row: saving the results
+    // on screen, or taking a filter off.
     const bool everything = current_source_ == sources_source_ && SearchScope() == 0;
+    const BrowseLevel* shown = CurrentLevel();
+    const bool filtered = shown && !shown->filter.empty();
     MenuSection("Find");
     // Results: saving them is what is likely wanted now.
     if (library::Ref search; SavedSearchRef(search) &&
@@ -1370,13 +1406,14 @@ void App::OpenMenu() {
       AddMenuItem({"Save search\u2026", nullptr, [this, search](int) {
         OpenSaveSheet(search, search.entry.name);
       }});
+    if (filtered)
+      AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
     if (current_source_ && !path_.empty() &&
         current_source_->CanSearch(path_[SearchScope()].id))
-      AddMenuItem({everything ? "Search all sources\u2026" : "Search\u2026", nullptr,
-                   [this](int) { OpenSearch(); }});
-    if (const BrowseLevel* level = CurrentLevel(); level && !level->filter.empty())
-      AddMenuItem({"Clear filter", nullptr, [this](int) { ClearFilter(); }});
-    AddMenuItem({"Filter\u2026", nullptr, [this](int) { OpenFilter(); }});
+      AddMenuButton({icon::kSearch, everything ? "Search all sources\u2026" : "Search\u2026",
+                     [this] { OpenSearch(); }});
+    AddMenuButton({icon::kFilter, filtered ? "Filter (on)\u2026" : "Filter\u2026",
+                   [this] { OpenFilter(); }, filtered});
 
     // The folder on screen as a whole (the list of sources: the lot of
     // them). Fetching again comes last: rarely wanted (Load more is also
@@ -1403,7 +1440,7 @@ void App::OpenMenu() {
       AddMenuItem({"Load more", nullptr, [this](int) { LoadMore(); }});
     // (Favorites are the library's own: nothing to fetch again.)
     if (!InFavoritesTree())
-      AddMenuItem({"Refresh", nullptr, [this](int) { RefreshContainer(); }});
+      AddMenuButton({icon::kRefresh, "Refresh", [this] { RefreshContainer(); }});
 
     // How it is shown: the sort is changed far more often than list or
     // grid, which is set once per folder.
@@ -1414,11 +1451,7 @@ void App::OpenMenu() {
     AddMenuItem({"Order",
       [this] { return std::string(sort_desc_ ? "Descending" : "Ascending"); },
       [this](int) { SetSort(sort_mode_, !sort_desc_); }});
-    AddMenuItem({"Display as",
-      [this] { return std::string(view_mode_ == ViewMode::Grid ? "Grid" : "List"); },
-      [this](int) {
-        SetViewMode(view_mode_ == ViewMode::Grid ? ViewMode::List : ViewMode::Grid);
-      }});
+    view_row();
 
     // The plugin this is from: of the source, or in Favorites and Continue
     // watching, of the item in focus.
@@ -1445,24 +1478,22 @@ void App::OpenMenu() {
     if (Identify(card, ref))
       AddPluginSettingsEntry(ref.source_key);
   } else if (view_ == View::Home && !bind_settings_page_ && !bind_home_shelves_) {
-    MenuSection("Sources");
-    AddMenuItem({"Refresh", nullptr, [this](int) { SearchAllSources(); }});
+    AddMenuButton({icon::kRefresh, "Refresh sources", [this] { SearchAllSources(); }});
   } else if (bind_watching_) {
     // On Home's tabs: only what plays.
     Set("menu_title", bind_menu_title_, bind_watch_name_);
   }
 
-  // Something plays behind the menus: back to it, or an end to it. Last,
-  // in every menu: the menu is for what is on screen first, and one step
-  // up from its first row is its last.
+  // Something plays behind the menus: back to it, or an end to it. Last
+  // on the bar, set apart: the bar is one step up from the first row, and
+  // its last button one more to the left.
   if (bind_watching_) {
-    MenuSection("Now playing");
-    AddMenuItem({bind_watch_audio_ ? "Show player" : "Back to full screen",
-      nullptr, [this](int) { SetFullscreen(true); }});
-    AddMenuItem({"Stop playback", nullptr, [this](int) { StopPlayback(); }});
+    AddMenuButton({icon::kFullscreen, bind_watch_audio_ ? "Show player" : "Back to full screen",
+                   [this] { SetFullscreen(true); }}, true);
+    AddMenuButton({icon::kStop, "Stop playback", [this] { StopPlayback(); }});
   }
 
-  if (menu_items_.empty())
+  if (menu_items_.empty() && menu_buttons_.empty())
     return; // nothing to offer on the tabs
   ShowMenu();
 }
@@ -1587,7 +1618,7 @@ void App::NewFavoritesFolder() {
     const std::string id = library_.AddFavoriteFolder(parent, name);
     if (id.empty())
       return;
-    library_.Save();
+    SaveLibrary();
     if (CurrentFavoritesFolder() == parent)
       RefreshFavoritesLevel(library::FavoriteFolderEntryId(id));
   });
@@ -1605,7 +1636,7 @@ void App::AddFavoriteFolderActions(const browse::Entry& entry,
     OpenTextEntry("Rename folder", f.name, kFolderNameMaxLength, false,
                   [this, f](const std::string& name) {
       if (library_.RenameFavoriteFolder(f.id, name))
-        library_.Save();
+        SaveLibrary();
     });
   }});
   if (before_delete)
@@ -1622,7 +1653,7 @@ void App::ConfirmDeleteFavoriteFolder(const std::string& folder) {
   library_.FavoriteFolderContents(folder, favorites, folders);
   auto remove = [this, f] {
     library_.DeleteFavoriteFolder(f.id);
-    library_.Save();
+    SaveLibrary();
     ShowToast("Deleted \u201c" + f.name + "\u201d", icon::kFavoriteFolder);
   };
   if (favorites == 0 && folders == 0) {
@@ -1639,6 +1670,7 @@ void App::ConfirmDeleteFavoriteFolder(const std::string& folder) {
   if (folders > 0)
     what += (what.empty() ? "" : " and ") + count(folders, "folder", "folders");
   menu_items_.clear();
+  ClearMenuButtons();
   menu_section_.clear();
   menu_parent_ = nullptr;
   menu_items_.push_back({"Delete", nullptr, [remove](int) { remove(); }});
@@ -1691,6 +1723,7 @@ void App::AddPluginSettingsEntry(const std::string& source_key) {
 // text. A list of choices takes the menu's place and gives it back.
 void App::OpenPluginMenu(const std::shared_ptr<browse::JsPlugin>& plugin, int selection) {
   menu_items_.clear();
+  ClearMenuButtons();
   menu_section_.clear();
   menu_parent_ = nullptr;
   std::vector<SettingItem> settings;
@@ -1724,6 +1757,7 @@ void App::CloseMenu() {
   Set("menu_open", bind_menu_open_, false);
   Set("menu_meta", bind_menu_meta_, Rml::String());
   menu_items_.clear();
+  ClearMenuButtons();
   menu_section_.clear();
   menu_parent_ = nullptr;
   // The info bar was held up for the menu: it stays a while yet.
@@ -1738,10 +1772,19 @@ void App::RebuildMenuRows() {
     menu_rows_.push_back({item.section, item.label, item.value ? item.value() : ""});
   model_.DirtyVariable("menu");
   model_.DirtyVariable("sel_menu");
+  model_.DirtyVariable("menu_buttons");
+  // A menu made in this one's place (a list of choices) has no bar of its
+  // own unless it adds one: nothing to keep the focus on.
+  if (menu_buttons_.empty() && bind_menu_on_buttons_)
+    FocusMenuButtons(false);
 }
 
 void App::HandleKeyMenu(Rml::Event& event, int key) {
   event.StopPropagation(); // the menu is modal
+  if (bind_menu_on_buttons_) {
+    HandleKeyMenuButtons(key);
+    return;
+  }
   const int count = (int)menu_items_.size();
   if (count == 0) {
     CloseMenu();
@@ -1760,11 +1803,19 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
 
   switch (key) {
   case Rml::Input::KI_UP:
-  case Rml::Input::KI_DOWN:
-    sel_menu_ = StepIndex(sel_menu_, key == Rml::Input::KI_UP ? -1 : +1, count);
+  case Rml::Input::KI_DOWN: {
+    const bool up = key == Rml::Input::KI_UP;
+    // Past either end of the rows: onto the bar, where there is one (from
+    // where the rows would have wrapped round).
+    if (!menu_buttons_.empty() && (up ? sel_menu_ == 0 : sel_menu_ == count - 1)) {
+      FocusMenuButtons(true);
+      break;
+    }
+    sel_menu_ = StepIndex(sel_menu_, up ? -1 : +1, count);
     model_.DirtyVariable("sel_menu");
     scroll_menu_pending_ = true;
     break;
+  }
   // A long menu (every country there is) pages and jumps as a list does.
   case Rml::Input::KI_PRIOR:
   case Rml::Input::KI_NEXT:
@@ -1823,6 +1874,53 @@ void App::HandleKeyMenu(Rml::Event& event, int key) {
   }
 }
 
+// The bar of buttons along the bottom of the menu has the focus: left and
+// right go along it, select closes the menu and runs the button, up and
+// down go back to the rows (the last, the first), back closes the menu.
+void App::HandleKeyMenuButtons(int key) {
+  const int count = (int)menu_buttons_.size();
+  if (count == 0) {
+    FocusMenuButtons(false);
+    return;
+  }
+  const int rows = (int)menu_items_.size();
+  switch (key) {
+  case Rml::Input::KI_LEFT:
+  case Rml::Input::KI_RIGHT:
+    sel_menu_button_ = StepIndex(sel_menu_button_, key == Rml::Input::KI_LEFT ? -1 : +1, count);
+    FocusMenuButtons(true);
+    break;
+  case Rml::Input::KI_UP:
+  case Rml::Input::KI_DOWN:
+    if (rows == 0)
+      break; // nothing but the bar
+    sel_menu_ = key == Rml::Input::KI_UP ? rows - 1 : 0;
+    model_.DirtyVariable("sel_menu");
+    scroll_menu_pending_ = true;
+    FocusMenuButtons(false);
+    break;
+  case Rml::Input::KI_RETURN:
+  case Rml::Input::KI_NUMPADENTER: {
+    // Closed first, as a row's action: the button may replace the view
+    // the menu was for, or open something of its own.
+    const std::function<void()> action = menu_buttons_[sel_menu_button_].action;
+    ClosePluginMenu();
+    CloseMenu();
+    action();
+    break;
+  }
+  case Rml::Input::KI_BACK:
+  case Rml::Input::KI_ESCAPE:
+  case gamepad::kKeyOptions:
+    ClosePluginMenu();
+    CloseMenu();
+    break;
+  default:
+    HandleTransportKey(key); // a remote's pause and stop reach what plays
+    break;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // View modes and artwork
 // ---------------------------------------------------------------------------
@@ -1837,7 +1935,7 @@ void App::SetViewMode(ViewMode mode) {
   // that failed to list, whose id may be anything).
   if (level->query.empty() && level->error.empty()) {
     library_.SetView(current_source_->Key(), level->id, mode == ViewMode::Grid);
-    library_.Save();
+    SaveLibrary();
   }
   ShowViewMode(mode);
 }

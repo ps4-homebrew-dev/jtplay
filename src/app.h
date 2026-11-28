@@ -198,6 +198,17 @@ private:
     std::function<void(int)> change;
     std::string section;
   };
+  // A button of the options menu's bar along its bottom, Kodi style: what
+  // is done to the screen as a whole rather than to the item in focus
+  // (search, filter, refresh, list or grid; back to what plays, stop it).
+  // Drawn as the playback controls are (ControlRow), its label beside the
+  // bar while it has the focus. Select closes the menu and runs it.
+  struct MenuButton {
+    std::string icon;
+    std::string label;
+    std::function<void()> action;
+    bool on = false;  // what it toggles is on now (a filter is set)
+  };
   // A row of the Settings page: a setting (left / right change it, select
   // steps it on) or an action (select runs it; 'value' is then what it
   // would act on, such as how many, and may be empty).
@@ -234,9 +245,17 @@ private:
   // model are touched. With 'busy', the task counts towards the activity
   // indicator in the top bar from the moment it is posted.
   // (Preview: what is in the focused folder, see RequestPreview; apart, so
-  // it never holds up opening a folder.)
-  enum class Lane { Discovery, Browse, Playback, Preview, Count };
+  // it never holds up opening a folder. Disk: saving the library, see
+  // SaveLibrary.)
+  enum class Lane { Discovery, Browse, Playback, Preview, Disk, Count };
   void PostTask(Lane lane, std::function<void()> task, bool busy = true);
+  // Saves the library on the Disk lane: putting a full library into words
+  // and syncing it to disk takes milliseconds on a desktop and more on a
+  // console's storage, too long for a frame. Saves asked for while one
+  // waits its turn are one save. (Shutdown saves directly, after the lanes
+  // have stopped.)
+  void SaveLibrary();
+  std::atomic<bool> library_save_queued_{false};
   void Reply(std::function<void()> apply);
   void RunReplies();
 
@@ -265,7 +284,8 @@ private:
 
   // --- Settings ----------------------------------------------------------
   void LoadSettings();
-  void SaveSettings() const;
+  // Writes on the Disk lane (directly while the lanes are not running).
+  void SaveSettings();
 
   // --- Library (favorites, resume points) ----------------------------------
   // The source and source-native id 'entry' belongs to, also for entries
@@ -637,7 +657,14 @@ private:
   // next one added gets the heading (none, if no entry follows).
   void MenuSection(const std::string& title);
   void AddMenuItem(MenuItem item);
+  // A button of the bar along the bottom; 'gap' sets it apart from the one
+  // before (another group: what plays).
+  void AddMenuButton(MenuButton button, bool gap = false);
+  void ClearMenuButtons(); // with menu_items_, whenever a menu starts over
+  void HandleKeyMenuButtons(int key);
   void ShowMenu(int selection = 0);  // menu_items_ -> the screen
+  // Puts the focus on the bar of buttons (true) or the rows (false).
+  void FocusMenuButtons(bool on);
   void CloseMenu();
   // A plugin's settings (what the Settings page lists for it) as a menu of
   // their own, from the options menu of anything that is the plugin's.
@@ -991,6 +1018,11 @@ private:
   int sel_menu_ = 0;
   std::vector<MenuItem> menu_items_;
   std::string menu_section_;       // heading the next entry added gets
+  std::vector<MenuButton> menu_buttons_;      // the bar along the bottom
+  std::vector<ControlRow> menu_button_rows_;  // ... as drawn
+  int sel_menu_button_ = 0;
+  bool bind_menu_on_buttons_ = false;  // the focus is on the bar, not a row
+  Rml::String bind_menu_button_label_; // the focused button's label
   // A menu opened from another: back returns to that one (this reopens
   // it) rather than closing them all.
   std::function<void()> menu_parent_;

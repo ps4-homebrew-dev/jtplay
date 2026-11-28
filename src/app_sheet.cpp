@@ -57,7 +57,7 @@ void App::ToggleFavorite(const browse::Entry& entry) {
     ref.source_name = current_source_ ? current_source_->Name() : std::string();
   if (library_.IsFavorite(ref.source_key, ref.entry.id)) {
     library_.ToggleFavorite(ref);
-    library_.Save();
+    SaveLibrary();
     ShowToast("Removed from favorites", icon::kStar);
     return;
   }
@@ -68,7 +68,7 @@ void App::ToggleSourceFavorite(const browse::SourcePtr& source) {
   const library::Ref ref = SourceRef(source);
   if (library_.IsFavorite(ref.source_key, ref.entry.id)) {
     library_.ToggleFavorite(ref);
-    library_.Save();
+    SaveLibrary();
     ShowToast("Removed from favorites", icon::kStar);
     return;
   }
@@ -239,7 +239,7 @@ void App::SheetChoose(const std::string& folder) {
     ShowToast("Saved to " + name, icon::kStar);
   }
   library_.NoteFavoriteFolderUsed(folder);
-  library_.Save();
+  SaveLibrary();
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +263,7 @@ void App::HandleKeySheet(Rml::Event& event, int key) {
       const std::string id = library_.AddFavoriteFolder(parent, name);
       if (id.empty())
         return;
-      library_.Save();
+      SaveLibrary();
       SheetShow(id);
       sel_sheet_button_ = kSheetOk;
       Set("sheet_on_buttons", bind_sheet_on_buttons_, true);

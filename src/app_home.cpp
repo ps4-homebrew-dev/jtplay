@@ -41,7 +41,7 @@ void App::GoHome() {
   CancelForegroundLaunch();
   AbandonBrowse(); // any browse that is still in flight
   RememberPlace(); // to open the source there the next time
-  library_.Save();
+  SaveLibrary();
   path_.clear();
   current_source_.reset();
   view_ = View::Home;
@@ -138,7 +138,7 @@ void App::StartDiscovery(browse::Source::Group group,
         known.logo = s->Image();
         library_.RememberSource(known);
       }
-      library_.Save();
+      SaveLibrary();
 
       // The plugins may have been loaded (or loaded afresh) by this: what
       // they want on the Settings page is known only now.
@@ -287,7 +287,7 @@ void App::OpenSourcesList(const std::string& select_key) {
   CancelForegroundLaunch();
   AbandonBrowse();
   RememberPlace(); // the source on screen, if any
-  library_.Save();
+  SaveLibrary();
   const std::string want = !select_key.empty() ? select_key : sources_list_key_;
   current_source_ = sources_source_;
   path_.clear();
@@ -359,7 +359,7 @@ void App::OpenFavoritesTab() {
   CancelForegroundLaunch();
   AbandonBrowse();
   RememberPlace(); // the source on screen, if any
-  library_.Save();
+  SaveLibrary();
   current_source_ = favorites_source_;
   from_sources_list_ = false;
   path_.clear();
@@ -1199,6 +1199,7 @@ void App::ConfirmForgetContinue() {
     return;
   }
   menu_items_.clear();
+  ClearMenuButtons();
   menu_section_.clear();
   menu_parent_ = nullptr;
   menu_items_.push_back({"Forget " + std::to_string(n) + (n == 1 ? " item" : " items"),
@@ -1208,7 +1209,7 @@ void App::ConfirmForgetContinue() {
         DropSnapshot(item.first.entry.image);
         library_.SetWatched(item.first, false);
       }
-      library_.Save();
+      SaveLibrary();
       RebuildSettingRows();
     }});
   menu_items_.push_back({"Cancel", nullptr, [](int) {}});
@@ -1223,6 +1224,7 @@ void App::ConfirmForgetContinue() {
 void App::OpenChoiceMenu(const std::string& title, const std::vector<std::string>& choices,
                          int current, std::function<void(int)> pick) {
   menu_items_.clear();
+  ClearMenuButtons();
   menu_section_.clear();
   menu_parent_ = nullptr;
   for (size_t i = 0; i < choices.size(); i++)

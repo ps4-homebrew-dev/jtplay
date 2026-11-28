@@ -129,7 +129,7 @@ void App::SetWatched(const browse::Entry& entry, bool watched) {
   // Either way the resume point goes, and with it the frame it showed.
   DropSnapshot(library_.ImageFor(ref.source_key, ref.entry.id));
   library_.SetWatched(ref, watched);
-  library_.Save();
+  SaveLibrary();
 }
 
 void App::RecordRecent() {
@@ -137,7 +137,7 @@ void App::RecordRecent() {
   if (!playing_identified_ || watch_last_pos_us_ < 0)
     return;
   library_.AddRecent(playing_ref_);
-  library_.Save();
+  SaveLibrary();
 }
 
 void App::RecordProgress(bool final, bool ended) {
@@ -170,6 +170,7 @@ void App::RecordProgress(bool final, bool ended) {
     drop_snapshot();
     library_.SetWatched(playing_ref_, true);
   } else if (pos >= kMinResumeSec) {
+    library_.SetResume(playing_ref_, pos, dur);
     if (final && !own_art && e.IsVideo() && !cache_dir_.empty()) {
       char name[64];
       std::snprintf(name, sizeof(name), "%016zx-%lld.jpg",
@@ -177,12 +178,33 @@ void App::RecordProgress(bool final, bool ended) {
                                              playing_ref_.entry.id),
                     (long long)pos);
       const std::string path = cache_dir_ + "/snap-" + name;
-      if (player_->Snapshot(path)) {
-        drop_snapshot();
-        playing_ref_.entry.image = "file://" + path;
-      }
+      const library::Ref ref = playing_ref_;
+      const std::string was = ref.entry.image;
+      // The frame on disk: it becomes the card's artwork in place of the
+      // last one (unless the item has changed meanwhile), which goes.
+      auto apply = [this, ref, was, path] {
+        const std::string image = "file://" + path;
+        if (!library_.ReplaceResumeImage(ref.source_key, ref.entry.id, was, image)) {
+          ::remove(path.c_str());
+          return;
+        }
+        DropSnapshot(was);
+        if (playing_identified_ && playing_ref_.source_key == ref.source_key &&
+            playing_ref_.entry.id == ref.entry.id && playing_ref_.entry.image == was)
+          playing_ref_.entry.image = image;
+        SaveLibrary();
+      };
+      // On the playback lane: mpv encodes the frame there, not in this
+      // frame of the UI (a JPEG of a 4K picture is a good part of a
+      // second on a console), and still before the stop or the next open
+      // posted after this. With the lanes stopped (quitting), here.
+      const bool posted = lanes_[(int)Lane::Playback].Post([this, path, apply] {
+        if (player_->Snapshot(path))
+          Reply(apply);
+      });
+      if (!posted && player_->Snapshot(path))
+        apply();
     }
-    library_.SetResume(playing_ref_, pos, dur);
     // The folder it plays from, on it (moving on through the folder, on
     // the one it has moved on to).
     if (!playing_place_.empty()) {
@@ -199,7 +221,7 @@ void App::RecordProgress(bool final, bool ended) {
   const double now = Now();
   if (final || now - library_saved_at_ > 60.0) {
     library_saved_at_ = now;
-    library_.Save();
+    SaveLibrary();
   }
 }
 
